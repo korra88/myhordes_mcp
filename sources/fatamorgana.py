@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 import httpx
 
 FATA_SPY_URL = "https://fatamorgana.md26.eu/spy/town/{town_id}"
+FATA_SPY_DAY_URL = "https://fatamorgana.md26.eu/spy/town/{town_id}/{day}"
 
 # dtype int → human-readable cause of death
 DEATH_TYPES = {
@@ -45,13 +46,20 @@ JOB_NAMES = {
 }
 
 
-async def fetch_town_data(town_id: int) -> dict:
+async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
     """Fetch and parse all data from a Fata Morgana spy page.
+
+    Args:
+        town_id: The Fata Morgana town/game ID.
+        day: Optional day number to fetch historical data. None = current day.
 
     Returns a dict with keys: meta, defense, water, gate, estimations,
     citizens, deaths, bank, buildings, scout, error.
     """
-    url = FATA_SPY_URL.format(town_id=town_id)
+    if day is not None:
+        url = FATA_SPY_DAY_URL.format(town_id=town_id, day=day)
+    else:
+        url = FATA_SPY_URL.format(town_id=town_id)
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(url)

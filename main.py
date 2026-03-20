@@ -93,45 +93,55 @@ def get_bank_inventory() -> str:
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-async def get_town_overview() -> str:
+async def get_town_overview(day: int = 0) -> str:
     """
     Fetches a complete overview of the town from Fata Morgana (community spy service).
     Returns: town name/day, gate status, defense breakdown, attack estimation,
     water supply, consumables, and citizen positions.
     Use this as the first tool when the user asks about general town status.
     Data is crowd-sourced by players and may lag behind real-time game state.
+
+    Args:
+        day: Specific day number to inspect (e.g. 5 for day 5). Use 0 or omit for
+             the current/latest day. Useful for comparing town progress over time.
     """
     if err := _check_fata():
         return err
-    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID))
+    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID), day=day or None)
     return fatamorgana.format_town_overview(data)
 
 
 @mcp.tool()
-async def get_citizen_positions() -> str:
+async def get_citizen_positions(day: int = 0) -> str:
     """
     Fetches citizen positions from Fata Morgana — who is inside the town,
     who is outside (and where), and the list of dead citizens with cause of death.
     Use this when the user asks who is outside, who is camping, or about deaths.
+
+    Args:
+        day: Specific day number to inspect. Use 0 or omit for the current day.
     """
     if err := _check_fata():
         return err
-    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID))
+    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID), day=day or None)
     return fatamorgana.format_citizens(data)
 
 
 @mcp.tool()
-async def get_defense_status() -> str:
+async def get_defense_status(day: int = 0) -> str:
     """
     Fetches the town defense breakdown and attack estimations from Fata Morgana.
     Includes: total defense, per-source breakdown (wall, buildings, items, guardians,
     homes, other), item multiplier, tonight's and tomorrow's zombie estimates,
     and a survival assessment (safe / at risk / danger).
     Use this when the user asks about defense, attack survival, or zombie estimates.
+
+    Args:
+        day: Specific day number to inspect. Use 0 or omit for the current day.
     """
     if err := _check_fata():
         return err
-    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID))
+    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID), day=day or None)
     return fatamorgana.format_defense(data)
 
 
