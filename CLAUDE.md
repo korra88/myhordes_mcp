@@ -51,9 +51,9 @@ The game source (PHP/Symfony) is at `myhordes-docker/myhordes/`. Key paths:
 
 ## Current state
 
-- Fata Morgana tools are live: `get_town_overview`, `get_citizen_positions`, `get_defense_status`
-- `get_bank_inventory` still returns mocked data (waiting for official API app key)
+- Fata Morgana tools are live: `get_town_overview`, `get_citizen_positions`, `get_defense_status`, `get_bank_inventory`, `get_buildings`, `get_scout_map`
 - Knowledge base tools are live: `search_knowledge_base`, `list_knowledge_categories`
+- Planned (blocked on official API app key): `get_construction_progress`, `get_last_night_report` — stubs are commented out in `main.py`
 - Next: official API client (`sources/official_api.py`) once app key is obtained
 - Future: when both sources work, let the agent choose the right tool based on the question
 

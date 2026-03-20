@@ -424,6 +424,112 @@ def format_bank(data: dict) -> str:
     return "\n".join(lines)
 
 
+def format_buildings(data: dict) -> str:
+    """Format building list with defense values and construction status."""
+    if data.get("error"):
+        return f"Error: {data['error']}"
+
+    buildings = data["buildings"]
+    meta = data["meta"]
+
+    if not buildings:
+        return "No building data available."
+
+    built = [b for b in buildings if b["built"]]
+    available = [b for b in buildings if not b["built"]]
+
+    lines = [
+        f"## Buildings — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
+        f"{len(built)} built, {len(available)} available to build",
+        "",
+    ]
+
+    if built:
+        built.sort(key=lambda b: b["name"].lower())
+        total_def = sum(b["defense"] for b in built)
+        lines.append(f"### Built ({len(built)}, total defense: {total_def})")
+        for b in built:
+            parts = [f"  {b['name']}"]
+            if b["defense"]:
+                parts.append(f"+{b['defense']} def")
+            if b["temporary"]:
+                parts.append("(temporary)")
+            lines.append(" — ".join(parts) if len(parts) > 1 else parts[0])
+        lines.append("")
+
+    if available:
+        available.sort(key=lambda b: b["ap_cost"])
+        lines.append(f"### Available to build ({len(available)})")
+        for b in available:
+            parts = [f"  {b['name']}"]
+            details = []
+            if b["ap_cost"]:
+                details.append(f"{b['ap_cost']} AP")
+            if b["defense"]:
+                details.append(f"+{b['defense']} def")
+            if b["temporary"]:
+                details.append("temporary")
+            if details:
+                parts.append(", ".join(details))
+            lines.append(" — ".join(parts) if len(parts) > 1 else parts[0])
+
+    return "\n".join(lines)
+
+
+def format_scout(data: dict) -> str:
+    """Format scout data showing zombie counts per zone."""
+    if data.get("error"):
+        return f"Error: {data['error']}"
+
+    zones = data["scout"]
+    meta = data["meta"]
+
+    if not zones:
+        return "No scout data available. Zones haven't been scouted yet."
+
+    # Sort by zombie count descending for threat prioritization
+    zones_sorted = sorted(zones, key=lambda z: z["zombies"], reverse=True)
+    total_zombies = sum(z["zombies"] for z in zones_sorted)
+    scouted_count = len(zones_sorted)
+
+    lines = [
+        f"## Scout Map — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
+        f"{scouted_count} zones scouted, {total_zombies} total zombies spotted",
+        "",
+    ]
+
+    # Group into threat levels
+    dangerous = [z for z in zones_sorted if z["zombies"] >= 10]
+    moderate = [z for z in zones_sorted if 3 <= z["zombies"] < 10]
+    low = [z for z in zones_sorted if 1 <= z["zombies"] < 3]
+    clear = [z for z in zones_sorted if z["zombies"] == 0]
+
+    if dangerous:
+        lines.append(f"### Dangerous zones ({len(dangerous)}, 10+ zombies)")
+        for z in dangerous:
+            lines.append(f"  {z['coords']}: {z['zombies']} zombies (scouted by {z['scouted_by']}, day {z['scouted_day']})")
+        lines.append("")
+
+    if moderate:
+        lines.append(f"### Moderate zones ({len(moderate)}, 3-9 zombies)")
+        for z in moderate:
+            lines.append(f"  {z['coords']}: {z['zombies']} zombies (day {z['scouted_day']})")
+        lines.append("")
+
+    if low:
+        lines.append(f"### Low threat zones ({len(low)}, 1-2 zombies)")
+        for z in low:
+            lines.append(f"  {z['coords']}: {z['zombies']} zombies (day {z['scouted_day']})")
+        lines.append("")
+
+    if clear:
+        lines.append(f"### Clear zones ({len(clear)})")
+        coords_list = ", ".join(z["coords"] for z in clear)
+        lines.append(f"  {coords_list}")
+
+    return "\n".join(lines)
+
+
 def format_defense(data: dict) -> str:
     """Format defense breakdown and attack estimation."""
     if data.get("error"):

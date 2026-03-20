@@ -123,6 +123,76 @@ async def get_defense_status(day: int = 0) -> str:
     return fatamorgana.format_defense(data)
 
 
+@mcp.tool()
+async def get_buildings(day: int = 0) -> str:
+    """
+    Fetches the town's building list from Fata Morgana — what's been built
+    and what's still available to construct, with defense values and AP costs.
+    Use this when the user asks what to build next, what buildings exist,
+    or how much AP a construction needs.
+
+    Args:
+        day: Specific day number to inspect. Use 0 or omit for the current day.
+    """
+    if err := _check_fata():
+        return err
+    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID), day=day or None)
+    return fatamorgana.format_buildings(data)
+
+
+@mcp.tool()
+async def get_scout_map(day: int = 0) -> str:
+    """
+    Fetches zombie counts per zone from scout data (Fata Morgana).
+    Shows which zones have been scouted, how many zombies were spotted,
+    and who scouted them. Zones are grouped by threat level.
+    Use this when the user asks about zombie positions, safe scavenging routes,
+    or where the horde is concentrated.
+
+    Args:
+        day: Specific day number to inspect. Use 0 or omit for the current day.
+    """
+    if err := _check_fata():
+        return err
+    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID), day=day or None)
+    return fatamorgana.format_scout(data)
+
+
+# ---------------------------------------------------------------------------
+# Official API tools — requires MYHORDES_APP_KEY (not yet available)
+# ---------------------------------------------------------------------------
+
+# TODO: Uncomment once official API app key is obtained and sources/official_api.py
+# is implemented. These tools need the official API because Fata Morgana doesn't
+# provide construction progress details or last night's attack report.
+
+# @mcp.tool()
+# async def get_construction_progress() -> str:
+#     """
+#     Fetches construction site progress from the official API.
+#     Shows buildings currently under construction: AP invested vs. AP needed,
+#     resources deposited vs. required, and estimated completion.
+#     Use this when the user asks what's closest to being finished,
+#     where to spend AP, or what resources are still needed for a build.
+#     """
+#     if err := _check_auth():
+#         return err
+#     # return await official_api.get_construction_progress(MYHORDES_USER_KEY, MYHORDES_APP_KEY)
+
+# @mcp.tool()
+# async def get_last_night_report() -> str:
+#     """
+#     Fetches last night's attack gazette from the official API.
+#     Includes: zombies killed, defense used, water lost overnight,
+#     wind direction (if Search Tower built), and citizen casualties.
+#     Use this for post-attack analysis — was defense tight or comfortable,
+#     and how should the town adjust today?
+#     """
+#     if err := _check_auth():
+#         return err
+#     # return await official_api.get_last_night_report(MYHORDES_USER_KEY, MYHORDES_APP_KEY)
+
+
 # ---------------------------------------------------------------------------
 # Knowledge base tools
 # ---------------------------------------------------------------------------
