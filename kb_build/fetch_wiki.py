@@ -11,7 +11,7 @@ load_dotenv()
 
 # Configuration
 WIKI_API_URL = "https://en.mhwiki.org/api.php"
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "knowledge_base", "wiki")
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "knowledge_base", "wiki")
 
 # Cloudflare requires browser-like headers + cf_clearance cookie.
 # To refresh: open en.mhwiki.org in Chrome, copy cookies from DevTools,
