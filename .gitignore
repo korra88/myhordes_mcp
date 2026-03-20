@@ -1,1 +1,11 @@
 myhordes-docker/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Environment
+.env
