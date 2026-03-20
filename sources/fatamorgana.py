@@ -393,6 +393,37 @@ def format_citizens(data: dict) -> str:
     return "\n".join(lines)
 
 
+def format_bank(data: dict) -> str:
+    """Format bank inventory grouped by category."""
+    if data.get("error"):
+        return f"Error: {data['error']}"
+
+    bank = data["bank"]
+    meta = data["meta"]
+
+    if not bank:
+        return "The bank is empty."
+
+    # Group by category
+    by_cat: dict[str, list[dict]] = {}
+    for item in bank:
+        by_cat.setdefault(item["category"], []).append(item)
+
+    lines = [
+        f"## Bank Inventory — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
+        f"{len(bank)} item types in the bank",
+        "",
+    ]
+    for cat in sorted(by_cat.keys()):
+        lines.append(f"### {cat}")
+        for item in by_cat[cat]:
+            broken = " [BROKEN]" if item["broken"] else ""
+            lines.append(f"  {item['name']}: {item['count']}{broken}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def format_defense(data: dict) -> str:
     """Format defense breakdown and attack estimation."""
     if data.get("error"):

@@ -1,5 +1,4 @@
 import os
-import asyncio
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 import knowledge
@@ -52,40 +51,19 @@ def _check_fata() -> str | None:
 
 
 @mcp.tool()
-def get_bank_inventory() -> str:
+async def get_bank_inventory(day: int = 0) -> str:
     """
-    Fetches the current bank inventory of the MyHordes town.
-    Use this tool when the user asks about available resources, materials for construction sites,
-    or general inventory status.
+    Fetches the current bank inventory of the MyHordes town, grouped by category.
+    Use this tool when the user asks about available resources, materials for
+    construction sites, or general inventory status.
+
+    Args:
+        day: Specific day number to inspect. Use 0 or omit for the current day.
     """
-    if err := _check_auth():
+    if err := _check_fata():
         return err
-
-    # TODO: Replace mock with real API call:
-    # GET https://myhordes.eu/api/x/json/map
-    #   ?userkey={MYHORDES_USER_KEY}&appkey={MYHORDES_APP_KEY}
-    #   &fields=city(.bank(.id|.count|.broken))
-    #   &lang=en
-
-    # MOCK RESPONSE FOR MVP
-    mock_data = {
-        "status": "success",
-        "items": [
-            {"name": "Wooden plank", "quantity": 12},
-            {"name": "Twisted plank", "quantity": 5},
-            {"name": "Wrought iron", "quantity": 8},
-            {"name": "Water ration", "quantity": 24},
-            {"name": "Bandage", "quantity": 2},
-            {"name": "Flesh-eating virus", "quantity": 1},
-        ],
-    }
-
-    # Format data for the LLM
-    result = "Current Town Bank Inventory:\n"
-    for item in mock_data["items"]:
-        result += f"- {item['name']}: {item['quantity']} units\n"
-
-    return result
+    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID), day=day or None)
+    return fatamorgana.format_bank(data)
 
 
 # ---------------------------------------------------------------------------
