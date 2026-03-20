@@ -7,8 +7,14 @@ __pycache__/
 .venv/
 venv/
 
+# IDE
+*.code-workspace
+
 # Environment
 .env
+
+# Debug artifacts
+fata-spy-rendered.html
 
 # Wiki content
 knowledge_base/wiki/

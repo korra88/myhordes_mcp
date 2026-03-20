@@ -1,7 +1,9 @@
 import os
+import asyncio
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 import knowledge
+from sources import fatamorgana
 
 # IMPORTANT: MyHordes rules prohibit automated/scheduled API polling.
 # All API calls must be triggered by explicit user queries via MCP tools.
@@ -20,14 +22,18 @@ mcp = FastMCP("MyHordes Advisor")
 MYHORDES_USER_KEY = os.getenv("MYHORDES_USER_KEY")
 MYHORDES_APP_KEY = os.getenv("MYHORDES_APP_KEY")
 
+FATAMORGANA_TOWN_ID = os.getenv("FATAMORGANA_TOWN_ID")
+
 if not MYHORDES_USER_KEY:
     print("Warning: MYHORDES_USER_KEY not found in environment variables.", flush=True)
 if not MYHORDES_APP_KEY:
     print("Warning: MYHORDES_APP_KEY not found in environment variables.", flush=True)
+if not FATAMORGANA_TOWN_ID:
+    print("Warning: FATAMORGANA_TOWN_ID not found in environment variables.", flush=True)
 
 
 def _check_auth() -> str | None:
-    """Return an error message if credentials are missing, None if OK."""
+    """Return an error message if official API credentials are missing, None if OK."""
     missing = []
     if not MYHORDES_USER_KEY:
         missing.append("MYHORDES_USER_KEY")
@@ -35,6 +41,13 @@ def _check_auth() -> str | None:
         missing.append("MYHORDES_APP_KEY")
     if missing:
         return f"Authentication Error: {', '.join(missing)} not configured. See .env.example."
+    return None
+
+
+def _check_fata() -> str | None:
+    """Return an error message if Fata Morgana town ID is missing, None if OK."""
+    if not FATAMORGANA_TOWN_ID:
+        return "Error: FATAMORGANA_TOWN_ID not configured. Set it in .env to your town's Fata Morgana spy ID."
     return None
 
 
@@ -74,6 +87,57 @@ def get_bank_inventory() -> str:
 
     return result
 
+
+# ---------------------------------------------------------------------------
+# Fata Morgana tools — live town data from community-maintained spy service
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def get_town_overview() -> str:
+    """
+    Fetches a complete overview of the town from Fata Morgana (community spy service).
+    Returns: town name/day, gate status, defense breakdown, attack estimation,
+    water supply, consumables, and citizen positions.
+    Use this as the first tool when the user asks about general town status.
+    Data is crowd-sourced by players and may lag behind real-time game state.
+    """
+    if err := _check_fata():
+        return err
+    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID))
+    return fatamorgana.format_town_overview(data)
+
+
+@mcp.tool()
+async def get_citizen_positions() -> str:
+    """
+    Fetches citizen positions from Fata Morgana — who is inside the town,
+    who is outside (and where), and the list of dead citizens with cause of death.
+    Use this when the user asks who is outside, who is camping, or about deaths.
+    """
+    if err := _check_fata():
+        return err
+    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID))
+    return fatamorgana.format_citizens(data)
+
+
+@mcp.tool()
+async def get_defense_status() -> str:
+    """
+    Fetches the town defense breakdown and attack estimations from Fata Morgana.
+    Includes: total defense, per-source breakdown (wall, buildings, items, guardians,
+    homes, other), item multiplier, tonight's and tomorrow's zombie estimates,
+    and a survival assessment (safe / at risk / danger).
+    Use this when the user asks about defense, attack survival, or zombie estimates.
+    """
+    if err := _check_fata():
+        return err
+    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID))
+    return fatamorgana.format_defense(data)
+
+
+# ---------------------------------------------------------------------------
+# Knowledge base tools
+# ---------------------------------------------------------------------------
 
 @mcp.tool()
 def search_knowledge_base(query: str, category: str = "", limit: int = 5) -> str:

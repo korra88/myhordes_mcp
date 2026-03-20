@@ -13,15 +13,23 @@ A read-only MCP (Model Context Protocol) server in Python for **MyHordes**, a br
 ## Architecture
 
 - **Entry point:** `main.py` — `FastMCP` server with tool definitions, runs over stdio.
-- **Auth:** Two keys required — `userkey` (player External ID) + `appkey` (registered app secret). Both passed as query params to the game API.
-- **Game API:** JSON v1 at `https://myhordes.eu/api/x/json/{type}`. The `map` endpoint with SURLL field selection is the workhorse — one call can fetch bank, defense, estimations, citizens, zones, buildings. Full reference in `docs/external-api-reference.md`.
+- **Data sources are modular** under `sources/`:
+  - `sources/fatamorgana.py` — Scrapes Fata Morgana spy pages (community-maintained). No auth needed, just a town ID. Provides defense, citizens, gate, map/scout, attack estimations, ruins, buildings, water, consumables.
+  - `sources/official_api.py` — *(planned)* Official JSON v1 API client. Needs `userkey` + `appkey`.
+- **Auth (official API):** Two keys required — `userkey` (player External ID) + `appkey` (registered app secret). Both passed as query params.
+- **Auth (Fata Morgana):** Just `FATAMORGANA_TOWN_ID` in `.env`. No API key needed.
+- **Game API:** JSON v1 at `https://myhordes.eu/api/x/json/{type}`. The `map` endpoint with SURLL field selection is the workhorse. Full reference in `docs/external-api-reference.md`.
 - **API blocked during attacks:** ~23:59 CET nightly. Tools must handle `nightly_attack` errors gracefully.
+- **Fata Morgana approach:** The spy page embeds a `var data = {...}` JS object with structured data (defense, water, buildings, scout zones) plus server-rendered HTML for citizens, gate, ruins, attack estimations. We fetch with httpx and parse with regex — no Selenium/browser needed.
 
 ## Key files
 
 | File | Purpose |
 |---|---|
 | `main.py` | MCP server, tool definitions |
+| `sources/fatamorgana.py` | Fata Morgana httpx scraper + formatters |
+| `sources/official_api.py` | *(planned)* Official API client |
+| `knowledge.py` | Wiki knowledge base search engine |
 | `AGENT-PERSONALITY.md` | System prompt for the end-user AI agent (game advisor persona + mechanics + MCP guidelines) |
 | `docs/source-map.md` | Navigation guide for the game PHP source (`myhordes-docker/myhordes/`) |
 | `docs/external-api-reference.md` | Every JSON v1 endpoint, field, and SURLL syntax |
@@ -43,9 +51,11 @@ The game source (PHP/Symfony) is at `myhordes-docker/myhordes/`. Key paths:
 
 ## Current state
 
-- MVP phase: `get_bank_inventory` tool returns mocked data
-- Next: replace mocks with real `httpx` calls to the JSON v1 API
-- Future tools planned: town status, defense breakdown, attack estimations, citizen list, map/zones, buildings, gazette
+- Fata Morgana tools are live: `get_town_overview`, `get_citizen_positions`, `get_defense_status`
+- `get_bank_inventory` still returns mocked data (waiting for official API app key)
+- Knowledge base tools are live: `search_knowledge_base`, `list_knowledge_categories`
+- Next: official API client (`sources/official_api.py`) once app key is obtained
+- Future: when both sources work, let the agent choose the right tool based on the question
 
 ## Style notes
 
