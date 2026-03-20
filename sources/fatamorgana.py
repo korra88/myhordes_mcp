@@ -15,7 +15,7 @@ Fetches the spy page for a given town ID and extracts the embedded
 
 import json
 import re
-from datetime import datetime, timezone
+import time
 
 import httpx
 
@@ -46,8 +46,19 @@ JOB_NAMES = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Response cache — avoids duplicate fetches when multiple tools fire in a row
+# ---------------------------------------------------------------------------
+
+_cache: dict[str, tuple[float, dict]] = {}
+CACHE_TTL = 60  # seconds
+
+
 async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
     """Fetch and parse all data from a Fata Morgana spy page.
+
+    Results are cached for 60 seconds per URL so that consecutive tool calls
+    (e.g. get_town_overview + get_citizen_positions) reuse the same fetch.
 
     Args:
         town_id: The Fata Morgana town/game ID.
@@ -60,6 +71,14 @@ async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
         url = FATA_SPY_DAY_URL.format(town_id=town_id, day=day)
     else:
         url = FATA_SPY_URL.format(town_id=town_id)
+
+    # Return cached result if fresh
+    now = time.monotonic()
+    if url in _cache:
+        cached_at, cached_data = _cache[url]
+        if now - cached_at < CACHE_TTL:
+            return cached_data
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(url)
@@ -77,7 +96,7 @@ async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
     sys = js_data.get("system", {})
     current_day = sys.get("day")
 
-    return {
+    result = {
         "error": None,
         "meta": {
             "town_name": sys.get("gamename", "Unknown"),
@@ -99,6 +118,8 @@ async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
         "buildings": _parse_buildings(js_data),
         "scout": _parse_scout(js_data),
     }
+    _cache[url] = (now, result)
+    return result
 
 
 # ---------------------------------------------------------------------------
