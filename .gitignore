@@ -10,8 +10,9 @@ venv/
 # IDE
 *.code-workspace
 
-# Environment
+# Environment & local config
 .env
+.mcp.json
 
 # Debug artifacts
 fata-spy-rendered.html
