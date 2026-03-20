@@ -9,3 +9,6 @@ venv/
 
 # Environment
 .env
+
+# Wiki content
+knowledge_base/wiki/
