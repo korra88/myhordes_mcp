@@ -19,11 +19,17 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 
 # ─── Main targets ─────────────────────────────────────────────
 
-.PHONY: kb fetch process clean-kb clean-all help
+.PHONY: kb fetch process clean-kb clean-all help desert-veteran
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
+
+desert-veteran: ## Start Claude as the Desert Veteran advisor (loads personality + tips)
+	claude \
+		--append-system-prompt-file ./AGENT-PERSONALITY.md \
+		--append-system-prompt-file ./tips/player-behavior.md \
+		--append-system-prompt-file ./tips/strategy-quirks.md
 
 kb: process ## Build the full knowledge base (fetch if needed, then process)
 

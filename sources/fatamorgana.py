@@ -40,6 +40,7 @@ JOB_NAMES = {
     "guardian": "Guardian",
     "hunter": "Scavenger",
     "collec": "Collector",
+    "scout": "Scout",
     "survivalist": "Survivalist",
     "tamer": "Tamer",
     "tech": "Technician",
@@ -96,6 +97,10 @@ async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
     sys = js_data.get("system", {})
     current_day = sys.get("day")
 
+    def _as_dict(val, default=None):
+        """Return val if it's a dict, otherwise default (handles [] from empty fields)."""
+        return val if isinstance(val, dict) else (default or {})
+
     result = {
         "error": None,
         "meta": {
@@ -108,8 +113,8 @@ async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
             "owner": sys.get("owner_name"),
             "data_time": sys.get("datatime"),
         },
-        "defense": js_data.get("defense", {}),
-        "water": js_data.get("water", {}),
+        "defense": _as_dict(js_data.get("defense")),
+        "water": _as_dict(js_data.get("water")),
         "gate": "open" if js_data.get("door") == 1 else "closed",
         "estimations": _parse_estimations(js_data, current_day),
         "citizens": _parse_citizens(js_data, sys),
@@ -167,7 +172,12 @@ def _extract_js_data(html: str) -> dict | None:
 def _parse_citizens(js_data: dict, sys_data: dict) -> list[dict]:
     """Parse citizen positions from the citizens dict."""
     citizens_raw = js_data.get("citizens", {})
-    shaman_id = sys_data.get("roles", {}).get("shaman")
+    if not isinstance(citizens_raw, dict):
+        citizens_raw = {}
+    roles = sys_data.get("roles", {})
+    if not isinstance(roles, dict):
+        roles = {}
+    shaman_id = roles.get("shaman")
     town_x = js_data.get("ox", 0)
     town_y = js_data.get("oy", 0)
     citizens = []
@@ -213,6 +223,8 @@ def _parse_deaths(js_data: dict, current_day: int | None) -> list[dict]:
 def _parse_estimations(js_data: dict, current_day: int | None) -> dict:
     """Parse attack estimations. Keys are day numbers as strings."""
     est_raw = js_data.get("estimations", {})
+    if not isinstance(est_raw, dict):
+        est_raw = {}
     today = {}
     tomorrow = {}
     if current_day and str(current_day) in est_raw:
@@ -228,7 +240,11 @@ def _parse_estimations(js_data: dict, current_day: int | None) -> dict:
 def _parse_bank(js_data: dict) -> list[dict]:
     """Parse bank inventory, resolving item IDs to names."""
     bank_raw = js_data.get("bank", {})
+    if not isinstance(bank_raw, dict):
+        bank_raw = {}
     items_dict = js_data.get("items", {})
+    if not isinstance(items_dict, dict):
+        items_dict = {}
     bank = []
     for item_id, info in bank_raw.items():
         count = info.get("count", 0)
@@ -251,7 +267,11 @@ def _parse_bank(js_data: dict) -> list[dict]:
 def _parse_buildings(js_data: dict) -> list[dict]:
     """Extract building list from bpsAndConstructions."""
     bps = js_data.get("bpsAndConstructions", {})
+    if not isinstance(bps, dict):
+        bps = {}
     constructions = js_data.get("constructions", {})
+    if not isinstance(constructions, dict):
+        constructions = {}
     built_ids = set(constructions.keys())
     buildings = []
     for bid, b in bps.items():
@@ -271,6 +291,8 @@ def _parse_buildings(js_data: dict) -> list[dict]:
 def _parse_scout(js_data: dict) -> list[dict]:
     """Extract scout data (zombie counts per zone)."""
     scout_raw = js_data.get("scout", {})
+    if not isinstance(scout_raw, dict):
+        scout_raw = {}
     zones = []
     for key, info in scout_raw.items():
         m = re.match(r"y(-?\d+)x(-?\d+)", key)

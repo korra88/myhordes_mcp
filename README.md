@@ -77,7 +77,19 @@ Replace `/absolute/path/to/myhordes_mcp` with the actual path to this repo, and 
 
 > **Note:** The `.env` file is loaded by `python-dotenv` inside `main.py`, so you can either put values in `.env` or in the `"env"` block above. The `"env"` block in `.mcp.json` takes precedence.
 
-### 2. Restart Claude Code
+### 2. Load the agent personality (recommended)
+
+To use the advisor persona and community tips as system prompts (more token-efficient than loading them as context):
+
+```bash
+claude --append-system-prompt-file ./AGENT-PERSONALITY.md \
+       --append-system-prompt-file ./tips/player-behavior.md \
+       --append-system-prompt-file ./tips/strategy-quirks.md
+```
+
+This keeps all advisory content out of the conversation context window, leaving more room for actual game data. Add new `tips/*.md` files and include them here as the knowledge grows.
+
+### 3. Restart Claude Code
 
 ```bash
 # If running in CLI:

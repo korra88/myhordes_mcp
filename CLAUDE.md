@@ -35,6 +35,9 @@ A read-only MCP (Model Context Protocol) server in Python for **MyHordes**, a br
 | `docs/external-api-reference.md` | Every JSON v1 endpoint, field, and SURLL syntax |
 | `docs/auth-and-rate-limits.md` | Two-key auth model, rate limit buckets, attack lockout |
 | `docs/game-rules-for-external-apps.md` | Official rules translated from German — the authoritative compliance reference |
+| `docs/implementation-notes.md` | Design decisions with rationale — read before changing architecture |
+| `towns/` | Per-town memory logs written by the agent (`s{season}-{town-slug}/daily-log.md` + `notes.md`) |
+| `towns/_template/` | Templates for new town folders |
 
 ## Game source location
 
@@ -56,6 +59,25 @@ The game source (PHP/Symfony) is at `myhordes-docker/myhordes/`. Key paths:
 - Planned (blocked on official API app key): `get_construction_progress`, `get_last_night_report` — stubs are commented out in `main.py`
 - Next: official API client (`sources/official_api.py`) once app key is obtained
 - Future: when both sources work, let the agent choose the right tool based on the question
+
+## Design decisions
+
+Key architectural choices are documented in `docs/implementation-notes.md`. Consult it before changing the data source strategy, MCP write permissions, or agent memory approach.
+
+## Agent context files
+
+The agent is loaded with two types of system prompt files (via `--append-system-prompt-file`):
+
+| File | Purpose |
+|---|---|
+| `AGENT-PERSONALITY.md` | Persona, core mechanics, MCP operational rules. Edit this for tone, behavior, or fundamental game rules. |
+| `tips/*.md` | Community knowledge, player meta, and strategic quirks. Add new tips here, **not** in `AGENT-PERSONALITY.md`. |
+
+**Where to put new content:**
+- New game mechanic or rule → `AGENT-PERSONALITY.md` (Core World Mechanics section)
+- Observed player behavior (e.g. timezone patterns) → `tips/player-behavior.md`
+- Non-obvious strategy or game quirk → `tips/strategy-quirks.md`
+- New category of tips → create a new `tips/<topic>.md` and add it to the README launch command
 
 ## Style notes
 
