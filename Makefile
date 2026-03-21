@@ -19,11 +19,14 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 
 # ─── Main targets ─────────────────────────────────────────────
 
-.PHONY: kb fetch process clean-kb clean-all help desert-veteran
+.PHONY: kb fetch process clean-kb clean-all help desert-veteran gemini-veteran
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
+
+gemini-veteran: ## Start Gemini as the Desert Veteran advisor (embedded agent, proper CLI)
+	$(PYTHON) gemini_client.py
 
 desert-veteran: ## Start Claude as the Desert Veteran advisor (loads personality + tips)
 	claude \
