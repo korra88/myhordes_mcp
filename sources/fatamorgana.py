@@ -38,9 +38,8 @@ DEATH_TYPES = {
 JOB_NAMES = {
     "basic": "Resident",
     "guardian": "Guardian",
-    "hunter": "Scavenger",
-    "collec": "Collector",
-    "scout": "Scout",
+    "hunter": "Scout",
+    "collec": "Scavenger",
     "survivalist": "Survivalist",
     "tamer": "Tamer",
     "tech": "Technician",
