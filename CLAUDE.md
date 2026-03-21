@@ -66,7 +66,7 @@ Key architectural choices are documented in `docs/implementation-notes.md`. Cons
 
 ## Agent context files
 
-The agent is loaded with two types of system prompt files (via `--append-system-prompt-file`):
+The agent is loaded with two types of system prompt files:
 
 | File | Purpose |
 |---|---|
@@ -74,10 +74,12 @@ The agent is loaded with two types of system prompt files (via `--append-system-
 | `tips/*.md` | Community knowledge, player meta, and strategic quirks. Add new tips here, **not** in `AGENT-PERSONALITY.md`. |
 
 **Where to put new content:**
-- New game mechanic or rule → `AGENT-PERSONALITY.md` (Core World Mechanics section)
+- Persona or character enforcement → `AGENT-PERSONALITY.md` (keep it slim — persona only)
+- Game mechanics or rules → `tips/game-mechanics.md`
+- MCP tool usage, constraints, town memory → `tips/mcp-guidelines.md`
 - Observed player behavior (e.g. timezone patterns) → `tips/player-behavior.md`
 - Non-obvious strategy or game quirk → `tips/strategy-quirks.md`
-- New category of tips → create a new `tips/<topic>.md` and add it to the README launch command
+- New category of tips → create a new `tips/<topic>.md` and add it to the Makefile + README
 
 ## Style notes
 

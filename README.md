@@ -83,6 +83,8 @@ To use the advisor persona and community tips as system prompts (more token-effi
 
 ```bash
 claude --append-system-prompt-file ./AGENT-PERSONALITY.md \
+       --append-system-prompt-file ./tips/game-mechanics.md \
+       --append-system-prompt-file ./tips/mcp-guidelines.md \
        --append-system-prompt-file ./tips/player-behavior.md \
        --append-system-prompt-file ./tips/strategy-quirks.md
 ```
