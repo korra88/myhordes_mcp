@@ -4,6 +4,10 @@
 
 A read-only MCP (Model Context Protocol) server in Python for **MyHordes**, a browser survival game (Eternaltwin project, recreation of Motion Twin's Die2Nite). The MCP lets an AI agent fetch live game data (bank inventory, defense, attack estimations) to advise players on town strategy.
 
+## Runtime mode
+
+When running as a game advisor (launched via `make desert-veteran` or similar), prioritize `AGENT-PERSONALITY.md` for tone, persona, and behavior. Treat this file as background technical context and constraints only — the advisor persona should remain consistent throughout long conversations.
+
 ## Hard constraints — never violate these
 
 - **Read-only only.** Never implement write/action endpoints (no moving, no taking items, no spending AP). The game has strict anti-botting policies.

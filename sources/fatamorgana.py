@@ -400,17 +400,17 @@ def _parse_map(js_data: dict) -> list[dict]:
                 ruin = {
                     "name": bld.get("name", "Unknown ruin"),
                     "type_id": bld.get("type"),
-                    "digs_remaining": bld.get("dig"),
-                    "blueprint_available": bld.get("blueprint", 0) == 0,
-                    "dried": bld.get("dried", 0),
+                    "digs_remaining": int(bld.get("dig", 0)),
+                    "blueprint_available": int(bld.get("blueprint", 0)) == 0,
+                    "dried": int(bld.get("dried", 0)),
                 }
 
             entry = {
                 "coords": f"[{rx}|{ry}]",
-                "zombies": zone.get("zm", 0),
-                "zombies_max": zone.get("z", 0),
-                "danger": zone.get("danger", 0),
-                "dried": zone.get("dried", 0),
+                "zombies": int(zone.get("zm", 0)),
+                "zombies_max": int(zone.get("z", 0)),
+                "danger": int(zone.get("danger", 0)),
+                "dried": int(zone.get("dried", 0)),
                 "tag": zone.get("tag"),
                 "items": zone_items,
                 "ruin": ruin,
