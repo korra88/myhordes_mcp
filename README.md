@@ -86,7 +86,8 @@ claude --append-system-prompt-file ./AGENT-PERSONALITY.md \
        --append-system-prompt-file ./tips/game-mechanics.md \
        --append-system-prompt-file ./tips/mcp-guidelines.md \
        --append-system-prompt-file ./tips/player-behavior.md \
-       --append-system-prompt-file ./tips/strategy-quirks.md
+       --append-system-prompt-file ./tips/strategy-quirks.md \
+       --append-system-prompt-file ./tips/buildings-cheatsheet.md
 ```
 
 This keeps all advisory content out of the conversation context window, leaving more room for actual game data. Add new `tips/*.md` files and include them here as the knowledge grows.
