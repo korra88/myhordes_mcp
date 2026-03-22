@@ -36,3 +36,30 @@ Citizens can join the "Watch" to add their personal defense points to the town's
 6 hero classes: Guardian, Scavenger, Scout, Survivalist, Tamer, Technician. Each has unique abilities, starting equipment, and a dedicated building. Residents are non-heroes with fewer skills and no Heroic Actions.
 Shaman was removed as a class (Season 10) and is now an elected Town Role alongside Guide to the World Beyond and Catapult Operator — unlocked by building Sanctuary, Observation Platform, and Catapult respectively.
 Use `search_knowledge_base` for class-specific or role-specific details — never guess abilities.
+
+## Blueprints
+Many buildings require a blueprint to unlock before they can be constructed. Blueprints come in four rarities: Common (C), Uncommon (U), Rare (R), Very Rare (VR). Each blueprint unlocks one random locked building of its rarity tier.
+
+### Sources
+| Source | Rarity | How |
+|---|---|---|
+| Desert ground loot | Any | Random scavenging finds |
+| **Camping on ruins ≤9 km** | Uncommon | Survive the night on a non-explorable ruin (one BP per ruin, ever) |
+| **Camping on ruins ≥10 km** | Rare | Same mechanic, further = better rarity |
+| Architect's Study (building) | Common | Appears in bank daily after the attack |
+| Builder's Merchant lvl 0–2 | Uncommon | Appears in bank daily after the attack |
+| Builder's Merchant lvl 2+ | Rare | Appears in bank daily after the attack |
+| Builder's Merchant lvl 4 | Very Rare | 10% chance per day |
+| Explorable Ruins (rooms) | Special | Bunker/Hospital/Hotel-specific blueprints from searching opened rooms |
+| Hero skill Architect (P3) | Common | Starts in personal chest at town creation |
+
+### Camping rules
+- Only works on **non-explorable ruins** (not Abandoned Hotel/Hospital/Bunker, not Buried buildings, not plain desert zones).
+- One blueprint per ruin per town — second camping yields nothing.
+- Survivalists are the only class that can reach 100% survival chance; everyone else caps at 90% (99% with Reclusive R4). Always send Survivalists for blueprint runs.
+- Buried buildings do NOT drop blueprints while buried, but if uncovered after hiding, the blueprint is obtained.
+
+### Reading priority — critical
+**Always read Explorable Ruins blueprints before normal blueprints.** Ruin blueprints pull from a small preset pool of buildings. If a normal blueprint randomly unlocks a building from that pool first, the ruin blueprint is wasted. Hold all normal uncommon/rare/VR blueprints until the explorable ruins stop yielding their own.
+
+Exception: if a ruin blueprint's remaining pool only contains child buildings whose parent isn't in the pool and isn't unlocked yet, read normal blueprints until the parent is unlocked, then switch back to ruin blueprints.
