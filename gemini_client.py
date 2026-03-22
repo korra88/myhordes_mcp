@@ -19,6 +19,8 @@ if not GEMINI_API_KEY:
     print("Error: GEMINI_API_KEY not found in environment variables.")
     exit(1)
 
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
 genai.configure(api_key=GEMINI_API_KEY)
 
 TIPS_DIR = Path(__file__).parent / "tips"
@@ -135,7 +137,7 @@ async def run_gemini_client():
 
             system_prompt = load_system_prompt()
             model = genai.GenerativeModel(
-                model_name="gemini-2.0-flash",
+                model_name=GEMINI_MODEL,
                 tools=gemini_tools,
                 system_instruction=system_prompt,
             )
