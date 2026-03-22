@@ -20,6 +20,8 @@ import time
 
 import httpx
 
+from sources import cache
+
 FATA_SPY_URL = "https://fatamorgana.md26.eu/spy/town/{town_id}"
 FATA_SPY_DAY_URL = "https://fatamorgana.md26.eu/spy/town/{town_id}/{day}"
 
@@ -82,20 +84,45 @@ async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
     else:
         url = FATA_SPY_URL.format(town_id=town_id)
 
-    # Return cached result if fresh
+    # Return in-memory cached result if fresh
     now = time.monotonic()
     if url in _cache:
         cached_at, cached_data = _cache[url]
         if now - cached_at < CACHE_TTL:
             return cached_data
 
+    # For past days, try filesystem cache before hitting the network.
+    # But if the requested day matches the town's current day, always fetch
+    # fresh — players keep updating Fata throughout the day.
+    is_current_day = day is None
+    if not is_current_day and day is not None:
+        known_day = cache.get_current_day(town_id)
+        if known_day is not None and day == known_day:
+            is_current_day = True
+
+    if not is_current_day and day is not None:
+        cached_js = cache.load_day_json(town_id, day)
+        if cached_js is not None:
+            result = _build_result(town_id, cached_js)
+            _cache[url] = (now, result)
+            return result
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(url)
             resp.raise_for_status()
     except httpx.HTTPStatusError as e:
+        # On network failure, try filesystem cache as fallback
+        if day is not None:
+            cached_js = cache.load_day_json(town_id, day)
+            if cached_js is not None:
+                return _build_result(town_id, cached_js)
         return {"error": f"Fata Morgana returned HTTP {e.response.status_code}"}
     except httpx.RequestError as e:
+        if day is not None:
+            cached_js = cache.load_day_json(town_id, day)
+            if cached_js is not None:
+                return _build_result(town_id, cached_js)
         return {"error": f"Could not reach Fata Morgana: {e}"}
 
     html = resp.text
@@ -103,6 +130,28 @@ async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
     if not js_data:
         return {"error": "Could not parse town data from Fata Morgana page."}
 
+    result = _build_result(town_id, js_data)
+
+    # Persist to filesystem cache
+    sys_data = js_data.get("system", {})
+    result_day = day if day is not None else sys_data.get("day")
+    if result_day is not None:
+        cache.save_day(
+            town_id=town_id,
+            day=result_day,
+            html=html,
+            js_data=js_data,
+            town_name=sys_data.get("gamename", "Unknown"),
+            season=sys_data.get("season"),
+            is_current_day=(day is None),
+        )
+
+    _cache[url] = (now, result)
+    return result
+
+
+def _build_result(town_id: int, js_data: dict) -> dict:
+    """Transform raw JS data into the standardized result dict."""
     sys = js_data.get("system", {})
     current_day = sys.get("day")
 
@@ -110,7 +159,7 @@ async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
         """Return val if it's a dict, otherwise default (handles [] from empty fields)."""
         return val if isinstance(val, dict) else (default or {})
 
-    result = {
+    return {
         "error": None,
         "meta": {
             "town_name": sys.get("gamename", "Unknown"),
@@ -135,8 +184,6 @@ async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
         "scout": _parse_scout(js_data),
         "zones": _parse_map(js_data),
     }
-    _cache[url] = (now, result)
-    return result
 
 
 # ---------------------------------------------------------------------------
