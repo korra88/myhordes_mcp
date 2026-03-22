@@ -43,15 +43,21 @@ def _check_auth() -> str | None:
     return None
 
 
-def _check_fata() -> str | None:
-    """Return an error message if Fata Morgana town ID is missing, None if OK."""
-    if not FATAMORGANA_TOWN_ID:
-        return "Error: FATAMORGANA_TOWN_ID not configured. Set it in .env to your town's Fata Morgana spy ID."
-    return None
+def _resolve_town_id(town_id: int = 0) -> int | str:
+    """Return a valid town ID (int) or an error message (str).
+
+    If town_id is provided and non-zero, use it directly.
+    Otherwise fall back to the FATAMORGANA_TOWN_ID env var.
+    """
+    if town_id:
+        return int(town_id)
+    if FATAMORGANA_TOWN_ID:
+        return int(FATAMORGANA_TOWN_ID)
+    return "Error: No town ID provided and FATAMORGANA_TOWN_ID not configured in .env."
 
 
 @mcp.tool()
-async def get_bank_inventory(day: int = 0) -> str:
+async def get_bank_inventory(day: int = 0, town_id: int = 0) -> str:
     """
     Fetches the current bank inventory of the MyHordes town, grouped by category.
     Use this tool when the user asks about available resources, materials for
@@ -59,10 +65,12 @@ async def get_bank_inventory(day: int = 0) -> str:
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
     """
-    if err := _check_fata():
-        return err
-    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID), day=day or None)
+    tid = _resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data = await fatamorgana.fetch_town_data(tid, day=day or None)
     return fatamorgana.format_bank(data)
 
 
@@ -71,7 +79,7 @@ async def get_bank_inventory(day: int = 0) -> str:
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-async def get_town_overview(day: int = 0) -> str:
+async def get_town_overview(day: int = 0, town_id: int = 0) -> str:
     """
     Fetches a complete overview of the town from Fata Morgana (community spy service).
     Returns: town name/day, gate status, defense breakdown, attack estimation,
@@ -82,15 +90,17 @@ async def get_town_overview(day: int = 0) -> str:
     Args:
         day: Specific day number to inspect (e.g. 5 for day 5). Use 0 or omit for
              the current/latest day. Useful for comparing town progress over time.
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
     """
-    if err := _check_fata():
-        return err
-    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID), day=day or None)
+    tid = _resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data = await fatamorgana.fetch_town_data(tid, day=day or None)
     return fatamorgana.format_town_overview(data)
 
 
 @mcp.tool()
-async def get_citizen_positions(day: int = 0) -> str:
+async def get_citizen_positions(day: int = 0, town_id: int = 0) -> str:
     """
     Fetches citizen positions from Fata Morgana — who is inside the town,
     who is outside (and where), and the list of dead citizens with cause of death.
@@ -98,15 +108,17 @@ async def get_citizen_positions(day: int = 0) -> str:
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
     """
-    if err := _check_fata():
-        return err
-    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID), day=day or None)
+    tid = _resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data = await fatamorgana.fetch_town_data(tid, day=day or None)
     return fatamorgana.format_citizens(data)
 
 
 @mcp.tool()
-async def get_defense_status(day: int = 0) -> str:
+async def get_defense_status(day: int = 0, town_id: int = 0) -> str:
     """
     Fetches the town defense breakdown and attack estimations from Fata Morgana.
     Includes: total defense, per-source breakdown (wall, buildings, items, guardians,
@@ -116,15 +128,17 @@ async def get_defense_status(day: int = 0) -> str:
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
     """
-    if err := _check_fata():
-        return err
-    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID), day=day or None)
+    tid = _resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data = await fatamorgana.fetch_town_data(tid, day=day or None)
     return fatamorgana.format_defense(data)
 
 
 @mcp.tool()
-async def get_buildings(day: int = 0) -> str:
+async def get_buildings(day: int = 0, town_id: int = 0) -> str:
     """
     Fetches the town's building list from Fata Morgana — what's been built
     and what's still available to construct, with defense values and AP costs.
@@ -133,15 +147,17 @@ async def get_buildings(day: int = 0) -> str:
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
     """
-    if err := _check_fata():
-        return err
-    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID), day=day or None)
+    tid = _resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data = await fatamorgana.fetch_town_data(tid, day=day or None)
     return fatamorgana.format_buildings(data)
 
 
 @mcp.tool()
-async def get_scout_map(day: int = 0) -> str:
+async def get_scout_map(day: int = 0, town_id: int = 0) -> str:
     """
     Fetches zombie counts per zone from scout data (Fata Morgana).
     Shows which zones have been scouted, how many zombies were spotted,
@@ -151,11 +167,32 @@ async def get_scout_map(day: int = 0) -> str:
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
     """
-    if err := _check_fata():
-        return err
-    data = await fatamorgana.fetch_town_data(int(FATAMORGANA_TOWN_ID), day=day or None)
+    tid = _resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data = await fatamorgana.fetch_town_data(tid, day=day or None)
     return fatamorgana.format_scout(data)
+
+
+@mcp.tool()
+async def get_zone_details(day: int = 0, town_id: int = 0) -> str:
+    """
+    Fetches detailed map zone data from Fata Morgana — ruins (with names, dig
+    counts, blueprint status), ground items per zone, and zombie counts.
+    Use this when the user asks about ruins, what items are on the ground outside,
+    or what's available at specific map coordinates.
+
+    Args:
+        day: Specific day number to inspect. Use 0 or omit for the current day.
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+    """
+    tid = _resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data = await fatamorgana.fetch_town_data(tid, day=day or None)
+    return fatamorgana.format_zones(data)
 
 
 # ---------------------------------------------------------------------------

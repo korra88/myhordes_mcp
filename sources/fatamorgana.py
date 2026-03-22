@@ -6,11 +6,12 @@ Fetches the spy page for a given town ID and extracts the embedded
 - Defense breakdown and attack estimations
 - Water supply
 - Gate status (door)
-- Citizen positions and jobs
+- Citizen positions and jobs (with per-citizen freshness)
 - Dead citizens (cadavers) with cause of death
 - Bank inventory with item names
-- Scout data (zombie counts per zone)
-- Buildings and construction history
+- Scout data (zombie counts per zone, per-zone freshness)
+- Map zone data (ruins, ground items, zombie counts, danger)
+- Buildings with upgrade levels and construction history
 """
 
 import json
@@ -111,6 +112,8 @@ async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
             "game_type": sys.get("gametype"),
             "owner": sys.get("owner_name"),
             "data_time": sys.get("datatime"),
+            "chaos": bool(sys.get("chaos")),
+            "devastated": bool(sys.get("devast")),
         },
         "defense": _as_dict(js_data.get("defense")),
         "water": _as_dict(js_data.get("water")),
@@ -121,6 +124,7 @@ async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
         "bank": _parse_bank(js_data),
         "buildings": _parse_buildings(js_data),
         "scout": _parse_scout(js_data),
+        "zones": _parse_map(js_data),
     }
     _cache[url] = (now, result)
     return result
@@ -177,8 +181,6 @@ def _parse_citizens(js_data: dict, sys_data: dict) -> list[dict]:
     if not isinstance(roles, dict):
         roles = {}
     shaman_id = roles.get("shaman")
-    town_x = js_data.get("ox", 0)
-    town_y = js_data.get("oy", 0)
     citizens = []
     for cid, c in citizens_raw.items():
         if c.get("dead"):
@@ -264,18 +266,29 @@ def _parse_bank(js_data: dict) -> list[dict]:
 
 
 def _parse_buildings(js_data: dict) -> list[dict]:
-    """Extract building list from bpsAndConstructions."""
+    """Extract building list from bpsAndConstructions.
+
+    The `constructions` dict tells us which buildings are built and their
+    current upgrade level (if upgradeable). The `constructionHistory` dict
+    provides the day each building was built and when each upgrade happened.
+    """
     bps = js_data.get("bpsAndConstructions", {})
     if not isinstance(bps, dict):
         bps = {}
     constructions = js_data.get("constructions", {})
     if not isinstance(constructions, dict):
         constructions = {}
+    history = js_data.get("constructionHistory", {})
+    if not isinstance(history, dict):
+        history = {}
     built_ids = set(constructions.keys())
     buildings = []
     for bid, b in bps.items():
         name_dict = b.get("name", {})
         name = name_dict.get("en") or name_dict.get("fr") or next(iter(name_dict.values()), f"Building {bid}")
+        con = constructions.get(bid, {})
+        hist = history.get(bid, {})
+        level = con.get("level")  # None if not upgradeable
         buildings.append({
             "id": bid,
             "name": name,
@@ -283,22 +296,35 @@ def _parse_buildings(js_data: dict) -> list[dict]:
             "ap_cost": b.get("paCurrent", 0),
             "temporary": b.get("temporary", False),
             "built": bid in built_ids,
+            "level": level,
+            "built_day": hist.get("built"),
+            "upgrade_days": hist.get("voted") if isinstance(hist.get("voted"), dict) else None,
         })
     return buildings
 
 
 def _parse_scout(js_data: dict) -> list[dict]:
-    """Extract scout data (zombie counts per zone)."""
+    """Extract scout data (zombie counts per zone).
+
+    Zone keys in the scout dict are absolute map coordinates (e.g. y15x-3).
+    We normalize to town-relative by subtracting the town origin (ox, oy).
+    """
     scout_raw = js_data.get("scout", {})
     if not isinstance(scout_raw, dict):
         scout_raw = {}
+    ox = js_data.get("ox", 0)
+    oy = js_data.get("oy", 0)
     zones = []
     for key, info in scout_raw.items():
         m = re.match(r"y(-?\d+)x(-?\d+)", key)
         if not m:
             continue
+        abs_y = int(m.group(1))
+        abs_x = int(m.group(2))
+        rel_x = abs_x - ox
+        rel_y = abs_y - oy
         zones.append({
-            "coords": f"[{m.group(2)}|{m.group(1)}]",
+            "coords": f"[{rel_x}|{rel_y}]",
             "zombies": int(info.get("zom", 0)),
             "scouted_by": info.get("updatedBy", "Unknown"),
             "scouted_day": info.get("updatedOnDay"),
@@ -306,9 +332,120 @@ def _parse_scout(js_data: dict) -> list[dict]:
     return zones
 
 
+def _parse_map(js_data: dict) -> list[dict]:
+    """Extract detailed zone data from the map dict.
+
+    The map dict uses absolute coords as nested keys: map[yN][xM].
+    Each zone has items, zombie count, ruin/building info, danger level, etc.
+    Zone coords include rx/ry which are already town-relative.
+    """
+    map_raw = js_data.get("map", {})
+    if not isinstance(map_raw, dict):
+        map_raw = {}
+    items_dict = js_data.get("items", {})
+    if not isinstance(items_dict, dict):
+        items_dict = {}
+    buildings_dict = js_data.get("buildings", {})
+    if not isinstance(buildings_dict, dict):
+        buildings_dict = {}
+    ox = js_data.get("ox", 0)
+    oy = js_data.get("oy", 0)
+    zones = []
+    for y_key, x_dict in map_raw.items():
+        if not isinstance(x_dict, dict):
+            continue
+        for x_key, zone in x_dict.items():
+            if not isinstance(zone, dict):
+                continue
+            # Use rx/ry if available (already relative), else compute from keys
+            if "rx" in zone and "ry" in zone:
+                rx = zone["rx"]
+                ry = zone["ry"]
+            else:
+                y_m = re.match(r"y(-?\d+)", y_key)
+                x_m = re.match(r"x(-?\d+)", x_key)
+                if not y_m or not x_m:
+                    continue
+                rx = int(x_m.group(1)) - ox
+                ry = int(y_m.group(1)) - oy
+
+            # Resolve item names
+            zone_items = []
+            for item in zone.get("items", []):
+                item_id = str(item.get("id", ""))
+                item_def = items_dict.get(item_id, {})
+                name_dict = item_def.get("name", {})
+                name = name_dict.get("en") or name_dict.get("fr") or f"Item #{item_id}"
+                zone_items.append({
+                    "name": name,
+                    "count": item.get("count", 0),
+                    "broken": item.get("broken", 0),
+                })
+
+            # Parse ruin/building
+            ruin = None
+            bld = zone.get("building")
+            if bld and isinstance(bld, dict):
+                ruin = {
+                    "name": bld.get("name", "Unknown ruin"),
+                    "type_id": bld.get("type"),
+                    "digs_remaining": bld.get("dig"),
+                    "blueprint": bld.get("blueprint", 0),
+                    "dried": bld.get("dried", 0),
+                }
+
+            entry = {
+                "coords": f"[{rx}|{ry}]",
+                "zombies": zone.get("zm", 0),
+                "danger": zone.get("danger", 0),
+                "dried": zone.get("dried", 0),
+                "tag": zone.get("tag"),
+                "items": zone_items,
+                "ruin": ruin,
+                "updated_by": zone.get("updatedBy"),
+                "updated_day": zone.get("updatedOnDay"),
+            }
+            zones.append(entry)
+    return zones
+
+
 # ---------------------------------------------------------------------------
 # Formatters — turn parsed data into human-readable strings for the LLM
 # ---------------------------------------------------------------------------
+
+def _format_estimate(est: dict) -> str:
+    """Format a single attack estimate with confirmed/partial indicator."""
+    if est.get("min") is None:
+        return "???"
+    label = "(confirmed)" if est.get("maxed") else "(partial)"
+    return f"{est['min']}-{est['max']} {label}"
+
+
+def _staleness_tag(last_update_day: int | None, current_day: int | None) -> str:
+    """Return a staleness warning if position data is old, empty string otherwise."""
+    if last_update_day is None or current_day is None:
+        return ""
+    age = current_day - last_update_day
+    if age >= 1:
+        return f" [STALE: day {last_update_day}]"
+    return ""
+
+
+def _zone_freshness(zone: dict, current_day: int | None) -> str:
+    """Return a compact freshness string for a map zone, e.g. ' (by PlayerName, day 32)'."""
+    updated_by = zone.get("updated_by")
+    updated_day = zone.get("updated_day")
+    if not updated_by and updated_day is None:
+        return ""
+    parts = []
+    if updated_by:
+        parts.append(f"by {updated_by}")
+    if updated_day is not None:
+        parts.append(f"day {updated_day}")
+    tag = f" ({', '.join(parts)})"
+    if current_day is not None and updated_day is not None and current_day - updated_day >= 1:
+        tag += " [STALE]"
+    return tag
 
 def format_town_overview(data: dict) -> str:
     """Format a complete town overview."""
@@ -321,20 +458,24 @@ def format_town_overview(data: dict) -> str:
     gate = data["gate"]
     est = data["estimations"]
     citizens = data["citizens"]
+    deaths = data["deaths"]
     bank = data["bank"]
+    current_day = meta.get("day")
 
     alive = len(citizens)
     inside = sum(1 for c in citizens if c["inside_town"])
     outside = alive - inside
 
     today_est = est.get("today", {})
-    tonight = f"{today_est['min']}-{today_est['max']}" if today_est.get("min") is not None else "???"
+    tonight = _format_estimate(today_est)
     tomorrow_est = est.get("tomorrow", {})
-    tomorrow = f"{tomorrow_est['min']}-{tomorrow_est['max']}" if tomorrow_est.get("min") is not None else "???"
+    tomorrow = _format_estimate(tomorrow_est)
 
     lines = [
         f"# {meta.get('town_name', 'Unknown Town')} — Day {meta.get('day', '?')}",
-        f"Season {meta.get('season', '?')} | Type: {meta.get('game_type', '?')} | Region: {meta.get('region', '?')}",
+        f"Season {meta.get('season', '?')} | Type: {meta.get('game_type', '?')} | Region: {meta.get('region', '?')}"
+        + (" | CHAOS MODE" if meta.get("chaos") else "")
+        + (" | DEVASTATED" if meta.get("devastated") else ""),
         f"Data updated: {meta.get('data_time', 'unknown')}",
         "",
         f"## Gate: {gate.upper()}",
@@ -354,10 +495,19 @@ def format_town_overview(data: dict) -> str:
         "",
         f"## Citizens ({alive} alive — {inside} inside, {outside} outside)",
     ]
+    # Citizen positions are auto-synced unless town is in chaos/devastated mode
+    show_citizen_stale = meta.get("chaos") or meta.get("devastated")
     for c in citizens:
         loc = "IN TOWN" if c["inside_town"] else c["coords"]
         shaman = " [Shaman]" if c["is_shaman"] else ""
-        lines.append(f"  {c['name']} ({c['job']}{shaman}) — {loc}")
+        stale = _staleness_tag(c.get("last_update_day"), current_day) if show_citizen_stale else ""
+        lines.append(f"  {c['name']} ({c['job']}{shaman}) — {loc}{stale}")
+
+    if deaths:
+        lines.append("")
+        lines.append(f"## Deaths ({len(deaths)})")
+        for d in deaths:
+            lines.append(f"  Day {d['day']}: {d['name']} — {d['cause']} (last at {d['last_coords']})")
 
     lines.append("")
     lines.append(f"## Bank ({len(bank)} items)")
@@ -376,6 +526,9 @@ def format_citizens(data: dict) -> str:
     citizens = data["citizens"]
     deaths = data["deaths"]
     gate = data["gate"]
+    meta = data["meta"]
+    current_day = meta.get("day")
+    show_citizen_stale = meta.get("chaos") or meta.get("devastated")
 
     inside = [c for c in citizens if c["inside_town"]]
     outside = [c for c in citizens if not c["inside_town"]]
@@ -390,7 +543,8 @@ def format_citizens(data: dict) -> str:
         lines.append("### Outside the town:")
         for c in outside:
             shaman = " [Shaman]" if c["is_shaman"] else ""
-            lines.append(f"  {c['name']} ({c['job']}{shaman}) at {c['coords']}")
+            stale = _staleness_tag(c.get("last_update_day"), current_day) if show_citizen_stale else ""
+            lines.append(f"  {c['name']} ({c['job']}{shaman}) at {c['coords']}{stale}")
     else:
         lines.append("Everyone is inside the town.")
 
@@ -470,7 +624,10 @@ def format_buildings(data: dict) -> str:
         total_def = sum(b["defense"] for b in built)
         lines.append(f"### Built ({len(built)}, total defense: {total_def})")
         for b in built:
-            parts = [f"  {b['name']}"]
+            name = b["name"]
+            if b.get("level") is not None:
+                name += f" [Lv.{b['level']}]"
+            parts = [f"  {name}"]
             if b["defense"]:
                 parts.append(f"+{b['defense']} def")
             if b["temporary"]:
@@ -498,55 +655,175 @@ def format_buildings(data: dict) -> str:
 
 
 def format_scout(data: dict) -> str:
-    """Format scout data showing zombie counts per zone."""
+    """Format zombie counts per zone from scout data or map data.
+
+    Prefers the `scout` dict when available, falls back to `zones` (map data).
+    Map data uses zm: -1 = not scouted, 0 = clear, 1+ = zombie count.
+    Each zone has independent freshness (updatedBy / updatedOnDay).
+    """
     if data.get("error"):
         return f"Error: {data['error']}"
 
-    zones = data["scout"]
     meta = data["meta"]
+    current_day = meta.get("day")
 
-    if not zones:
-        return "No scout data available. Zones haven't been scouted yet."
+    # Prefer scout data; fall back to map zones
+    scout_zones = data.get("scout", [])
+    map_zones = data.get("zones", [])
 
-    # Sort by zombie count descending for threat prioritization
-    zones_sorted = sorted(zones, key=lambda z: z["zombies"], reverse=True)
-    total_zombies = sum(z["zombies"] for z in zones_sorted)
-    scouted_count = len(zones_sorted)
+    if scout_zones:
+        # Legacy scout data — already formatted as list of dicts with zombies
+        zones_sorted = sorted(scout_zones, key=lambda z: z["zombies"], reverse=True)
+        total_zombies = sum(z["zombies"] for z in zones_sorted)
+
+        lines = [
+            f"## Scout Map — {meta.get('town_name', '?')} Day {current_day}",
+            f"{len(zones_sorted)} zones scouted, {total_zombies} total zombies spotted",
+            "",
+        ]
+
+        dangerous = [z for z in zones_sorted if z["zombies"] >= 10]
+        moderate = [z for z in zones_sorted if 3 <= z["zombies"] < 10]
+        low = [z for z in zones_sorted if 1 <= z["zombies"] < 3]
+        clear = [z for z in zones_sorted if z["zombies"] == 0]
+
+        if dangerous:
+            lines.append(f"### Dangerous zones ({len(dangerous)}, 10+ zombies)")
+            for z in dangerous:
+                lines.append(f"  {z['coords']}: {z['zombies']} zombies (scouted by {z['scouted_by']}, day {z['scouted_day']})")
+            lines.append("")
+
+        if moderate:
+            lines.append(f"### Moderate zones ({len(moderate)}, 3-9 zombies)")
+            for z in moderate:
+                lines.append(f"  {z['coords']}: {z['zombies']} zombies (day {z['scouted_day']})")
+            lines.append("")
+
+        if low:
+            lines.append(f"### Low threat zones ({len(low)}, 1-2 zombies)")
+            for z in low:
+                lines.append(f"  {z['coords']}: {z['zombies']} zombies (day {z['scouted_day']})")
+            lines.append("")
+
+        if clear:
+            lines.append(f"### Clear zones ({len(clear)})")
+            coords_list = ", ".join(z["coords"] for z in clear)
+            lines.append(f"  {coords_list}")
+
+        return "\n".join(lines)
+
+    if not map_zones:
+        return "No scout or map data available."
+
+    # Use map data — richer: per-zone freshness, zm=-1 for unscouted
+    # zm: -1 = not scouted, 0 = clear, 1+ = zombie count
+    scouted = [z for z in map_zones if z["zombies"] >= 0]
+    unscouted = [z for z in map_zones if z["zombies"] < 0]
+    with_zombies = [z for z in scouted if z["zombies"] > 0]
+    clear = [z for z in scouted if z["zombies"] == 0]
+    total_zombies = sum(z["zombies"] for z in with_zombies)
 
     lines = [
-        f"## Scout Map — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
-        f"{scouted_count} zones scouted, {total_zombies} total zombies spotted",
+        f"## Scout Map — {meta.get('town_name', '?')} Day {current_day}",
+        f"{len(map_zones)} zones explored | {len(scouted)} scouted | {len(unscouted)} unscouted | {total_zombies} zombies spotted",
         "",
     ]
 
-    # Group into threat levels
-    dangerous = [z for z in zones_sorted if z["zombies"] >= 10]
-    moderate = [z for z in zones_sorted if 3 <= z["zombies"] < 10]
-    low = [z for z in zones_sorted if 1 <= z["zombies"] < 3]
-    clear = [z for z in zones_sorted if z["zombies"] == 0]
-
-    if dangerous:
-        lines.append(f"### Dangerous zones ({len(dangerous)}, 10+ zombies)")
-        for z in dangerous:
-            lines.append(f"  {z['coords']}: {z['zombies']} zombies (scouted by {z['scouted_by']}, day {z['scouted_day']})")
-        lines.append("")
-
-    if moderate:
-        lines.append(f"### Moderate zones ({len(moderate)}, 3-9 zombies)")
-        for z in moderate:
-            lines.append(f"  {z['coords']}: {z['zombies']} zombies (day {z['scouted_day']})")
-        lines.append("")
-
-    if low:
-        lines.append(f"### Low threat zones ({len(low)}, 1-2 zombies)")
-        for z in low:
-            lines.append(f"  {z['coords']}: {z['zombies']} zombies (day {z['scouted_day']})")
+    if with_zombies:
+        with_zombies.sort(key=lambda z: z["zombies"], reverse=True)
+        lines.append(f"### Zones with zombies ({len(with_zombies)})")
+        for z in with_zombies:
+            stale = _staleness_tag(z.get("updated_day"), current_day)
+            who = f", by {z['updated_by']}" if z.get("updated_by") else ""
+            lines.append(f"  {z['coords']}: {z['zombies']} zombies (day {z.get('updated_day', '?')}{who}){stale}")
         lines.append("")
 
     if clear:
-        lines.append(f"### Clear zones ({len(clear)})")
-        coords_list = ", ".join(z["coords"] for z in clear)
+        # Group clear zones by freshness
+        fresh = [z for z in clear if z.get("updated_day") == current_day]
+        older = [z for z in clear if z.get("updated_day") != current_day and z.get("updated_day") is not None]
+        lines.append(f"### Clear zones ({len(clear)}: {len(fresh)} today, {len(older)} older)")
+        if fresh:
+            coords_list = ", ".join(z["coords"] for z in sorted(fresh, key=lambda z: z["coords"]))
+            lines.append(f"  Today: {coords_list}")
+        if older:
+            # Show with day info
+            older.sort(key=lambda z: z.get("updated_day", 0), reverse=True)
+            by_day: dict[int, list[str]] = {}
+            for z in older:
+                d = z.get("updated_day", 0)
+                by_day.setdefault(d, []).append(z["coords"])
+            for d in sorted(by_day.keys(), reverse=True):
+                coords_list = ", ".join(by_day[d])
+                lines.append(f"  Day {d}: {coords_list}")
+        lines.append("")
+
+    if unscouted:
+        lines.append(f"### Unscouted zones ({len(unscouted)})")
+        coords_list = ", ".join(z["coords"] for z in sorted(unscouted, key=lambda z: z["coords"]))
         lines.append(f"  {coords_list}")
+
+    return "\n".join(lines)
+
+
+def format_zones(data: dict) -> str:
+    """Format detailed map zone data — ruins, items, zombies, danger."""
+    if data.get("error"):
+        return f"Error: {data['error']}"
+
+    zones = data.get("zones", [])
+    meta = data["meta"]
+
+    if not zones:
+        return "No map data available."
+
+    # Separate ruins from regular zones
+    ruin_zones = [z for z in zones if z.get("ruin")]
+    item_zones = [z for z in zones if z.get("items") and not z.get("ruin")]
+
+    lines = [
+        f"## Zone Map — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
+        f"{len(zones)} zones explored, {len(ruin_zones)} ruins found",
+        "",
+    ]
+
+    current_day = meta.get("day")
+
+    if ruin_zones:
+        ruin_zones.sort(key=lambda z: z["ruin"]["name"])
+        lines.append(f"### Ruins ({len(ruin_zones)})")
+        for z in ruin_zones:
+            r = z["ruin"]
+            bp = " [BLUEPRINT]" if r.get("blueprint") else ""
+            dried = " (dried)" if r.get("dried") else ""
+            digs = f", {r['digs_remaining']} digs left" if r.get("digs_remaining") not in (None, "0", 0) else ""
+            zm_val = z.get("zombies", 0)
+            zm = f", {zm_val} zom" if zm_val and zm_val > 0 else ""
+            fresh = _zone_freshness(z, current_day)
+            lines.append(f"  {z['coords']}: {r['name']}{bp}{dried}{digs}{zm}{fresh}")
+            if z.get("items"):
+                item_list = ", ".join(
+                    f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")
+                    for i in z["items"]
+                )
+                lines.append(f"    Items: {item_list}")
+        lines.append("")
+
+    # Show zones with items (non-ruin)
+    if item_zones:
+        item_zones.sort(key=lambda z: z["coords"])
+        lines.append(f"### Zones with ground items ({len(item_zones)})")
+        for z in item_zones:
+            zm_val = z.get("zombies", 0)
+            zm = f", {zm_val} zom" if zm_val and zm_val > 0 else ""
+            dried = " (dried)" if z.get("dried") else ""
+            fresh = _zone_freshness(z, current_day)
+            lines.append(f"  {z['coords']}{dried}{zm}{fresh}:")
+            item_list = ", ".join(
+                f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")
+                for i in z["items"]
+            )
+            lines.append(f"    {item_list}")
 
     return "\n".join(lines)
 
@@ -564,10 +841,10 @@ def format_defense(data: dict) -> str:
     today_est = est.get("today", {})
     low = today_est.get("min")
     high = today_est.get("max")
-    tonight = f"{low}-{high}" if low is not None else "???"
+    tonight = _format_estimate(today_est)
 
     tomorrow_est = est.get("tomorrow", {})
-    tomorrow = f"{tomorrow_est['min']}-{tomorrow_est['max']}" if tomorrow_est.get("min") is not None else "???"
+    tomorrow = _format_estimate(tomorrow_est)
 
     survival = ""
     if low is not None and high is not None:
@@ -601,7 +878,6 @@ def format_defense(data: dict) -> str:
         lines.append("### Attack history:")
         for day_str in sorted(history.keys(), key=int):
             e = history[day_str]
-            maxed = " (confirmed)" if e.get("maxed") else ""
-            lines.append(f"  Day {day_str}: {e.get('min')}-{e.get('max')}{maxed}")
+            lines.append(f"  Day {day_str}: {_format_estimate(e)}")
 
     return "\n".join(lines)

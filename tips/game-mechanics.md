@@ -27,6 +27,8 @@ Taking a drug gives "Drugged" status and restores AP. Taking a second drug while
 ## Midnight Attack
 Every night at 23:59 CET, a horde of zombies attacks. The town's total defense must exceed the zombie attack estimation or citizens will be slaughtered. The Town Gates MUST be closed before the attack.
 
+**Unfilled towns:** If the town doesn't have 40 citizens by midnight, the attack is skipped entirely. No AP refresh, no status reset, no status progression (thirst, infection, etc.). The day effectively extends by 24 hours. This repeats until the town fills.
+
 ## Watchmen
 Citizens can join the "Watch" to add their personal defense points to the town's total. This heavily risks their lives (injury, terror, or death). Bank resources are sacred — calculate carefully before equipping Watchmen.
 
