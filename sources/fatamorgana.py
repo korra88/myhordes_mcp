@@ -35,6 +35,15 @@ DEATH_TYPES = {
     8: "Ghoul purge",
 }
 
+# Zone danger level → human-readable zombie estimate
+# These come from in-game map exploration (automatic), not manual scouting.
+DANGER_LEVELS = {
+    0: "safe (0 zombies)",
+    1: "low (1-2 zombies)",
+    2: "moderate (3-5 zombies)",
+    3: "dangerous (6+ zombies)",
+}
+
 # Fata job key → display name
 JOB_NAMES = {
     "basic": "Resident",
@@ -307,7 +316,8 @@ def _parse_scout(js_data: dict) -> list[dict]:
     """Extract scout data (zombie counts per zone).
 
     Zone keys in the scout dict are absolute map coordinates (e.g. y15x-3).
-    We normalize to town-relative by subtracting the town origin (ox, oy).
+    We normalize to town-relative coords where Y is inverted: rel_y = oy - abs_y.
+    This matches the game convention where positive Y is south (lower abs_y).
     """
     scout_raw = js_data.get("scout", {})
     if not isinstance(scout_raw, dict):
@@ -322,7 +332,7 @@ def _parse_scout(js_data: dict) -> list[dict]:
         abs_y = int(m.group(1))
         abs_x = int(m.group(2))
         rel_x = abs_x - ox
-        rel_y = abs_y - oy
+        rel_y = oy - abs_y
         zones.append({
             "coords": f"[{rel_x}|{rel_y}]",
             "zombies": int(info.get("zom", 0)),
@@ -367,7 +377,7 @@ def _parse_map(js_data: dict) -> list[dict]:
                 if not y_m or not x_m:
                     continue
                 rx = int(x_m.group(1)) - ox
-                ry = int(y_m.group(1)) - oy
+                ry = oy - int(y_m.group(1))
 
             # Resolve item names
             zone_items = []
@@ -383,6 +393,7 @@ def _parse_map(js_data: dict) -> list[dict]:
                 })
 
             # Parse ruin/building
+            # blueprint: 0 = available (not yet found), 1 = already found
             ruin = None
             bld = zone.get("building")
             if bld and isinstance(bld, dict):
@@ -390,13 +401,14 @@ def _parse_map(js_data: dict) -> list[dict]:
                     "name": bld.get("name", "Unknown ruin"),
                     "type_id": bld.get("type"),
                     "digs_remaining": bld.get("dig"),
-                    "blueprint": bld.get("blueprint", 0),
+                    "blueprint_available": bld.get("blueprint", 0) == 0,
                     "dried": bld.get("dried", 0),
                 }
 
             entry = {
                 "coords": f"[{rx}|{ry}]",
                 "zombies": zone.get("zm", 0),
+                "zombies_max": zone.get("z", 0),
                 "danger": zone.get("danger", 0),
                 "dried": zone.get("dried", 0),
                 "tag": zone.get("tag"),
@@ -428,6 +440,24 @@ def _staleness_tag(last_update_day: int | None, current_day: int | None) -> str:
     age = current_day - last_update_day
     if age >= 1:
         return f" [STALE: day {last_update_day}]"
+    return ""
+
+
+def _zone_threat(zone: dict) -> str:
+    """Format zombie count or danger estimate for a zone.
+
+    If an exact zombie count was reported (zm >= 0), show it.
+    Otherwise fall back to the danger level from in-game map exploration.
+    """
+    zm = zone.get("zombies", 0)
+    if zm is not None and zm >= 0:
+        if zm == 0:
+            return ""
+        return f", {zm} zom"
+    # No exact count — use danger level from exploration
+    danger = zone.get("danger", 0)
+    if danger:
+        return f", ~{DANGER_LEVELS.get(danger, f'danger {danger}')}"
     return ""
 
 
@@ -667,56 +697,20 @@ def format_scout(data: dict) -> str:
     meta = data["meta"]
     current_day = meta.get("day")
 
-    # Prefer scout data; fall back to map zones
-    scout_zones = data.get("scout", [])
+    # Combine map data (explored zones with danger levels, items, ruins) with
+    # scout estimates (zombie counts for distant zones estimated by Scout profession).
+    # Scout estimates cover zones not in the map data.
     map_zones = data.get("zones", [])
+    scout_zones = data.get("scout", [])
 
-    if scout_zones:
-        # Legacy scout data — already formatted as list of dicts with zombies
-        zones_sorted = sorted(scout_zones, key=lambda z: z["zombies"], reverse=True)
-        total_zombies = sum(z["zombies"] for z in zones_sorted)
-
-        lines = [
-            f"## Scout Map — {meta.get('town_name', '?')} Day {current_day}",
-            f"{len(zones_sorted)} zones scouted, {total_zombies} total zombies spotted",
-            "",
-        ]
-
-        dangerous = [z for z in zones_sorted if z["zombies"] >= 10]
-        moderate = [z for z in zones_sorted if 3 <= z["zombies"] < 10]
-        low = [z for z in zones_sorted if 1 <= z["zombies"] < 3]
-        clear = [z for z in zones_sorted if z["zombies"] == 0]
-
-        if dangerous:
-            lines.append(f"### Dangerous zones ({len(dangerous)}, 10+ zombies)")
-            for z in dangerous:
-                lines.append(f"  {z['coords']}: {z['zombies']} zombies (scouted by {z['scouted_by']}, day {z['scouted_day']})")
-            lines.append("")
-
-        if moderate:
-            lines.append(f"### Moderate zones ({len(moderate)}, 3-9 zombies)")
-            for z in moderate:
-                lines.append(f"  {z['coords']}: {z['zombies']} zombies (day {z['scouted_day']})")
-            lines.append("")
-
-        if low:
-            lines.append(f"### Low threat zones ({len(low)}, 1-2 zombies)")
-            for z in low:
-                lines.append(f"  {z['coords']}: {z['zombies']} zombies (day {z['scouted_day']})")
-            lines.append("")
-
-        if clear:
-            lines.append(f"### Clear zones ({len(clear)})")
-            coords_list = ", ".join(z["coords"] for z in clear)
-            lines.append(f"  {coords_list}")
-
-        return "\n".join(lines)
-
-    if not map_zones:
+    if not map_zones and not scout_zones:
         return "No scout or map data available."
 
-    # Use map data — richer: per-zone freshness, zm=-1 for unscouted
-    # zm: -1 = not scouted, 0 = clear, 1+ = zombie count
+    # Merge: scout zones that aren't already in map data
+    map_coords = {z["coords"] for z in map_zones}
+    scout_only = [z for z in scout_zones if z["coords"] not in map_coords]
+
+    # Use map data — zm: -1 = not scouted, 0 = clear, 1+ = zombie count
     scouted = [z for z in map_zones if z["zombies"] >= 0]
     unscouted = [z for z in map_zones if z["zombies"] < 0]
     with_zombies = [z for z in scouted if z["zombies"] > 0]
@@ -725,7 +719,7 @@ def format_scout(data: dict) -> str:
 
     lines = [
         f"## Scout Map — {meta.get('town_name', '?')} Day {current_day}",
-        f"{len(map_zones)} zones explored | {len(scouted)} scouted | {len(unscouted)} unscouted | {total_zombies} zombies spotted",
+        f"{len(map_zones)} zones explored | {len(scouted)} scouted | {len(unscouted)} unscouted | {len(scout_only)} scout estimates | {total_zombies} zombies spotted",
         "",
     ]
 
@@ -759,9 +753,28 @@ def format_scout(data: dict) -> str:
         lines.append("")
 
     if unscouted:
+        # Split unscouted into those with danger info vs completely unknown
+        with_danger = [z for z in unscouted if z.get("danger")]
+        no_info = [z for z in unscouted if not z.get("danger")]
         lines.append(f"### Unscouted zones ({len(unscouted)})")
-        coords_list = ", ".join(z["coords"] for z in sorted(unscouted, key=lambda z: z["coords"]))
-        lines.append(f"  {coords_list}")
+        if with_danger:
+            # Group by danger level, show highest first
+            with_danger.sort(key=lambda z: (-z["danger"], z["coords"]))
+            for z in with_danger:
+                dlevel = z["danger"]
+                label = DANGER_LEVELS.get(dlevel, f"danger {dlevel}")
+                lines.append(f"  {z['coords']}: ~{label}")
+        if no_info:
+            coords_list = ", ".join(z["coords"] for z in sorted(no_info, key=lambda z: z["coords"]))
+            lines.append(f"  No data: {coords_list}")
+
+    if scout_only:
+        lines.append("")
+        scout_only.sort(key=lambda z: z["zombies"], reverse=True)
+        lines.append(f"### Scout estimates ({len(scout_only)} zones beyond explored map)")
+        for z in scout_only:
+            stale = _staleness_tag(z.get("scouted_day"), current_day)
+            lines.append(f"  {z['coords']}: ~{z['zombies']} zombies (by {z['scouted_by']}, day {z['scouted_day']}){stale}")
 
     return "\n".join(lines)
 
@@ -794,13 +807,12 @@ def format_zones(data: dict) -> str:
         lines.append(f"### Ruins ({len(ruin_zones)})")
         for z in ruin_zones:
             r = z["ruin"]
-            bp = " [BLUEPRINT]" if r.get("blueprint") else ""
+            bp = " [BLUEPRINT]" if r.get("blueprint_available") else ""
             dried = " (dried)" if r.get("dried") else ""
             digs = f", {r['digs_remaining']} digs left" if r.get("digs_remaining") not in (None, "0", 0) else ""
-            zm_val = z.get("zombies", 0)
-            zm = f", {zm_val} zom" if zm_val and zm_val > 0 else ""
+            threat = _zone_threat(z)
             fresh = _zone_freshness(z, current_day)
-            lines.append(f"  {z['coords']}: {r['name']}{bp}{dried}{digs}{zm}{fresh}")
+            lines.append(f"  {z['coords']}: {r['name']}{bp}{dried}{digs}{threat}{fresh}")
             if z.get("items"):
                 item_list = ", ".join(
                     f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")
@@ -814,11 +826,10 @@ def format_zones(data: dict) -> str:
         item_zones.sort(key=lambda z: z["coords"])
         lines.append(f"### Zones with ground items ({len(item_zones)})")
         for z in item_zones:
-            zm_val = z.get("zombies", 0)
-            zm = f", {zm_val} zom" if zm_val and zm_val > 0 else ""
             dried = " (dried)" if z.get("dried") else ""
+            threat = _zone_threat(z)
             fresh = _zone_freshness(z, current_day)
-            lines.append(f"  {z['coords']}{dried}{zm}{fresh}:")
+            lines.append(f"  {z['coords']}{dried}{threat}{fresh}:")
             item_list = ", ".join(
                 f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")
                 for i in z["items"]
