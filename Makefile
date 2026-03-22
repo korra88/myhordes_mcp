@@ -26,7 +26,7 @@ help: ## Show this help
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 gemini-veteran: ## Start Gemini as the Desert Veteran advisor (embedded agent, proper CLI)
-	$(PYTHON) gemini_client.py
+	.venv/bin/python gemini_client.py
 
 desert-veteran: ## Start Claude as the Desert Veteran advisor (loads personality + tips)
 	claude \

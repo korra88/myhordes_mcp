@@ -39,12 +39,40 @@ def load_system_prompt() -> str:
     return "\n\n---\n\n".join(parts)
 
 
+def _clean_schema(schema: dict) -> dict:
+    """Convert JSON Schema to Gemini-compatible Schema (uppercase types, no unsupported fields)."""
+    UNSUPPORTED = {"default", "title", "additionalProperties", "$schema"}
+    TYPE_MAP = {
+        "string": "STRING",
+        "integer": "INTEGER",
+        "number": "NUMBER",
+        "boolean": "BOOLEAN",
+        "array": "ARRAY",
+        "object": "OBJECT",
+    }
+    cleaned = {}
+    for k, v in schema.items():
+        if k in UNSUPPORTED:
+            continue
+        if k == "type" and isinstance(v, str):
+            cleaned[k] = TYPE_MAP.get(v, v.upper())
+        else:
+            cleaned[k] = v
+    if "properties" in cleaned:
+        cleaned["properties"] = {
+            k: _clean_schema(v) for k, v in cleaned["properties"].items()
+        }
+    if "items" in cleaned and isinstance(cleaned["items"], dict):
+        cleaned["items"] = _clean_schema(cleaned["items"])
+    return cleaned
+
+
 def mcp_tool_to_gemini_declaration(mcp_tool):
     """Convert an MCP tool to Gemini FunctionDeclaration format."""
     return {
         "name": mcp_tool.name,
         "description": mcp_tool.description,
-        "parameters": mcp_tool.inputSchema,
+        "parameters": _clean_schema(mcp_tool.inputSchema),
     }
 
 
@@ -91,7 +119,7 @@ async def handle_function_calls(session: ClientSession, response, chat):
 
 async def run_gemini_client():
     server_params = StdioServerParameters(
-        command="python",
+        command=str(Path(__file__).parent / ".venv" / "bin" / "python"),
         args=["main.py"],
         env=dict(os.environ),
     )

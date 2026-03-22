@@ -1,4 +1,5 @@
 import os
+import sys
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 import knowledge
@@ -24,11 +25,11 @@ MYHORDES_APP_KEY = os.getenv("MYHORDES_APP_KEY")
 FATAMORGANA_TOWN_ID = os.getenv("FATAMORGANA_TOWN_ID")
 
 if not MYHORDES_USER_KEY:
-    print("Warning: MYHORDES_USER_KEY not found in environment variables.", flush=True)
+    print("Warning: MYHORDES_USER_KEY not found in environment variables.", file=sys.stderr, flush=True)
 if not MYHORDES_APP_KEY:
-    print("Warning: MYHORDES_APP_KEY not found in environment variables.", flush=True)
+    print("Warning: MYHORDES_APP_KEY not found in environment variables.", file=sys.stderr, flush=True)
 if not FATAMORGANA_TOWN_ID:
-    print("Warning: FATAMORGANA_TOWN_ID not found in environment variables.", flush=True)
+    print("Warning: FATAMORGANA_TOWN_ID not found in environment variables.", file=sys.stderr, flush=True)
 
 
 def _check_auth() -> str | None:
