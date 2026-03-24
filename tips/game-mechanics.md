@@ -29,6 +29,19 @@ Every night at 23:59 CET, a horde of zombies attacks. The town's total defense m
 
 **Unfilled towns:** If the town doesn't have 40 citizens by midnight, the attack is skipped entirely. No AP refresh, no status reset, no status progression (thirst, infection, etc.). The day effectively extends by 24 hours. This repeats until the town fills.
 
+### Attack Scaling Curve (theoretical min/max)
+The game uses a fixed formula to compute the theoretical zombie attack range for each day. Gest'Hordes publishes these as `atk_min_theo` and `atk_max_theo`. Use `get_attack_forecast` to retrieve the full curve. Key observations:
+
+| Phase | Days | Approx range | Character |
+|---|---|---|---|
+| Early | 1–3 | 22 – 100 | Near-zero threat, defence trivially exceeds attack |
+| Growth | 4–10 | 100 – 1 300 | Rapid exponential climb — every day the floor rises sharply |
+| Mid | 11–20 | 1 300 – 8 600 | Linear-ish growth, 500–700 per day; this is where most towns die |
+| Late | 21–30 | 8 600 – 24 000 | Very large increments; only fortified/Opti towns survive |
+| End | 31–35 | 24 000 – 32 000 | Theoretical maximum; virtually no standard town survives |
+
+These ranges come from the standard 40-citizen town formula. The actual attack drawn each night is a random value from within this window, which is why Gest'Hordes shows both a floor and a ceiling. When defence is between `atk_min_theo` and `atk_max_theo`, the town's fate is probabilistic — not guaranteed.
+
 ## Watchmen
 Citizens can join the "Watch" to add their personal defense points to the town's total. This heavily risks their lives (injury, terror, or death). Bank resources are sacred — calculate carefully before equipping Watchmen.
 

@@ -3,7 +3,7 @@ import sys
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 import knowledge
-from sources import fatamorgana
+from sources import fatamorgana, gesthordes
 
 # IMPORTANT: MyHordes rules prohibit automated/scheduled API polling.
 # All API calls must be triggered by explicit user queries via MCP tools.
@@ -194,6 +194,26 @@ async def get_zone_details(day: int = 0, town_id: int = 0) -> str:
         return tid
     data = await fatamorgana.fetch_town_data(tid, day=day or None)
     return fatamorgana.format_zones(data)
+
+
+@mcp.tool()
+async def get_attack_forecast(town_id: int = 0) -> str:
+    """
+    Fetches the theoretical attack curve and defence history from Gest'Hordes.
+    Shows the theoretical min/max zombie attack range for each day of the game,
+    actual attack counts from previous nights, Gest'Hordes community estimates,
+    and defence totals with per-source breakdown (buildings, items, homes, guardians).
+    Use this when the user asks about tonight's expected attack, how the attack
+    scales over the game, or wants to compare defence vs. projected zombie counts.
+
+    Args:
+        town_id: Gest'Hordes map ID. Omit to use the default from .env.
+    """
+    tid = _resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data = await gesthordes.fetch_stats(tid)
+    return gesthordes.format_attack_forecast(data)
 
 
 # ---------------------------------------------------------------------------

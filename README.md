@@ -109,6 +109,7 @@ In a Claude Code conversation, ask something like:
 - *"What's the town status?"* → calls `get_town_overview`
 - *"Who's outside the town?"* → calls `get_citizen_positions`
 - *"Will we survive tonight's attack?"* → calls `get_defense_status`
+- *"How bad does the attack get on day 15?"* → calls `get_attack_forecast`
 - *"What's a Twisted Plank?"* → calls `search_knowledge_base`
 
 ## Available Tools
@@ -118,7 +119,11 @@ In a Claude Code conversation, ask something like:
 | `get_town_overview` | Fata Morgana | Complete town snapshot: gate, defense, water, citizens, bank, attack estimates. Accepts optional `day` param for historical data. |
 | `get_citizen_positions` | Fata Morgana | Who's inside/outside, where, plus death log. Accepts optional `day`. |
 | `get_defense_status` | Fata Morgana | Defense breakdown, attack estimates, survival assessment, attack history. Accepts optional `day`. |
-| `get_bank_inventory` | Official API | Town bank inventory. *(Currently mocked — waiting for app key)* |
+| `get_bank_inventory` | Fata Morgana | Town bank inventory grouped by category. Accepts optional `day`. |
+| `get_buildings` | Fata Morgana | Built and available construction projects with AP costs and defense values. |
+| `get_scout_map` | Fata Morgana | Zombie counts per scouted zone, grouped by threat level. |
+| `get_zone_details` | Fata Morgana | Ruins, ground items, and zombie counts per map zone. |
+| `get_attack_forecast` | Gest'Hordes | Theoretical min/max attack curve for the full game, with actual and estimated attack history and defence breakdown per day. |
 | `search_knowledge_base` | Wiki KB | Search items, buildings, ruins, skills, statuses, and strategy guides. |
 | `list_knowledge_categories` | Wiki KB | List available knowledge base categories. |
 

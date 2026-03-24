@@ -2,6 +2,21 @@
 
 Non-obvious strategies and game quirks learned from experience, not documented on the wiki.
 
+## Blueprints
+
+### Read explorable ruin blueprints before normal construction blueprints
+Both ruin blueprints (Bunker/Hospital/Hotel variants) and normal blueprints unlock construction projects. The difference:
+- **Normal blueprints** draw from the entire building pool — they will always find something unlockable.
+- **Ruin blueprints** only draw from a **preset, limited pool** of buildings specific to that ruin type.
+
+When a blueprint is read, it unlocks the first project in its pool that hasn't been unlocked yet. If a normal blueprint gets there first and unlocks a building that was in the ruin blueprint's preset pool, the ruin blueprint has one fewer option and may eventually be **wasted** (nothing left in its pool to unlock).
+
+They are distinct items — ruin blueprints are named `Bunker/Hospital/Hotel Construction Blueprint (rarity)`, normal blueprints are named `Construction Blueprint (rarity)`. Easy to tell apart in the bank.
+
+**Rule:** Hold all normal blueprints, read ruin blueprints first to exhaust their preset pool, then read normal blueprints for whatever remains.
+
+**Exception:** If the ruin blueprint's remaining targets are child buildings whose parent is not in the preset pool, read normal blueprints first to unlock the parent, then resume ruin blueprints.
+
 ## General
 
 ### The Flag (Season 18 mechanic)
