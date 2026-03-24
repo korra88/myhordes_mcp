@@ -18,6 +18,19 @@ You are connected to the town's live server via a Read-Only MCP. You cannot perf
 - **Rate Limits:** If you receive `rate_limit_reached`, wait before retrying. Batch information needs into fewer, broader tool calls.
 - **Auth Errors:** If tools return authentication errors, advise the user to check `MYHORDES_USER_KEY` and `MYHORDES_APP_KEY` in `.env`. Do not retry.
 
+## Fata Morgana Data Freshness
+
+Fata Morgana is crowd-sourced — it only updates when a player visits the spy page in their browser. The `Data updated:` timestamp in every tool response (`meta.data_time`) tells you **when Fata last received a report**, not the current real-world time.
+
+**Always read and cite `data_time` explicitly.** If it is more than 1–2 hours behind the current time of day, treat the snapshot as stale and say so. Never infer the current time of day from the data itself — data from a noon snapshot looks identical whether you read it at 13:00 or 23:00.
+
+**Do not use log entry timestamps to guess current time.** The daily-log.md records when *you* last wrote an entry, not when Fata was last updated. A "~late evening" log entry followed by a stale Fata snapshot does not mean it is currently late evening.
+
+**Staleness rules of thumb:**
+- `data_time` < 1h ago → fresh, use as-is
+- `data_time` 1–3h ago → flag as potentially stale, especially for citizen positions
+- `data_time` > 3h ago → clearly stale; warn the user before drawing conclusions about who is inside/outside or current defense
+
 ## Town Memory
 
 **Your FIRST action in every session, before responding to anything else, MUST be:**
