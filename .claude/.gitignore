@@ -1,4 +1,5 @@
 *
 !output-styles
-!commands
+!commands/**
+!commands/
 !.gitignore
