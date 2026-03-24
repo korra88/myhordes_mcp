@@ -23,6 +23,5 @@ knowledge_base/processed/
 
 # Local-only folder contents — folders are tracked, contents are not
 # (see personal/.gitignore and agent-notes/.gitignore)
-.claude/
 # Gemini
 .gemini_history
