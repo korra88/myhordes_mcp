@@ -97,7 +97,12 @@ async def get_town_overview(day: int = 0, town_id: int = 0) -> str:
     if isinstance(tid, str):
         return tid
     data = await fatamorgana.fetch_town_data(tid, day=day or None)
-    return fatamorgana.format_town_overview(data)
+    # Enrich with season points from Gest'Hordes (current day only)
+    season_points = None
+    if not (day and day != data.get("meta", {}).get("day")):
+        gh_data = await gesthordes.fetch_stats(tid)
+        season_points = gesthordes.extract_season_points(gh_data)
+    return fatamorgana.format_town_overview(data, season_points=season_points)
 
 
 @mcp.tool()
@@ -200,6 +205,25 @@ async def get_zone_details(day: int = 0, town_id: int = 0) -> str:
         return tid
     data = await fatamorgana.fetch_town_data(tid, day=day or None)
     return fatamorgana.format_zones(data)
+
+
+@mcp.tool()
+async def get_attack_distribution(town_id: int = 0) -> str:
+    """
+    Fetches historical attack distribution statistics from Gest'Hordes — real attack
+    values sampled across all towns per day, showing median, percentiles (p25/p75),
+    min/max, and sample count alongside the theoretical floor and ceiling.
+    Use this when the user wants to understand how bad the attack typically gets at
+    a given day level, or whether tonight's estimate is unusually high or normal.
+
+    Args:
+        town_id: Gest'Hordes map ID. Omit to use the default from .env.
+    """
+    tid = _resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data = await gesthordes.fetch_stats(tid)
+    return gesthordes.format_attack_distribution(data)
 
 
 @mcp.tool()

@@ -524,8 +524,13 @@ def _zone_freshness(zone: dict, current_day: int | None) -> str:
         tag += " [STALE]"
     return tag
 
-def format_town_overview(data: dict) -> str:
-    """Format a complete town overview."""
+def format_town_overview(data: dict, season_points: int | None = None) -> str:
+    """Format a complete town overview.
+
+    Args:
+        data: Fata Morgana town data dict.
+        season_points: Optional season point total from Gest'Hordes, shown in header.
+    """
     if data.get("error"):
         return f"Error fetching town data: {data['error']}"
 
@@ -548,9 +553,11 @@ def format_town_overview(data: dict) -> str:
     tomorrow_est = est.get("tomorrow", {})
     tomorrow = _format_estimate(tomorrow_est)
 
+    season_pts_str = f" | Season pts: {season_points}" if season_points is not None else ""
     lines = [
         f"# {meta.get('town_name', 'Unknown Town')} — Day {meta.get('day', '?')}",
         f"Season {meta.get('season', '?')} | Type: {meta.get('game_type', '?')} | Region: {meta.get('region', '?')}"
+        + season_pts_str
         + (" | CHAOS MODE" if meta.get("chaos") else "")
         + (" | DEVASTATED" if meta.get("devastated") else ""),
         f"Data updated: {meta.get('data_time', 'unknown')}",

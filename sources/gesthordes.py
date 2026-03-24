@@ -61,6 +61,14 @@ async def fetch_stats(map_id: int) -> dict:
     return data
 
 
+def extract_season_points(data: dict) -> int | None:
+    """Extract the current season point total from Gest'Hordes stats."""
+    try:
+        return data["data"]["general"]["ville"]["nombre_point_saison"]
+    except (KeyError, TypeError):
+        return None
+
+
 def extract_current_defense(data: dict) -> dict | None:
     """Extract current-day Gest'Hordes defence breakdown as a flat dict.
 
@@ -210,5 +218,90 @@ def format_attack_forecast(data: dict) -> str:
         lines.append("")
 
     lines.append("_Source: Gest'Hordes community stats. Theoretical ranges use the standard MyHordes attack formula. Actual counts are crowd-reported._")
+
+    return "\n".join(lines)
+
+
+def format_attack_distribution(data: dict) -> str:
+    """Format per-day attack distribution statistics from historical town data.
+
+    Uses atk.atk — a list-of-lists of real attack values sampled across all towns
+    per day — to compute median, 25th/75th percentiles, min, max, and sample count.
+    """
+    if "error" in data:
+        return f"Error fetching Gest'Hordes stats: {data['error']}"
+
+    stats = data.get("data", {}).get("stats", {})
+    general = data.get("data", {}).get("general", {})
+    ville = general.get("ville", {})
+
+    current_day = stats.get("current_ville_jour", 0)
+    town_name = ville.get("nom", "Unknown town")
+    season = ville.get("saison", "?")
+
+    atk_samples = stats.get("atk", {}).get("atk", [])
+    atk_min_theo = stats.get("atk", {}).get("atk_min_theo", [])
+    atk_max_theo = stats.get("atk", {}).get("atk_max_theo", [])
+
+    def _percentile(sorted_vals, pct):
+        if not sorted_vals:
+            return None
+        idx = (len(sorted_vals) - 1) * pct / 100
+        lo, hi = int(idx), min(int(idx) + 1, len(sorted_vals) - 1)
+        return round(sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (idx - lo))
+
+    lines = [
+        f"## Attack Distribution — {town_name} (Season {season}, Day {current_day})",
+        "",
+        "Historical attack values sampled across all towns at each day level.",
+        "Percentiles show where most towns actually land within the theoretical range.",
+        "",
+        f"{'Day':<5} {'n':>5}  {'Min':>6}  {'p25':>6}  {'Median':>7}  {'p75':>6}  {'Max':>6}  {'Theo Min':>9}  {'Theo Max':>9}",
+        "-" * 72,
+    ]
+
+    # Show all days with data, up to current_day + 3 lookahead (theo only)
+    max_day = max(len(atk_samples) - 1, len(atk_min_theo) - 1)
+    show_to = min(max_day, current_day + 3)
+    show_from = max(1, current_day - 5)
+
+    for d in range(show_from, show_to + 1):
+        t_min = atk_min_theo[d] if d < len(atk_min_theo) else None
+        t_max = atk_max_theo[d] if d < len(atk_max_theo) else None
+
+        samples = atk_samples[d] if d < len(atk_samples) else []
+        samples = [v for v in samples if v is not None]
+
+        if samples:
+            s = sorted(samples)
+            n = len(s)
+            p25 = _percentile(s, 25)
+            med = _percentile(s, 50)
+            p75 = _percentile(s, 75)
+            marker = " ◄" if d == current_day else ""
+            lines.append(
+                f"D{d:<4} {n:>5}  "
+                f"{s[0]:>6}  {p25:>6}  {med:>7}  {p75:>6}  {s[-1]:>6}  "
+                f"{(str(t_min) if t_min is not None else '—'):>9}  "
+                f"{(str(t_max) if t_max is not None else '—'):>9}"
+                f"{marker}"
+            )
+        elif t_min is not None:
+            # Future days — theo range only, no samples yet
+            lines.append(
+                f"D{d:<4} {'—':>5}  {'—':>6}  {'—':>6}  {'—':>7}  {'—':>6}  {'—':>6}  "
+                f"{t_min:>9}  {t_max:>9}"
+            )
+
+    lines += [
+        "",
+        "### How to read this",
+        "- **n**: number of real-game attack values at this day level (larger = more reliable)",
+        "- **p25/p75**: 25th and 75th percentile — the middle 50% of towns fall in this band",
+        "- **Median**: half of all towns faced more than this, half faced less",
+        "- **Theo Min/Max**: the game formula's theoretical floor and ceiling",
+        "",
+        "_Source: Gest'Hordes aggregated town data. Sample size grows as the season progresses._",
+    ]
 
     return "\n".join(lines)
