@@ -169,7 +169,14 @@ async def get_buildings(day: int = 0, town_id: int = 0) -> str:
 
 
 @mcp.tool()
-async def get_scout_map(day: int = 0, town_id: int = 0) -> str:
+async def get_scout_map(
+    day: int = 0,
+    town_id: int = 0,
+    x1: int | None = None,
+    y1: int | None = None,
+    x2: int | None = None,
+    y2: int | None = None,
+) -> str:
     """
     Fetches zombie counts per zone from scout data (Fata Morgana).
     Shows which zones have been scouted, how many zombies were spotted,
@@ -177,33 +184,66 @@ async def get_scout_map(day: int = 0, town_id: int = 0) -> str:
     Use this when the user asks about zombie positions, safe scavenging routes,
     or where the horde is concentrated.
 
+    When x1/y1/x2/y2 are provided, runs Dijkstra pathfinding to find the safest
+    route between those two coordinates, minimising total zombie exposure.
+    Hard cap: 40 AP. Use this when the user asks for the safest path to a location.
+
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        x1: X coordinate of the starting point (town-relative). Omit for full map.
+        y1: Y coordinate of the starting point.
+        x2: X coordinate of the destination. Required if x1/y1 are set.
+        y2: Y coordinate of the destination. Required if x1/y1 are set.
     """
     tid = _resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
     data = await fatamorgana.fetch_town_data(tid, day=day or None)
+
+    coords_provided = all(v is not None for v in (x1, y1, x2, y2))
+    if coords_provided:
+        return fatamorgana.find_safe_path(data, x1, y1, x2, y2)
     return fatamorgana.format_scout(data)
 
 
 @mcp.tool()
-async def get_zone_details(day: int = 0, town_id: int = 0) -> str:
+async def get_zone_details(
+    day: int = 0,
+    town_id: int = 0,
+    x1: int | None = None,
+    y1: int | None = None,
+    x2: int | None = None,
+    y2: int | None = None,
+    max_ap: int | None = None,
+) -> str:
     """
     Fetches detailed map zone data from Fata Morgana — ruins (with names, dig
     counts, blueprint status), ground items per zone, and zombie counts.
     Use this when the user asks about ruins, what items are on the ground outside,
     or what's available at specific map coordinates.
 
+    When x1/y1/x2/y2 are provided, restricts output to the bounding box between
+    those two coordinates, sorted by AP cost (Manhattan distance from town).
+    Use this for expedition planning: "what's between [2|3] and [5|6] within 8 AP?"
+
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        x1: X coordinate of the first corner of the area to inspect (town-relative).
+        y1: Y coordinate of the first corner of the area to inspect (town-relative).
+        x2: X coordinate of the second corner. Required if x1/y1 are set.
+        y2: Y coordinate of the second corner. Required if x1/y1 are set.
+        max_ap: Optional AP budget. Cells beyond this cost are shown separately.
     """
     tid = _resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
     data = await fatamorgana.fetch_town_data(tid, day=day or None)
+
+    coords_provided = all(v is not None for v in (x1, y1, x2, y2))
+    if coords_provided:
+        return fatamorgana.format_zone_path(data, x1, y1, x2, y2, max_ap=max_ap)
     return fatamorgana.format_zones(data)
 
 

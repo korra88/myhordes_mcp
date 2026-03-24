@@ -14,6 +14,7 @@ Fetches the spy page for a given town ID and extracts the embedded
 - Buildings with upgrade levels and construction history
 """
 
+import heapq
 import json
 import re
 import time
@@ -889,6 +890,260 @@ def format_zones(data: dict) -> str:
                 for i in z["items"]
             )
             lines.append(f"    {item_list}")
+
+    return "\n".join(lines)
+
+
+def _parse_coords(zone: dict) -> tuple[int, int] | None:
+    """Extract (rx, ry) integers from a zone's coords string '[rx|ry]'."""
+    m = re.match(r"\[(-?\d+)\|(-?\d+)\]", zone.get("coords", ""))
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2))
+
+
+def format_zone_path(
+    data: dict,
+    x1: int, y1: int,
+    x2: int, y2: int,
+    max_ap: int | None = None,
+) -> str:
+    """Format zones within a bounding box, sorted by AP cost then loot value.
+
+    Useful for planning expeditions between two coordinates — shows AP cost per
+    cell, items, ruins, zombie counts, and flags cells that exceed the AP budget.
+    """
+    if data.get("error"):
+        return f"Error: {data['error']}"
+
+    zones = data.get("zones", [])
+    meta = data["meta"]
+
+    if not zones:
+        return "No map data available."
+
+    # Bounding box: include all cells within the rectangle defined by (x1,y1)-(x2,y2)
+    min_x, max_x = min(x1, x2), max(x1, x2)
+    min_y, max_y = min(y1, y2), max(y1, y2)
+
+    in_range = []
+    for z in zones:
+        coords = _parse_coords(z)
+        if coords is None:
+            continue
+        rx, ry = coords
+        if min_x <= rx <= max_x and min_y <= ry <= max_y:
+            ap = abs(rx) + abs(ry)
+            in_range.append((ap, z, rx, ry))
+
+    current_day = meta.get("day")
+    town = meta.get("town_name", "?")
+    day = meta.get("day", "?")
+
+    header_parts = [f"## Zone Path [{x1}|{y1}] → [{x2}|{y2}] — {town} Day {day}"]
+    if max_ap is not None:
+        header_parts.append(f"AP budget: {max_ap}")
+    lines = [" | ".join(header_parts), ""]
+
+    if not in_range:
+        lines.append("No explored zones in this area.")
+        return "\n".join(lines)
+
+    # Sort by AP cost (cheapest first), then by loot count descending
+    in_range.sort(key=lambda t: (t[0], -len(t[1].get("items", []))))
+
+    over_budget = [t for t in in_range if max_ap is not None and t[0] > max_ap]
+    in_budget = [t for t in in_range if max_ap is None or t[0] <= max_ap]
+
+    def _render_zone(ap: int, z: dict, rx: int, ry: int, budget_exceeded: bool = False) -> list[str]:
+        budget_flag = " [OVER BUDGET]" if budget_exceeded else ""
+        threat = _zone_threat(z)
+        fresh = _zone_freshness(z, current_day)
+        dried = " (dried)" if z.get("dried") else ""
+        ruin = z.get("ruin")
+
+        if ruin:
+            bp = " [BLUEPRINT]" if ruin.get("blueprint_available") else ""
+            digs = f", {ruin['digs_remaining']} digs left" if ruin.get("digs_remaining") not in (None, "0", 0) else ""
+            label = f"{ruin['name']}{bp}{digs}"
+        else:
+            label = "open zone"
+
+        entry = [f"  {z['coords']} ({ap} AP){budget_flag}{dried}: {label}{threat}{fresh}"]
+        if z.get("items"):
+            item_list = ", ".join(
+                f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")
+                for i in z["items"]
+            )
+            entry.append(f"    Items: {item_list}")
+        return entry
+
+    if in_budget:
+        lines.append(f"### Zones in range ({len(in_budget)})")
+        for ap, z, rx, ry in in_budget:
+            lines.extend(_render_zone(ap, z, rx, ry))
+        lines.append("")
+
+    if over_budget:
+        lines.append(f"### Beyond AP budget ({len(over_budget)})")
+        for ap, z, rx, ry in over_budget:
+            lines.extend(_render_zone(ap, z, rx, ry, budget_exceeded=True))
+
+    return "\n".join(lines)
+
+
+# Risk weight assigned to cells with no scout data, only a danger level estimate.
+# Midpoints of each danger band (0 zombies / 1-2 / 3-5 / 6+).
+_DANGER_RISK = {0: 0, 1: 1.5, 2: 4.0, 3: 6.0}
+
+# Risk penalty for cells with no information at all (unexplored).
+# Set above the highest danger band so known-clear paths are preferred,
+# but unknown cells are still traversable when no other route exists.
+_UNKNOWN_RISK = 8.0
+
+MAX_PATH_AP = 40
+
+
+def _cell_risk(zone: dict | None) -> float:
+    """Return the zombie-exposure risk for a single cell.
+
+    - Scouted (zombies >= 0): exact count.
+    - Explored but not scouted (zombies == -1): use danger-level estimate.
+    - Completely unknown (zone is None): use the unknown penalty.
+    """
+    if zone is None:
+        return _UNKNOWN_RISK
+    zm = zone.get("zombies", -1)
+    if zm >= 0:
+        return float(zm)
+    danger = zone.get("danger", 0)
+    return _DANGER_RISK.get(danger, _UNKNOWN_RISK)
+
+
+def find_safe_path(
+    data: dict,
+    x1: int, y1: int,
+    x2: int, y2: int,
+) -> str:
+    """Find the safest path between two map coordinates using Dijkstra.
+
+    Minimises total zombie exposure along the route, with AP as tiebreaker.
+    Hard cap: 40 AP total (MAX_PATH_AP). Only traverses explored or scout-known
+    cells; unknown cells are passable but penalised in risk weight.
+
+    Returns a human-readable path summary for the LLM.
+    """
+    if data.get("error"):
+        return f"Error: {data['error']}"
+
+    meta = data["meta"]
+    current_day = meta.get("day", "?")
+    town = meta.get("town_name", "?")
+
+    # Build a lookup: (rx, ry) -> zone dict
+    zone_map: dict[tuple[int, int], dict] = {}
+    for z in data.get("zones", []):
+        coords = _parse_coords(z)
+        if coords:
+            zone_map[coords] = z
+    # Merge scout-only zones (zombie count, no items/ruins)
+    map_coords = set(zone_map.keys())
+    for z in data.get("scout", []):
+        coords = _parse_coords(z)
+        if coords and coords not in map_coords:
+            zone_map[coords] = {"coords": z["coords"], "zombies": z["zombies"], "danger": 0, "items": [], "ruin": None}
+
+    ap_limit = MAX_PATH_AP
+
+    start = (x1, y1)
+    end = (x2, y2)
+
+    # Dijkstra: priority = (total_risk, total_ap)
+    # State: (risk, ap, x, y, path)
+    heap: list[tuple[float, int, int, int, list[tuple[int, int]]]] = []
+    heapq.heappush(heap, (0.0, 0, x1, y1, [(x1, y1)]))
+    visited: dict[tuple[int, int], tuple[float, int]] = {}  # (x,y) -> (best_risk, best_ap)
+
+    best: tuple[float, int, list[tuple[int, int]]] | None = None  # (risk, ap, path)
+
+    while heap:
+        risk, ap, x, y, path = heapq.heappop(heap)
+
+        if (x, y) == end:
+            if best is None or (risk, ap) < (best[0], best[1]):
+                best = (risk, ap, path)
+            continue
+
+        if (x, y) in visited:
+            prev_risk, prev_ap = visited[(x, y)]
+            if risk >= prev_risk and ap >= prev_ap:
+                continue
+        visited[(x, y)] = (risk, ap)
+
+        if ap >= ap_limit:
+            continue
+
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            next_ap = ap + 1
+            if next_ap > ap_limit:
+                continue
+            next_zone = zone_map.get((nx, ny))
+            # Allow unknown cells only if they're within the bounding box + margin
+            margin = 3
+            in_extended_box = (
+                min(x1, x2) - margin <= nx <= max(x1, x2) + margin
+                and min(y1, y2) - margin <= ny <= max(y1, y2) + margin
+            )
+            if next_zone is None and not in_extended_box:
+                continue
+            cell_risk = _cell_risk(next_zone)
+            next_risk = risk + cell_risk
+            heapq.heappush(heap, (next_risk, next_ap, nx, ny, path + [(nx, ny)]))
+
+    # Format output
+    lines = [
+        f"## Safest Path [{x1}|{y1}] → [{x2}|{y2}] — {town} Day {current_day}",
+        "",
+    ]
+
+    if best is None:
+        lines.append(f"No path found within {ap_limit} AP. The destination may be unreachable through explored zones.")
+        return "\n".join(lines)
+
+    total_risk, total_ap, path = best
+    lines.append(f"AP cost: {total_ap} | Total zombie exposure: {total_risk:.0f}")
+    lines.append("")
+    lines.append("### Steps")
+
+    for i, (px, py) in enumerate(path):
+        z = zone_map.get((px, py))
+        ap_here = abs(px) + abs(py)  # Manhattan from town gate
+        coord_str = f"[{px}|{py}]"
+
+        if z is None:
+            lines.append(f"  {i:>2}. {coord_str} ({ap_here} AP from gate) — unexplored")
+            continue
+
+        zm = z.get("zombies", -1)
+        if zm >= 0:
+            zom_str = f"{zm} zom" if zm > 0 else "clear"
+        else:
+            danger = z.get("danger", 0)
+            zom_str = f"~{DANGER_LEVELS.get(danger, 'unknown')}"
+
+        stale = _staleness_tag(z.get("updated_day"), current_day if isinstance(current_day, int) else None)
+        ruin = z.get("ruin")
+        ruin_str = f" | {ruin['name']}" if ruin else ""
+        items = z.get("items", [])
+        items_str = ""
+        if items:
+            items_str = " | Items: " + ", ".join(
+                f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")
+                for i in items
+            )
+
+        lines.append(f"  {i:>2}. {coord_str} ({ap_here} AP from gate) — {zom_str}{ruin_str}{items_str}{stale}")
 
     return "\n".join(lines)
 
