@@ -121,10 +121,11 @@ async def get_citizen_positions(day: int = 0, town_id: int = 0) -> str:
 @mcp.tool()
 async def get_defense_status(day: int = 0, town_id: int = 0) -> str:
     """
-    Fetches the town defense breakdown and attack estimations from Fata Morgana.
+    Fetches the town defense breakdown and attack estimations from Fata Morgana,
+    enriched with Gest'Hordes per-source detail for the current day.
     Includes: total defense, per-source breakdown (wall, buildings, items, guardians,
-    homes, other), item multiplier, tonight's and tomorrow's zombie estimates,
-    and a survival assessment (safe / at risk / danger).
+    homes, watchmen, temporary bonuses, dead-citizen bonus), item multiplier,
+    tonight's and tomorrow's zombie estimates, and a survival assessment.
     Use this when the user asks about defense, attack survival, or zombie estimates.
 
     Args:
@@ -135,7 +136,12 @@ async def get_defense_status(day: int = 0, town_id: int = 0) -> str:
     if isinstance(tid, str):
         return tid
     data = await fatamorgana.fetch_town_data(tid, day=day or None)
-    return fatamorgana.format_defense(data)
+    # Enrich current-day defense with Gest'Hordes breakdown (watchmen, temps, dead bonus)
+    gh_defense = None
+    if not (day and day != data.get("meta", {}).get("day")):
+        gh_data = await gesthordes.fetch_stats(tid)
+        gh_defense = gesthordes.extract_current_defense(gh_data)
+    return fatamorgana.format_defense(data, gh_defense=gh_defense)
 
 
 @mcp.tool()

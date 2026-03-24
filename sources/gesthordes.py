@@ -61,6 +61,36 @@ async def fetch_stats(map_id: int) -> dict:
     return data
 
 
+def extract_current_defense(data: dict) -> dict | None:
+    """Extract current-day Gest'Hordes defence breakdown as a flat dict.
+
+    Returns keys: watchers, temporary, dead_bonus (all int), or None on failure.
+    These are sources that Fata Morgana doesn't break out individually.
+    """
+    if "error" in data:
+        return None
+    stats = data.get("data", {}).get("stats", {})
+    current_day = stats.get("current_ville_jour")
+    if current_day is None:
+        return None
+
+    def_block = stats.get("def", {})
+    days = def_block.get("day", [])
+    if current_day not in days:
+        return None
+    i = days.index(current_day)
+
+    def _get(lst):
+        v = lst[i] if i < len(lst) else None
+        return v if v is not None else 0
+
+    return {
+        "watchers": _get(def_block.get("veilleurs", [])),
+        "temporary": _get(def_block.get("tempos", [])),
+        "dead_bonus": _get(def_block.get("morts", [])),
+    }
+
+
 def format_attack_forecast(data: dict) -> str:
     """Format attack forecast and defence history from Gest'Hordes stats."""
     if "error" in data:

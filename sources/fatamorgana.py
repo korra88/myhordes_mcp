@@ -886,8 +886,15 @@ def format_zones(data: dict) -> str:
     return "\n".join(lines)
 
 
-def format_defense(data: dict) -> str:
-    """Format defense breakdown and attack estimation."""
+def format_defense(data: dict, gh_defense: dict | None = None) -> str:
+    """Format defense breakdown and attack estimation.
+
+    Args:
+        data: Fata Morgana town data dict.
+        gh_defense: Optional Gest'Hordes current-day defence breakdown from
+                    gesthordes.extract_current_defense(). Adds watchers,
+                    temporary, and dead_bonus lines that Fata lumps into 'other'.
+    """
     if data.get("error"):
         return f"Error: {data['error']}"
 
@@ -923,7 +930,25 @@ def format_defense(data: dict) -> str:
         f"  Guardians: {defense.get('guardians', '?')}",
         f"  Homes: {defense.get('homes', '?')}",
         f"  Upgrades: {defense.get('upgrades', '?')}",
-        f"  Other sources: {defense.get('other', '?')}",
+    ]
+
+    other = defense.get("other", 0) or 0
+    if gh_defense is not None:
+        watchers = gh_defense.get("watchers", 0)
+        temporary = gh_defense.get("temporary", 0)
+        dead_bonus = gh_defense.get("dead_bonus", 0)
+        lines.append(f"  Watchmen: {watchers}")
+        lines.append(f"  Temporary bonuses: {temporary}")
+        lines.append(f"  Dead-citizen bonus: {dead_bonus}")
+        gh_accounted = watchers + temporary + dead_bonus
+        remainder = other - gh_accounted
+        if remainder != 0:
+            lines.append(f"  Other (unaccounted): {remainder}")
+        lines.append("  (Gest'Hordes breakdown)")
+    else:
+        lines.append(f"  Other sources: {other}")
+
+    lines += [
         "",
         f"Tonight's attack: {tonight} zombies",
         f"Tomorrow's attack: {tomorrow} zombies",
