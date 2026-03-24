@@ -35,6 +35,8 @@ desert-veteran: ## Start Claude as the Desert Veteran advisor (loads personality
 		--append-system-prompt-file ./tips/player-behavior.md \
 		--append-system-prompt-file ./tips/strategy-quirks.md \
 		--append-system-prompt-file ./tips/buildings-cheatsheet.md \
+		--append-system-prompt-file ./agent-notes/INDEX.md \
+		--append-system-prompt-file ./personal/INDEX.md \
 		"Read AGENT-PERSONALITY-2.md and adopt the persona described in it completely before responding to anything else."
 
 kb: process ## Build the full knowledge base (fetch if needed, then process)
