@@ -15,6 +15,10 @@ ENTITIES_JSON := $(PROC_DIR)/entities.json
 INDEX_JSON    := $(PROC_DIR)/index.json
 PERSONA	      := persona-town-elder.md
 
+TIPS_FILES        := $(wildcard ./tips/*.md)
+AGENT_NOTES_FILES := $(wildcard ./agent-notes/*.md)
+PERSONAL_FILES    := $(wildcard ./personal/*.md)
+
 # Sentinel: any Data_ file means the wiki has been fetched
 WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 
@@ -35,13 +39,9 @@ gemini-veteran: ## Start Gemini as the Desert Veteran advisor (embedded agent, p
 
 desert-veteran: ## Start Claude as the Desert Veteran advisor (loads personality + tips)
 	claude \
-		--append-system-prompt-file ./tips/game-mechanics.md \
-		--append-system-prompt-file ./tips/mcp-guidelines.md \
-		--append-system-prompt-file ./tips/player-behavior.md \
-		--append-system-prompt-file ./tips/strategy-quirks.md \
-		--append-system-prompt-file ./tips/buildings-cheatsheet.md \
-		--append-system-prompt-file ./agent-notes/INDEX.md \
-		--append-system-prompt-file ./personal/INDEX.md \
+		$(foreach f,$(TIPS_FILES),--append-system-prompt-file $(f)) \
+		$(foreach f,$(AGENT_NOTES_FILES),--append-system-prompt-file $(f)) \
+		$(foreach f,$(PERSONAL_FILES),--append-system-prompt-file $(f)) \
 		"Read persona-town-elder.md and adopt the persona described in it completely before responding to anything else."
 
 kb: process ## Build the full knowledge base (fetch if needed, then process)
