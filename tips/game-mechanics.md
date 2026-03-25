@@ -42,6 +42,31 @@ The game uses a fixed formula to compute the theoretical zombie attack range for
 
 These ranges come from the standard 40-citizen town formula. The actual attack drawn each night is a random value from within this window, which is why Gest'Hordes shows both a floor and a ceiling. When defence is between `atk_min_theo` and `atk_max_theo`, the town's fate is probabilistic — not guaranteed.
 
+## Control Points (CP) and Trapped
+
+**Formula:** Each zombie = 1 CP, each citizen = 2 CP. Humans control the zone if their combined CP ≥ zombie CP. If zombies have more CP, all humans in the zone are **Trapped**.
+
+**Trapped effects:** Cannot move, cannot scavenge. Can still explore ruins in the zone (but lose oxygen instead of getting wounded). Fleeing while Trapped causes a **Wound**. A 30-minute grace period applies when control is lost (e.g. a teammate leaves) before the trap locks in.
+
+**CP boosters (stackable, max 8 CP/person):**
+| Source | Bonus | Condition |
+|---|---|---|
+| Base citizen | 2 CP | Always |
+| Prepared (Beginner) | +1 CP | Must be Clean |
+| Prepared (Apprentice) | +1 CP | Always |
+| Prepared (Expert) | +1 CP | Not Thirsty/Dehydrated |
+| Car Door (carried) | +1 CP | Always |
+| Riot Shield (Guardian) | +2 CP | Always |
+
+**Terrorised citizens exert 0 CP** — all boosters are wasted.
+
+**Practical advisory:**
+- A solo citizen with no boosts (2 CP) is blocked by **3+ zombies** (3 CP).
+- With full Prepared stack (5 CP), a solo citizen is blocked by **6+ zombies**.
+- A Guardian with Riot Shield + full Prepared (8 CP) can solo up to **8 zombies**.
+- When advising on expeditions, always check the estimated zombie count against the party's available CP. If a zone's estimated zombie count exceeds the party's combined CP, entering alone means getting Trapped — coordinate with others or avoid the zone.
+- The Guide to the World Beyond gains +1 CP per other citizen in the same zone (stacks with all other bonuses).
+
 ## Watchmen
 Citizens can join the "Watch" to add their personal defense points to the town's total. This heavily risks their lives (injury, terror, or death). Bank resources are sacred — calculate carefully before equipping Watchmen.
 
