@@ -896,6 +896,24 @@ _STRONG_WEAPONS = {
     "Exploding Water Bomb", "Exploding Grapefruit",
     "Water Bomb", "Mobile Phone",
 }
+# Construction blueprints — grouped by rarity tier
+_BP_COMMON = {"Construction Blueprint (common)"}
+_BP_UNCOMMON = {"Construction Blueprint (uncommon)"}
+_BP_RARE = {"Construction Blueprint (rare)"}
+_BP_VERY_RARE = {"Construction Blueprint (very rare!)"}
+# Explorable ruin blueprints — unlock access to special ruins (higher priority)
+_BP_RUIN = {
+    "Bunker Construction Blueprint (uncommon)",
+    "Bunker Construction Blueprint (rare)",
+    "Bunker Construction Blueprint (very rare!)",
+    "Hospital Construction Blueprint (uncommon)",
+    "Hospital Construction Blueprint (rare)",
+    "Hospital Construction Blueprint (very rare!)",
+    "Hotel Construction Blueprint (uncommon)",
+    "Hotel Construction Blueprint (rare)",
+    "Hotel Construction Blueprint (very rare!)",
+}
+_ALL_BLUEPRINTS = _BP_COMMON | _BP_UNCOMMON | _BP_RARE | _BP_VERY_RARE | _BP_RUIN
 
 
 def _sum_items(bank: list[dict], names: set[str], *, include_broken: bool = False) -> tuple[int, list[tuple[str, int, int]]]:
@@ -1000,6 +1018,22 @@ def format_bank_summary(data: dict) -> str:
     top5 = ", ".join(f"{n} ×{c}" for n, c, _ in itemsres[:5])
     lines.append(f"**Other resources:** {tres} ({top5}, …)")
 
+    # Blueprints
+    tbp_ruin, itemsbp_ruin = _sum_items(bank, _BP_RUIN)
+    tbp_common, _ = _sum_items(bank, _BP_COMMON)
+    tbp_uncommon, _ = _sum_items(bank, _BP_UNCOMMON)
+    tbp_rare, _ = _sum_items(bank, _BP_RARE)
+    tbp_vrare, _ = _sum_items(bank, _BP_VERY_RARE)
+    if tbp_ruin or tbp_common or tbp_uncommon or tbp_rare or tbp_vrare:
+        ruin_detail = ""
+        if tbp_ruin:
+            ruin_names = ", ".join(n.replace(" Construction Blueprint", "") for n, *_ in itemsbp_ruin)
+            ruin_detail = f"; ruin: {tbp_ruin} ({ruin_names})"
+        bp_parts = []
+        for tier, count in (("common", tbp_common), ("uncommon", tbp_uncommon), ("rare", tbp_rare), ("very rare", tbp_vrare)):
+            bp_parts.append(f"{tier} {count}")
+        lines.append(f"**Blueprints:** {', '.join(bp_parts)}{ruin_detail}")
+
     # Weapons
     tweap, itemsweap = _sum_items(bank, _STRONG_WEAPONS, include_broken=True)
     lines.extend(_fmt_bucket("Strong weapons", tweap, itemsweap))
@@ -1024,7 +1058,7 @@ def format_bank_summary(data: dict) -> str:
                  | _FOOD_7AP | _FOOD_6AP | _ALCOHOL | _FOOD_CONTAINERS
                  | _AP_DRUGS | _HEALING | _STATUS_DRUGS
                  | _DEFENSE_ITEMS | _METAL | _WOOD | _KEY_RESOURCES
-                 | _STRONG_WEAPONS)
+                 | _STRONG_WEAPONS | _ALL_BLUEPRINTS)
     remainder = [i for i in bank
                  if i["name"] not in accounted
                  and i["category"] not in ("Weapon", "Furniture", "Box")]
