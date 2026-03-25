@@ -5,6 +5,7 @@ Set up a recurring cron job to monitor citizen positions and town status for the
 Each town folder uses a per-day structure:
 - `towns/{folder}/daily-log.md` — index only (one summary row per day, links to day files)
 - `towns/{folder}/day-01.md`, `day-02.md`, … — one file per game day (active file grows during play)
+- `towns/{folder}/_baseline.md` — small sidecar holding last-known state for cron delta checks
 
 ## Step 1 — Resolve the town folder and active day log
 
@@ -17,7 +18,41 @@ Each town folder uses a per-day structure:
 - If `day-{NN}.md` does not exist yet, create it with a `# Day N — {dates}` header and add a row for it in `daily-log.md`.
 - Confirm `towns/{matched-folder}/daily-log.md` exists.
 
-## Step 2 — Determine the interval
+## Step 2 — Seed the baseline sidecar
+
+Check if `towns/{matched-folder}/_baseline.md` exists.
+- If it does not exist, call `get_town_overview` (if not already fresh) and create `_baseline.md` with the following structure:
+
+```markdown
+# Cron baseline — {folder}
+_Last updated: {datetime} (Day N)_
+
+## State
+- **Alive:** N — X inside, Y outside
+- **Defense:** N
+- **Gate:** OPEN/CLOSED
+
+## Outside citizens
+{name} [{x}|{y}] · …
+
+## Critical items
+| Item | Count |
+|---|---|
+| Handful of nuts and bolts | N |
+| Wire Reel | N |
+| Electronic component | N |
+| Laser Diode | N |
+| Compact detonator | N |
+| Copper Pipe | N |
+| Semtex | N |
+| Anabolic Steroids | N |
+| Vodka Marinostov | N |
+| Blueprint (rare) | N |
+| Blueprint (uncommon) | N |
+| Sealed Architect's Chest | N |
+```
+
+## Step 3 — Determine the interval
 
 - If `$ARGUMENTS` is provided, treat it as the interval (e.g. `30m`, `1h`, `2h`). Supported suffixes: `m` (minutes), `h` (hours).
 - If no argument is provided, default to `1h`.
@@ -25,54 +60,43 @@ Each town folder uses a per-day structure:
   - `Nm` where N ≤ 59 → `*/N * * * *`
   - `Nh` where N ≤ 23 → `7 */N * * *` (use minute :07 to avoid thundering-herd at :00)
 
-## Step 3 — Create the cron job
+## Step 4 — Create the cron job
 
 Use CronCreate with:
 - `recurring: true`
-- `cron`: the expression from Step 2
+- `cron`: the expression from Step 3
 - `prompt` (substitute the resolved folder from Step 1):
 
 ```
-Call get_town_overview to get the current town name and game day number. Call get_citizen_positions and get_defense_status. Also call get_bank_inventory.
+Call get_town_overview(detail='compact') and get_bank_inventory(detail='summary') in parallel. Read `towns/{resolved-folder}/_baseline.md` for last known state.
 
-Determine the active day log:
-- Active file = `towns/{resolved-folder}/day-{NN}.md` where NN is the current game day zero-padded to 2 digits.
-- If this file does not exist (a new day started since the cron was created): create it with a `# Day N — {dates}` header, then add a new row to `towns/{resolved-folder}/daily-log.md` marking this day as active (outcome TBD).
+Determine the active day log: `towns/{resolved-folder}/day-{NN}.md` where NN is the current game day zero-padded to 2 digits. If it doesn't exist, create it with a `# Day N — {date}` header and add a row to `towns/{resolved-folder}/daily-log.md` (outcome TBD).
 
-Read the last recorded state from the active day file.
+Compare current state to baseline. Build a brief timestamped entry:
 
-Append a brief timestamped update to that file noting:
+**MOVEMENTS:** Who went out / came home / died. Note position changes for citizens already outside.
 
-MOVEMENTS: Who moved (from/to), who came home, who went out. Note any deaths.
+**GATE:** Flag as urgent if gate is OPEN at 23:30 CET or later.
 
-GATE & DEFENSE: Flag if gate is open within 2 hours of midnight. Note any significant defense drops.
+**BANK — flag any decrease as PULLED (old→new) for these items:**
+HNB · Wire Reel · Electronic component · Laser Diode · Compact detonator · Copper Pipe · Semtex · Anabolic Steroids · Vodka Marinostov · Blueprint (rare) · Blueprint (uncommon)
+Also flag increases (deposits) for these same items.
 
-BANK CHANGES: Compare current bank to the last logged "critical items baseline" table. Flag any count decrease as "PULLED" (old count → new count) for these building-critical items:
-- Handful of nuts and bolts (HNB)
-- Wire Reel
-- Electronic component
-- Laser Diode
-- Compact detonator
-- Copper Pipe
-- Semtex
-- Anabolic Steroids (note: only needed until Fertilizer, Ravaged Pumpkins, and Tamer's Trap System are built)
-- Vodka Marinostov (note: only needed until Architect's Study and Builder's Merchant are built)
+If nothing changed at all, write a single line: `no changes — {time}`.
+Otherwise append the full entry to the active day log.
 
-Also flag if Construction Blueprint (rare or uncommon) count drops.
-
-Update the baseline table in the active day file to reflect the current counts after each check.
-
-Only append if there are actual changes. If nothing changed, note "no changes" with the current time.
+Finally, overwrite `towns/{resolved-folder}/_baseline.md` with updated state (timestamp, alive/inside/outside counts, defense, gate, outside citizen list, critical item counts).
 ```
 
-## Step 4 — Execute once immediately
+## Step 5 — Execute once immediately
 
 After creating the cron, run the prompt once immediately so the first check happens now rather than waiting for the first scheduled fire.
 
-## Step 5 — Confirm to the user
+## Step 6 — Confirm to the user
 
 Report:
 - The active day log path (e.g. `towns/s19-tortuous-valleys/day-03.md`)
+- The baseline sidecar path (`towns/{folder}/_baseline.md`)
 - The index path (`towns/{folder}/daily-log.md`)
 - The cron job ID
 - The interval and cron expression

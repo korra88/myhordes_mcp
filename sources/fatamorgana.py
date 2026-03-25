@@ -633,12 +633,14 @@ def _zone_freshness(zone: dict, current_day: int | None) -> str:
         tag += " [STALE]"
     return tag
 
-def format_town_overview(data: dict, season_points: int | None = None) -> str:
+def format_town_overview(data: dict, season_points: int | None = None, detail: str = "full") -> str:
     """Format a complete town overview.
 
     Args:
         data: Fata Morgana town data dict.
         season_points: Optional season point total from Gest'Hordes, shown in header.
+        detail: 'full' (default) includes bank and deaths. 'compact' omits both —
+                useful for cron/delta checks where bank is fetched separately.
     """
     if data.get("error"):
         return f"Error fetching town data: {data['error']}"
@@ -696,17 +698,18 @@ def format_town_overview(data: dict, season_points: int | None = None) -> str:
         stale = _staleness_tag(c.get("last_update_day"), current_day) if show_citizen_stale else ""
         lines.append(f"  {c['name']} ({c['job']}{shaman}) — {loc}{stale}")
 
-    if deaths:
-        lines.append("")
-        lines.append(f"## Deaths ({len(deaths)})")
-        for d in deaths:
-            lines.append(f"  Day {d['day']}: {d['name']} — {d['cause']} (last at {d['last_coords']})")
+    if detail != "compact":
+        if deaths:
+            lines.append("")
+            lines.append(f"## Deaths ({len(deaths)})")
+            for d in deaths:
+                lines.append(f"  Day {d['day']}: {d['name']} — {d['cause']} (last at {d['last_coords']})")
 
-    lines.append("")
-    lines.append(f"## Bank ({len(bank)} items)")
-    for item in bank:
-        broken = " [BROKEN]" if item["broken"] else ""
-        lines.append(f"  {item['name']}: {item['count']}{broken}")
+        lines.append("")
+        lines.append(f"## Bank ({len(bank)} items)")
+        for item in bank:
+            broken = " [BROKEN]" if item["broken"] else ""
+            lines.append(f"  {item['name']}: {item['count']}{broken}")
 
     return "\n".join(lines)
 

@@ -84,7 +84,7 @@ async def get_bank_inventory(day: int = 0, town_id: int = 0, detail: str = "summ
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-async def get_town_overview(day: int = 0, town_id: int = 0) -> str:
+async def get_town_overview(day: int = 0, town_id: int = 0, detail: str = "full") -> str:
     """
     Fetches a complete overview of the town from Fata Morgana (community spy service).
     Returns: town name/day, gate status, defense breakdown, attack estimation,
@@ -96,6 +96,9 @@ async def get_town_overview(day: int = 0, town_id: int = 0) -> str:
         day: Specific day number to inspect (e.g. 5 for day 5). Use 0 or omit for
              the current/latest day. Useful for comparing town progress over time.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        detail: 'full' (default) includes bank inventory and deaths. 'compact' omits
+                both — use for cron/delta checks where bank is fetched separately via
+                get_bank_inventory.
     """
     tid = _resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -106,7 +109,7 @@ async def get_town_overview(day: int = 0, town_id: int = 0) -> str:
     if not (day and day != data.get("meta", {}).get("day")):
         gh_data = await gesthordes.fetch_stats(tid)
         season_points = gesthordes.extract_season_points(gh_data)
-    return fatamorgana.format_town_overview(data, season_points=season_points)
+    return fatamorgana.format_town_overview(data, season_points=season_points, detail=detail)
 
 
 @mcp.tool()
