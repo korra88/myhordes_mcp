@@ -58,21 +58,25 @@ def _resolve_town_id(town_id: int = 0) -> int | str:
 
 
 @mcp.tool()
-async def get_bank_inventory(day: int = 0, town_id: int = 0) -> str:
+async def get_bank_inventory(day: int = 0, town_id: int = 0, detail: str = "summary") -> str:
     """
-    Fetches the current bank inventory of the MyHordes town, grouped by category.
-    Use this tool when the user asks about available resources, materials for
-    construction sites, or general inventory status.
+    Fetches the current bank inventory of the MyHordes town.
+    Default view is a strategic summary grouped by priority (water, food by AP,
+    drugs, defense items, key resources, weapons). Use detail='full' for the
+    complete item list grouped by raw category.
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        detail: 'summary' (default) for strategic overview, 'full' for every item.
     """
     tid = _resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
     data = await fatamorgana.fetch_town_data(tid, day=day or None)
-    return fatamorgana.format_bank(data)
+    if detail == "full":
+        return fatamorgana.format_bank(data)
+    return fatamorgana.format_bank_summary(data)
 
 
 # ---------------------------------------------------------------------------
