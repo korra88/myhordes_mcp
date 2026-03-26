@@ -76,6 +76,8 @@ Compare current state to baseline. Build a brief timestamped entry:
 
 **MOVEMENTS:** Who went out / came home / died. Note position changes for citizens already outside.
 
+**PLAYER — depleted zone check:** Read `PLAYER_NAME` from `.env`. If that citizen is outside town, call `get_zone_details` for their current coordinates (x1=X, y1=Y, x2=X, y2=Y). If the zone is marked "depleted", flag it: `⚠ {PLAYER_NAME} in depleted zone [X|Y] — consider moving`.
+
 **GATE:** Flag as urgent if gate is OPEN at 23:30 CET or later.
 
 **BANK — flag any decrease as PULLED (old→new) for these items:**
