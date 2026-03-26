@@ -13,10 +13,19 @@ Dice (chance 1 AP), Cards (chance 1 AP), Makeshift Guitar (1 AP to all in town, 
 
 ## Eating & Drinking
 - A citizen can eat only ONCE a day ("Fed" status). Basic food restores AP to max (6). Premium food restores AP to max + 1 (7 AP, or 6 if Wounded).
-- The first water ration restores AP to max (6) and gives "Refreshed" status. Further drinks don't restore AP but can improve thirst.
-- Thirst chain overnight if not Refreshed: Normal → Thirsty → Dehydrated! → Death.
+- The first water ration restores AP to max (6), gives "Refreshed" status, and resets the thirst counter. Further drinks don't restore AP but can improve thirst status.
 - A Dehydrated citizen dies at midnight regardless of Refreshed status.
 - Drinking when Dehydrated does NOT restore AP — it only improves status to Thirsty.
+
+### Thirst counter (in-desert movement)
+- Moving through zones increments a thirst counter. After walking **11 zones** since the last water ration, you become **Thirsty**.
+- **Thirsty and Refreshed are independent statuses** — you can be both simultaneously. Drinking a water ration gives Refreshed and resets the counter; it does not clear an existing Thirsty status if already acquired.
+- **Overnight progression depends on Refreshed, not Thirsty:**
+  - Normal, not Refreshed → Thirsty at midnight
+  - Thirsty, not Refreshed → Dehydrated at midnight
+  - Thirsty + Refreshed → stays Thirsty next morning (no degradation, but not reset to Normal either)
+  - Dehydrated → Death at midnight regardless of Refreshed status
+- **Expedition goal:** return **Refreshed** — Thirsty + Refreshed on arrival is safe overnight. Returning without Refreshed risks overnight degradation.
 
 ## Alcohol
 Restores AP to max (6), gives "Drunk" status. Drunk citizens suffer -20% scavenging penalty and scrambled forum/note messages. The next day they become "Hungover" and cannot drink alcohol. Exception: Ergot Homebrew can be consumed while Drunk or Hungover.
