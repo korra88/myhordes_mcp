@@ -67,6 +67,10 @@ These ranges come from the standard 40-citizen town formula. The actual attack d
 - When advising on expeditions, always check the estimated zombie count against the party's available CP. If a zone's estimated zombie count exceeds the party's combined CP, entering alone means getting Trapped — coordinate with others or avoid the zone.
 - The Guide to the World Beyond gains +1 CP per other citizen in the same zone (stacks with all other bonuses).
 
+## Coordinates display in markdown tables
+
+Coordinates use `|` as separator (e.g. `[4|5]`), which breaks markdown table formatting. Always write coordinates as `[x/y]` when inside a table cell (e.g. `[4/5]`). Outside tables (plain text, bullet points), either form is acceptable.
+
 ## Watchmen
 Citizens can join the "Watch" to add their personal defense points to the town's total. This heavily risks their lives (injury, terror, or death). Bank resources are sacred — calculate carefully before equipping Watchmen.
 
