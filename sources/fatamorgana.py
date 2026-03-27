@@ -329,8 +329,15 @@ def _parse_buildings(js_data: dict) -> list[dict]:
     """Extract building list from bpsAndConstructions.
 
     The `constructions` dict tells us which buildings are built and their
-    current upgrade level (if upgradeable). The `constructionHistory` dict
-    provides the day each building was built and when each upgrade happened.
+    current upgrade level (if upgradeable).
+
+    `dailyConstructions` is the authoritative source for build days:
+      dailyConstructions[day_str].built = [building_id, ...]
+
+    `constructionHistory[bid].voted` encodes upgrade events as
+    {vote_index_str: game_day_int} — vote index == new level reached,
+    value == game day when the vote happened. We transform this to
+    {game_day_int: new_level_int} for downstream consumption.
     """
     bps = js_data.get("bpsAndConstructions", {})
     if not isinstance(bps, dict):
@@ -341,14 +348,45 @@ def _parse_buildings(js_data: dict) -> list[dict]:
     history = js_data.get("constructionHistory", {})
     if not isinstance(history, dict):
         history = {}
+
+    # Reverse-lookup: bid (str) → built_day (int), from dailyConstructions
+    daily = js_data.get("dailyConstructions", {})
+    build_day_lookup: dict[str, int] = {}
+    if isinstance(daily, dict):
+        for day_str, events in daily.items():
+            if not isinstance(events, dict):
+                continue
+            try:
+                day_num = int(day_str)
+            except (ValueError, TypeError):
+                continue
+            for bid_val in events.get("built") or []:
+                build_day_lookup[str(bid_val)] = day_num
+
     built_ids = set(constructions.keys())
     buildings = []
     for bid, b in bps.items():
         name_dict = b.get("name", {})
         name = name_dict.get("en") or name_dict.get("fr") or next(iter(name_dict.values()), f"Building {bid}")
         con = constructions.get(bid, {})
-        hist = history.get(bid, {})
         level = con.get("level")  # None if not upgradeable
+
+        # Transform voted: {vote_index_str: game_day} → {game_day: new_level}
+        hist = history.get(bid, {})
+        voted_raw = hist.get("voted")
+        upgrade_days: dict[int, int] | None = None
+        if isinstance(voted_raw, dict) and voted_raw:
+            upgrade_days = {}
+            for vote_idx_str, game_day in voted_raw.items():
+                try:
+                    new_level = int(vote_idx_str)  # vote index equals new level
+                    day = int(game_day)
+                    upgrade_days[day] = new_level
+                except (ValueError, TypeError):
+                    pass
+            if not upgrade_days:
+                upgrade_days = None
+
         buildings.append({
             "id": bid,
             "name": name,
@@ -357,8 +395,8 @@ def _parse_buildings(js_data: dict) -> list[dict]:
             "temporary": b.get("temporary", False),
             "built": bid in built_ids,
             "level": level,
-            "built_day": hist.get("built"),
-            "upgrade_days": hist.get("voted") if isinstance(hist.get("voted"), dict) else None,
+            "built_day": build_day_lookup.get(bid),
+            "upgrade_days": upgrade_days,
         })
     return buildings
 
@@ -1075,7 +1113,12 @@ def format_bank_summary(data: dict) -> str:
 
 
 def format_buildings(data: dict) -> str:
-    """Format building list with defense values and construction status."""
+    """Format building list grouped by construction day, with upgrade events.
+
+    Uses constructionHistory.built (day first built) and constructionHistory.voted
+    (dict of {day_str: new_level}) to reconstruct the Fata UI construction log.
+    Falls back to a flat alphabetical list when history data is absent.
+    """
     if data.get("error"):
         return f"Error: {data['error']}"
 
@@ -1094,7 +1137,58 @@ def format_buildings(data: dict) -> str:
         "",
     ]
 
-    if built:
+    has_history = any(b.get("built_day") is not None for b in built)
+
+    if has_history:
+        # Group first-build events by built_day
+        day_builds: dict[int, list] = {}
+        day_upgrades: dict[int, list] = {}  # day → [(name, old_lv, new_lv), ...]
+
+        for b in built:
+            bd = b.get("built_day")
+            if bd is not None:
+                try:
+                    key = int(bd)
+                except (ValueError, TypeError):
+                    key = 0
+                day_builds.setdefault(key, []).append(b)
+
+            udays = b.get("upgrade_days")
+            if udays:
+                for day_str, new_level in udays.items():
+                    try:
+                        uday = int(day_str)
+                        nlevel = int(new_level)
+                    except (ValueError, TypeError):
+                        continue
+                    day_upgrades.setdefault(uday, []).append((b["name"], nlevel - 1, nlevel))
+
+        all_days = sorted(set(day_builds.keys()) | set(day_upgrades.keys()))
+        total_def = sum(b["defense"] for b in built)
+        lines.append(f"### Built — construction history (total defense from buildings: {total_def})")
+        for day_key in all_days:
+            label = f"**Day {day_key}**" if day_key > 0 else "**Day ? (unknown)**"
+            lines.append(label)
+            # Free vote upgrades first, sorted by name
+            for name, old_lv, new_lv in sorted(day_upgrades.get(day_key, []), key=lambda x: x[0].lower()):
+                lines.append(f"  *(free vote)* {name}: Lv.{old_lv} → Lv.{new_lv}")
+            # New paid builds, sorted by name
+            for b in sorted(day_builds.get(day_key, []), key=lambda x: x["name"].lower()):
+                name = b["name"]
+                if b.get("level") is not None:
+                    name += f" [Lv.{b['level']}]"
+                parts = [f"  {name}"]
+                details = []
+                if b["defense"]:
+                    details.append(f"+{b['defense']} def")
+                if b["temporary"]:
+                    details.append("temporary")
+                if details:
+                    parts.append(", ".join(details))
+                lines.append(" — ".join(parts) if len(parts) > 1 else parts[0])
+            lines.append("")
+    else:
+        # Fallback: flat alphabetical list (no history data in this snapshot)
         built.sort(key=lambda b: b["name"].lower())
         total_def = sum(b["defense"] for b in built)
         lines.append(f"### Built ({len(built)}, total defense: {total_def})")
