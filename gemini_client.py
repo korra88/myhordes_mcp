@@ -3,10 +3,11 @@ import asyncio
 import json
 from pathlib import Path
 from dotenv import load_dotenv
+
 import google.generativeai as genai
-from google.generativeai.types import content_types
 from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp.client.session import ClientSession
+
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
@@ -19,7 +20,8 @@ if not GEMINI_API_KEY:
     print("Error: GEMINI_API_KEY not found in environment variables.")
     exit(1)
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+# Corrected the default model name to the actual 2.0 version
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 genai.configure(api_key=GEMINI_API_KEY)
 
@@ -36,8 +38,11 @@ def load_system_prompt() -> str:
     parts = []
     if PERSONALITY_FILE.exists():
         parts.append(PERSONALITY_FILE.read_text())
-    for tips_file in sorted(TIPS_DIR.glob("*.md")):
-        parts.append(tips_file.read_text())
+    
+    if TIPS_DIR.exists():
+        for tips_file in sorted(TIPS_DIR.glob("*.md")):
+            parts.append(tips_file.read_text())
+            
     return "\n\n---\n\n".join(parts)
 
 
@@ -60,12 +65,14 @@ def _clean_schema(schema: dict) -> dict:
             cleaned[k] = TYPE_MAP.get(v, v.upper())
         else:
             cleaned[k] = v
+            
     if "properties" in cleaned:
         cleaned["properties"] = {
             k: _clean_schema(v) for k, v in cleaned["properties"].items()
         }
     if "items" in cleaned and isinstance(cleaned["items"], dict):
         cleaned["items"] = _clean_schema(cleaned["items"])
+        
     return cleaned
 
 
@@ -81,23 +88,31 @@ def mcp_tool_to_gemini_declaration(mcp_tool):
 async def handle_function_calls(session: ClientSession, response, chat):
     """Iteratively handle all function calls until Gemini returns a text response."""
     while True:
+        # Check if the response contains function calls
         parts = response.candidates[0].content.parts
         tool_calls = [p for p in parts if p.function_call.name]
+        
         if not tool_calls:
+            # No more tools to call, break the loop and return the final text
             break
 
         tool_responses = []
         for part in tool_calls:
             tool_name = part.function_call.name
-            tool_args = dict(part.function_call.args)
+            
+            # Safely convert protobuf map to standard Python dictionary
+            tool_args = type(part.function_call.args).to_dict(part.function_call.args)
 
-            print(f"\n  [tool] {tool_name}({json.dumps(tool_args)})")
+            print(f"\n  [MCP Tool Execution] -> {tool_name}({json.dumps(tool_args)})")
 
             try:
+                # Execute the tool on the local MCP server
                 result = await session.call_tool(tool_name, tool_args)
                 tool_output = "\n".join(
                     c.text for c in result.content if hasattr(c, "text")
                 )
+                
+                # Format exactly as the GenAI SDK expects
                 tool_responses.append({
                     "function_response": {
                         "name": tool_name,
@@ -112,14 +127,14 @@ async def handle_function_calls(session: ClientSession, response, chat):
                     }
                 })
 
-        response = chat.send_message(
-            content_types.to_contents({"role": "function", "parts": tool_responses})
-        )
+        # Send the tool execution results back to the model so it can continue reasoning
+        response = chat.send_message(tool_responses)
 
     return response
 
 
 async def run_gemini_client():
+    # Setup the subprocess parameters to start the MCP server
     server_params = StdioServerParameters(
         command=str(Path(__file__).parent / ".venv" / "bin" / "python"),
         args=["main.py"],
@@ -132,9 +147,11 @@ async def run_gemini_client():
         async with ClientSession(read, write) as session:
             await session.initialize()
 
+            # Discover available tools
             mcp_tools_list = await session.list_tools()
             gemini_tools = [mcp_tool_to_gemini_declaration(t) for t in mcp_tools_list.tools]
 
+            # Initialize Model
             system_prompt = load_system_prompt()
             model = genai.GenerativeModel(
                 model_name=GEMINI_MODEL,
@@ -144,9 +161,10 @@ async def run_gemini_client():
 
             chat = model.start_chat()
 
-            print(f"\n--- MyHordes Desert Veteran (Gemini) ---")
+            print(f"\n--- MyHordes Town Elder AI ---")
             print(f"Tools: {len(mcp_tools_list.tools)} loaded. Type 'exit' to quit.\n")
 
+            # Setup prompt toolkit for history
             history_file = Path(__file__).parent / ".gemini_history"
             prompt_session = PromptSession(
                 history=FileHistory(str(history_file)),
@@ -160,27 +178,31 @@ async def run_gemini_client():
                         [("class:prompt", "Citizen > ")]
                     )
                 except (EOFError, KeyboardInterrupt):
-                    print("\nFarewell, citizen. Try not to die out there.")
+                    print("\nStay safe out there, citizen. The gates close at midnight.")
                     break
 
                 user_input = user_input.strip()
                 if not user_input:
                     continue
                 if user_input.lower() in ("exit", "quit"):
-                    print("Farewell, citizen. Try not to die out there.")
+                    print("Stay safe out there, citizen. The gates close at midnight.")
                     break
 
-                print("\nVeteran is thinking...\n")
+                print("\nThe Elder is checking the records...\n")
 
                 try:
+                    # 1. Send the initial user prompt
                     response = chat.send_message(user_input)
+                    
+                    # 2. Let the Director loop handle any required tool executions
                     response = await handle_function_calls(session, response, chat)
 
+                    # 3. Print the final text output
                     text = response.text if response.text else "(No response)"
-                    print(f"Veteran: {text}\n")
+                    print(f"Town Elder: {text}\n")
 
                 except Exception as e:
-                    print(f"\n[!] Error: {e}\n")
+                    print(f"\n[!] Error communicating with the Elder: {e}\n")
 
 
 if __name__ == "__main__":
