@@ -75,7 +75,8 @@ The agent is loaded with two types of system prompt files:
 | File | Purpose |
 |---|---|
 | `AGENT-PERSONALITY.md` | Persona, core mechanics, MCP operational rules. Edit this for tone, behavior, or fundamental game rules. |
-| `tips/*.md` | Community knowledge, player meta, and strategic quirks. Add new tips here, **not** in `AGENT-PERSONALITY.md`. |
+| `tips/*.md` | All shared meta-knowledge: game mechanics, strategy, expedition math, opti-town tactics, session protocols. Add new tips here, **not** in `AGENT-PERSONALITY.md`. |
+| `personal/*.md` | Player-specific private data (friends, loadout). Local only, gitignored. |
 
 **Where to put new content:**
 - Persona or character enforcement → `AGENT-PERSONALITY.md` (keep it slim — persona only)
@@ -83,7 +84,11 @@ The agent is loaded with two types of system prompt files:
 - MCP tool usage, constraints, town memory → `tips/mcp-guidelines.md`
 - Observed player behavior (e.g. timezone patterns) → `tips/player-behavior.md`
 - Non-obvious strategy or game quirk → `tips/strategy-quirks.md`
-- New category of tips → create a new `tips/<topic>.md` and add it to the Makefile + README
+- Opti-town coordination tactics → `tips/opti-town-meta.md`
+- Expedition planning & movement math → `tips/expedition-planning.md`
+- Season-specific meta & nerfs → `tips/s19-meta.md`
+- Session standing orders → `tips/session-protocols.md`
+- New category → create a new `tips/<topic>.md` and add it to the Makefile + README
 
 ## Style notes
 

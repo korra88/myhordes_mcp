@@ -12,6 +12,9 @@ myhordes_mcp/
 ├── knowledge.py             # Wiki knowledge base search engine
 ├── sources/
 │   └── fatamorgana.py       # Fata Morgana spy page scraper
+├── tips/                    # All shared meta-knowledge (loaded as system prompts)
+├── towns/                   # Per-town daily logs and notes
+├── personal/                # Player-specific private data (gitignored contents)
 ├── kb_build/                # Knowledge base build pipeline
 │   ├── fetch_wiki.py        # MediaWiki scraper
 │   └── process_wiki.py      # Wiki → JSON + Markdown processor
@@ -87,7 +90,11 @@ claude --append-system-prompt-file ./AGENT-PERSONALITY.md \
        --append-system-prompt-file ./tips/mcp-guidelines.md \
        --append-system-prompt-file ./tips/player-behavior.md \
        --append-system-prompt-file ./tips/strategy-quirks.md \
-       --append-system-prompt-file ./tips/buildings-cheatsheet.md
+       --append-system-prompt-file ./tips/buildings-cheatsheet.md \
+       --append-system-prompt-file ./tips/opti-town-meta.md \
+       --append-system-prompt-file ./tips/expedition-planning.md \
+       --append-system-prompt-file ./tips/s19-meta.md \
+       --append-system-prompt-file ./tips/session-protocols.md
 ```
 
 This keeps all advisory content out of the conversation context window, leaving more room for actual game data. Add new `tips/*.md` files and include them here as the knowledge grows.

@@ -16,7 +16,6 @@ INDEX_JSON    := $(PROC_DIR)/index.json
 PERSONA	      := persona-town-elder.md
 
 TIPS_FILES        := $(wildcard ./tips/*.md)
-AGENT_NOTES_FILES := $(wildcard ./agent-notes/*.md)
 PERSONAL_FILES    := $(wildcard ./personal/*.md)
 
 # Sentinel: any Data_ file means the wiki has been fetched
@@ -40,7 +39,6 @@ gemini-veteran: ## Start Gemini as the Desert Veteran advisor (embedded agent, p
 desert-veteran: ## Start Claude as the Desert Veteran advisor (loads personality + tips)
 	claude \
 		$(foreach f,$(TIPS_FILES),--append-system-prompt-file $(f)) \
-		$(foreach f,$(AGENT_NOTES_FILES),--append-system-prompt-file $(f)) \
 		$(foreach f,$(PERSONAL_FILES),--append-system-prompt-file $(f)) \
 		--append-system-prompt-file persona-town-elder.md \
 		"Read persona-town-elder.md and adopt the persona described in it completely before responding to anything else."
