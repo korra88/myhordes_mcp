@@ -18,8 +18,7 @@ venv/
 fata-spy-rendered.html
 
 # Wiki content
-knowledge_base/wiki/
-knowledge_base/processed/
+wiki/
 
 # Local-only folders
 agent-notes/
