@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-_BASE_DIR = Path(__file__).parent / "knowledge_base" / "processed"
+_BASE_DIR = Path(__file__).parent / "wiki" / "processed"
 
 # Loaded once at import time — ~1 MB total, negligible.
 _index: dict[str, dict] = {}

@@ -7,7 +7,7 @@ Connected to town's live server via Read-Only MCP. No actions. Advise only.
 1. **Always Verify First:** Before any strategy or building plan, ALWAYS use MCP tools (`get_bank_inventory`, `get_town_overview`, `get_defense_status`, etc.) to check real-time situation.
 2. **Never Hallucinate:** Never guess AP levels, inventory items, or attack numbers. No data? Say so explicitly.
 3. **Optimize AP & Survival:** Formulate clear, step-by-step action plans. Calculate AP costs strictly from `game-mechanics.md`.
-4. **Use the Knowledge Base:** Unsure about item, building, status, or mechanic? Use `search_knowledge_base`. Never guess.
+4. **Use the Knowledge Base:** Unsure about item, building, status, or mechanic? Use `search_wiki`. For building phase guides and strategy, use `search_knowledge`. Never guess.
 5. **Historical Comparison:** All town data tools accept `day` param. Use to compare town state across days.
 6. **Sign-off:** Always end with dark, cynical, genuinely useful wasteland survival tip.
 
@@ -67,7 +67,7 @@ Save non-obvious things not derivable from code or mechanics that matter in futu
 
 Don't save:
 - Town-specific data (belongs in `towns/`)
-- Facts already in `tips/*.md` or `knowledge_base/`
+- Facts already in `tips/*.md`, `wiki/`, or `knowledge/`
 - Ephemeral session state
 
 ### How to create notes file

@@ -19,7 +19,9 @@ myhordes_mcp/
 ├── kb_build/                # Knowledge base build pipeline
 │   ├── fetch_wiki.py        # MediaWiki scraper
 │   └── process_wiki.py      # Wiki → JSON + Markdown processor
-├── knowledge_base/          # Generated wiki content (gitignored)
+├── wiki/                    # Generated wiki content (gitignored)
+├── knowledge/               # Curated advisor knowledge base (on-demand via search_knowledge)
+│   └── buildings/           #   Building guides by game phase
 ├── requirements.txt         # Python dependencies
 ├── .env.example             # Template for environment variables
 ├── docs/                    # Source analysis & API reference
@@ -113,7 +115,8 @@ In a Claude Code conversation, ask something like:
 - *"Who's outside the town?"* → calls `get_citizen_positions`
 - *"Will we survive tonight's attack?"* → calls `get_defense_status`
 - *"How bad does the attack get on day 15?"* → calls `get_attack_forecast`
-- *"What's a Twisted Plank?"* → calls `search_knowledge_base`
+- *"What's a Twisted Plank?"* → calls `search_wiki`
+- *"What should we build on day 8?"* → calls `search_knowledge`
 
 ## Available Tools
 
@@ -127,8 +130,9 @@ In a Claude Code conversation, ask something like:
 | `get_scout_map` | Fata Morgana | Zombie counts per scouted zone, grouped by threat level. |
 | `get_zone_details` | Fata Morgana | Ruins, ground items, and zombie counts per map zone. |
 | `get_attack_forecast` | Gest'Hordes | Theoretical min/max attack curve for the full game, with actual and estimated attack history and defence breakdown per day. |
-| `search_knowledge_base` | Wiki KB | Search items, buildings, ruins, skills, statuses, and strategy guides. |
-| `list_knowledge_categories` | Wiki KB | List available knowledge base categories. |
+| `search_wiki` | Wiki | Search items, buildings, ruins, skills, statuses, and strategy guides from en.mhwiki.org. |
+| `list_wiki_categories` | Wiki | List available wiki categories. |
+| `search_knowledge` | Knowledge | Search curated advisor KB — building phase guides, strategy, post-mortems. |
 
 ## Tech Stack
 

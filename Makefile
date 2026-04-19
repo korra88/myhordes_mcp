@@ -1,4 +1,4 @@
-# Makefile — MyHordes MCP knowledge-base pipeline
+# Makefile — MyHordes MCP wiki build pipeline
 #
 # Usage:
 #   make kb           Build the knowledge base (fetch → process)
@@ -9,8 +9,8 @@
 
 PYTHON ?= python3
 
-WIKI_DIR      := knowledge_base/wiki
-PROC_DIR      := knowledge_base/processed
+WIKI_DIR      := wiki/wiki
+PROC_DIR      := wiki/processed
 ENTITIES_JSON := $(PROC_DIR)/entities.json
 INDEX_JSON    := $(PROC_DIR)/index.json
 PERSONA       ?= town-elder

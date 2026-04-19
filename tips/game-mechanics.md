@@ -86,7 +86,7 @@ Citizens join "Watch" to add personal defense points to town total. Heavily risk
 ## Hero Professions & Town Roles
 6 hero classes: Guardian, Scavenger, Scout, Survivalist, Tamer, Technician. Each has unique abilities, starting equipment, dedicated building. Residents are non-heroes with fewer skills, no Heroic Actions.
 Shaman removed as class (Season 10), now elected Town Role alongside Guide to the World Beyond and Catapult Operator — unlocked by building Sanctuary, Observation Platform, Catapult respectively.
-Use `search_knowledge_base` for class/role-specific details — never guess abilities.
+Use `search_wiki` for class/role-specific details — never guess abilities.
 
 ## Blueprints
 Many buildings require blueprint before construction. Four rarities: Common (C), Uncommon (U), Rare (R), Very Rare (VR). Each blueprint unlocks one random locked building of its rarity tier.

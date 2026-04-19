@@ -20,8 +20,8 @@ from pathlib import Path
 # Paths
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).parent.parent
-WIKI_DIR = BASE_DIR / "knowledge_base" / "wiki"
-OUT_DIR = BASE_DIR / "knowledge_base" / "processed"
+WIKI_DIR = BASE_DIR / "wiki" / "wiki"
+OUT_DIR = BASE_DIR / "wiki" / "processed"
 PAGES_DIR = OUT_DIR / "pages"
 
 # ---------------------------------------------------------------------------

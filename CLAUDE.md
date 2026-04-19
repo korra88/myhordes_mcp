@@ -33,7 +33,7 @@ When running as game advisor (launched via `make desert-veteran` or similar), pr
 | `main.py` | MCP server, tool definitions |
 | `sources/fatamorgana.py` | Fata Morgana httpx scraper + formatters |
 | `sources/official_api.py` | *(planned)* Official API client |
-| `knowledge.py` | Wiki knowledge base search engine |
+| `knowledge.py` | Wiki search engine (indexes `wiki/processed/`) |
 | `AGENT-PERSONALITY.md` | Symlink → active persona in `personas/`. Set via `make use-persona p=<name>`. Gitignored (local state). |
 | `personas/` | All persona files. `town-elder.md` = current default. Add new personas here. |
 | `docs/source-map.md` | Navigation guide for game PHP source (`myhordes-docker/myhordes/`) |
@@ -43,6 +43,9 @@ When running as game advisor (launched via `make desert-veteran` or similar), pr
 | `docs/implementation-notes.md` | Design decisions with rationale — read before changing architecture |
 | `towns/` | Per-town memory logs written by agent (`s{season}-{town-slug}/daily-log.md` + `notes.md`) |
 | `towns/_template/` | Templates for new town folders |
+| `knowledge/` | Curated advisor knowledge base (on-demand, not auto-loaded). Searched via `search_knowledge`. |
+| `knowledge/buildings/` | Building guides by game phase: `basic.md`, `intermediate.md`, `defense-focus.md`, `advanced.md`, `wonders.md` |
+| `wiki/` | Generated wiki content (gitignored). Searched via `search_wiki`. |
 
 ## Game source location
 
@@ -60,7 +63,8 @@ Game source (PHP/Symfony) at `myhordes-docker/myhordes/`. Key paths:
 ## Current state
 
 - Fata Morgana tools live: `get_town_overview`, `get_citizen_positions`, `get_defense_status`, `get_bank_inventory`, `get_buildings`, `get_scout_map`
-- Knowledge base tools live: `search_knowledge_base`, `list_knowledge_categories`
+- Wiki tools live: `search_wiki`, `list_wiki_categories`
+- Knowledge tools live: `search_knowledge` (curated advisor KB in `knowledge/`)
 - Planned (blocked on official API app key): `get_construction_progress`, `get_last_night_report` — stubs commented out in `main.py`
 - Next: official API client (`sources/official_api.py`) once app key obtained
 - Future: when both sources work, let agent choose right tool based on question

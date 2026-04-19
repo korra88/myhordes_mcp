@@ -349,15 +349,15 @@ async def get_attack_forecast(town_id: int = 0) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Knowledge base tools
+# Wiki tools (scraped from en.mhwiki.org)
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def search_knowledge_base(query: str, category: str = "", limit: int = 5) -> str:
+def search_wiki(query: str, category: str = "", limit: int = 5) -> str:
     """
-    Search the MyHordes wiki knowledge base for game information.
-    Use this tool to look up items, buildings, ruins, skills, statuses, distinctions,
-    jobs, deaths, mechanics, and strategy guides.
+    Search the MyHordes wiki for game information.
+    Use for items, buildings, ruins, skills, statuses, distinctions, jobs, deaths,
+    mechanics, and strategy guides sourced from en.mhwiki.org.
 
     Args:
         query: Search terms (e.g. "Twisted Plank", "camping", "water ration poisoned")
@@ -368,7 +368,7 @@ def search_knowledge_base(query: str, category: str = "", limit: int = 5) -> str
                higher for broad searches.
     """
     if not knowledge.is_loaded():
-        return "Error: Knowledge base not loaded. Run 'make process' to build it."
+        return "Error: Wiki not loaded. Run 'make process' to build it."
 
     limit = max(1, min(10, limit))
     cat = category.strip().lower() or None
@@ -387,23 +387,70 @@ def search_knowledge_base(query: str, category: str = "", limit: int = 5) -> str
 
 
 @mcp.tool()
-def list_knowledge_categories() -> str:
+def list_wiki_categories() -> str:
     """
-    List all categories in the MyHordes knowledge base with page counts.
-    Use this to discover what information is available before searching.
+    List all categories in the MyHordes wiki with page counts.
+    Use this to discover what wiki information is available before searching.
     """
     if not knowledge.is_loaded():
-        return "Error: Knowledge base not loaded. Run 'make process' to build it."
+        return "Error: Wiki not loaded. Run 'make process' to build it."
 
     cats = knowledge.get_categories()
-    lines = ["MyHordes Knowledge Base Categories:\n"]
+    lines = ["MyHordes Wiki Categories:\n"]
     total = 0
     for cat, count in cats.items():
         lines.append(f"- {cat}: {count} pages")
         total += count
     lines.append(f"\nTotal: {total} pages")
-    lines.append("\nUse search_knowledge_base(query, category='...') to search within a category.")
+    lines.append("\nUse search_wiki(query, category='...') to search within a category.")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Knowledge tools (curated advisor knowledge base)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def search_knowledge(query: str, section: str = "") -> str:
+    """
+    Search the advisor's curated knowledge base for strategy, building guides,
+    and tactical notes not found in the wiki. Content lives in knowledge/ dir.
+
+    Use for: building priority by game phase, opti-town tactics, zoo strategy,
+    expedition planning, post-mortem analysis.
+
+    Args:
+        query: Search terms (e.g. "day 5 buildings", "water defense", "wonders")
+        section: Optional subfolder filter (e.g. "buildings"). Leave empty to search all.
+    """
+    import os
+    from pathlib import Path
+
+    kb_dir = Path(__file__).parent / "knowledge"
+    if section:
+        kb_dir = kb_dir / section
+
+    if not kb_dir.exists():
+        return f"Knowledge section '{section}' not found." if section else "Knowledge base not found."
+
+    results = []
+    query_lower = query.lower()
+
+    for md_file in sorted(kb_dir.rglob("*.md")):
+        content = md_file.read_text(encoding="utf-8")
+        if query_lower in content.lower():
+            rel = md_file.relative_to(Path(__file__).parent / "knowledge")
+            results.append((str(rel), content))
+
+    if not results:
+        return f"No knowledge entries found for '{query}'" + (f" in section '{section}'" if section else "") + "."
+
+    parts = [f"Found {len(results)} file(s) matching '{query}':\n"]
+    for name, content in results:
+        parts.append(f"## {name}\n")
+        parts.append(content)
+        parts.append("\n---\n")
+    return "\n".join(parts)
 
 
 if __name__ == "__main__":
