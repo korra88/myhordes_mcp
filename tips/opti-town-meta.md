@@ -1,151 +1,107 @@
 ---
 topic: Opti-town meta strategy
-description: How coordinated "Opti" towns work — the pillars, execution, and mechanics behind season-winning runs
+description: How coordinated "Opti" towns work — pillars, execution, mechanics behind season-winning runs
 ---
 
-## What is an Opti town
+## What is Opti town
 
-**Opti town** (Optimized town) = coordinated run by 3–4 experienced directors. Every citizen gets precise daily instructions, executes without deviation. Goal: maximize **final score/ranking** — zero unplanned deaths, optimized soul purification, perfect execution.
+Coordinated run by 3–4 experienced directors. Every citizen gets precise daily instructions, executes without deviation. Goal: maximize final score/ranking — zero unplanned deaths, optimized soul purification.
 
-Single unaccounted death **fails ranking** — dead citizens drain AP pool and lose ranking points. Every citizen kept alive as long as mathematically optimal.
+Single unaccounted death fails ranking — dead citizens drain AP pool, lose ranking points.
 
 ---
 
-## The five pillars of an Opti town
+## Pillars
 
 ### 1. Tamer-heavy roster
-Tamers = premier class for item accumulation:
-- Pets **send items directly from desert to town** — best item-per-AP ratio of any class
-- **Tamer Center** produces animals (Guard Dogs, Mangy Dachshunds) — defense items or food
-- Opti roster majority = Tamers, specifically for this pipeline
+Pets send items directly from desert to town — best item-per-AP ratio. Tamer Center produces Guard Dogs, Mangy Dachshunds (defense items or food). Opti roster = Tamer majority.
 
-### 2. The Flag mechanic (Season 18 specific)
-**Flag** item: each waving citizen absorbs 2.5% of zombies exceeding town defense.
-- 40 citizens waving = 100% excess zombies redistributed personally
-- ~49 personal defense × 40 citizens = ~1,960 zombie offset free
-- Town targets **lower total defense floor**, freeing AP for construction and scavenging
-- Early "defense below estimate" in Fata Morgana = not near-misses — **calculated, covered by Flag**
+### 2. AoN nuke (All or Nothing)
+AoN = one-shot last-stand — wipes entire bank when built. Prep:
+1. **Revolution** + **Altar**: shun most of town twice, remove shun. Each shun gives victim 3 items — 35+ citizens shunned twice = 200+ items.
+2. Stockpile (Vials of Poison, Toxin, etc.) accumulates in bank as AoN fuel.
 
-### 3. The shunning / All or Nothing nuke
-AoN = **one-shot last-stand move** — wipes entire bank when built. Preparation:
+**Before AoN night — Dump vault:**
+- Move defense objects (DOs) into Dump to survive bank wipe.
+- Dump = 2 DP/stored item as building bonus — keeps defense active while vaulted.
+- Bank has 15-min cooldown / 5-item withdrawal limit — impossible to rescue hundreds of DOs. Dump bypasses this.
+- Stash food, drugs, essentials outside walls or in Dump.
 
-1. **Revolution** + **Altar** to shun most of town twice, then remove shun status
-2. Each shun gives victim 3 items — 35+ citizens shunned twice = 200+ items
-3. Stockpile accumulates in bank as AoN fuel (Vials of Poison, Toxin, etc.)
+**AoN night:** Build All or Nothing — defense = consumable items in bank. Bank wiped → massive one-night defense spike.
 
-**Before AoN night — Dump vault strategy:**
-- Move defense objects (DOs) into **Dump** to survive bank wipe
-- Dump gives 2 DP per stored item as building bonus — keeps defense active while items vaulted
-- Bank has **15-minute cooldown / 5-item limit** on withdrawals — impossible to rescue hundreds of DOs conventionally. Dump bypasses this (costs AP to recover, no withdrawal limit)
-- Stash food, drugs, essentials outside walls or in Dump
+**After AoN:** Recover DOs from Dump (no item limit) → return to bank where Defensive Focus multiplies at full value (3 DP each at max). Net positive, AP-intensive. Typically last or second-to-last defensible night.
 
-**AoN night:**
-- Build All or Nothing — defense = consumable items remaining in bank
-- Bank wiped. Massive one-night defense spike from hundreds of accumulated junk items.
+Never interpret large poison/toxin stockpile as "deploy poison" — it's AoN fuel. Never suggest building AoN early — one-shot, time to final stand.
 
-**After AoN:**
-- Recover DOs from Dump (costs AP, no item limit) — return to bank where Defensive Focus multiplies at full value (3 DP each at max)
-- Recovery loses Dump's 2 DP bonus, gains bank's 3 DP — net positive, no defense compromise, AP-intensive
-- Typically last or second-to-last defensible night before mass exodus
-
-Never interpret large poison/toxin stockpile as "deploy poison" — it's **AoN fuel**. Never suggest building AoN early — one-shot, must time to final stand.
-
-### 4. The Ghoul sacrifice and Dump endgame
-- Late game (typically when Survivalist exhausts camping days), citizen **intentionally fed to Ghoul**
-- Ghoul kill drops **Meaty Bone** → craft **Bone** → craft **Engine** → build **Faucets**
-- Faucets = free water weapon refills
-- **Dump** building (upgraded) makes water weapons give **6 defense each**
-- Accumulated item stockpile = "temporary defense arsenal" for final push
+### 3. Ghoul sacrifice + Dump endgame
+Late game: citizen intentionally fed to Ghoul. Ghoul kill → Meaty Bone → craft Bone → craft Engine → build Faucets. Faucets = free water weapon refills. Dump upgraded = water weapons give 6 defense each.
 
 Scheduled event, not failure. Survivalist dying mid-game in Opti town = intentional.
 
-### 5. Reclusive R4 — the go-to skill build
-Every Opti citizen runs **Reclusive at Master level (R4)**:
-- **Pro Camper R2** (Reclusive Apprentice): 8 protected camping nights, gentle penalty curve (-10% → -130% cumulative by night 8)
-- **Pro Camper R4** (Reclusive Master): survival cap raised to 99% (vs 90% default)
-- Night 9 = **-480% penalty** — unsurvivable cliff
-- Exodus timing dictated by camping math: abandon town so protected nights carry citizens as far as possible; night 9+ = near-certain death
-- Mass death waves in endgame (8 dead one night, 24 the next) = not failures — camping cliff hitting everyone simultaneously
+### 4. Reclusive R4
+- **Pro Camper R2**: 8 protected camping nights, -10% → -130% cumulative penalty by night 8.
+- **Pro Camper R4**: survival cap 99% (vs 90% default).
+- Night 9 = -480% penalty — unsurvivable cliff.
+- Exodus timing dictated by camping math. Mass death waves in endgame (8 dead one night, 24 the next) = camping cliff hitting everyone simultaneously, not failures.
 
-### 6. The mass exodus endgame
+### 5. Mass exodus endgame
 When town indefensible, citizens exit together:
-- **No one dies inside walls** — dying in town wastes contribution
-- Desert citizens earn **soul points**: `days × (days + 1) / 2` (triangular number)
-  - Day 40 = 820 SP, Day 45 = 1035 SP, Day 46 = 1081 SP — every extra day worth more than last
-- Final days = **soul purification**: surviving citizens collect dead souls, purify for bonus town points
-- Last survivors spread to maximize personal desert scores
+- No one dies inside walls — dying in town wastes contribution.
+- Desert soul points: `days × (days + 1) / 2` (triangular). Day 40 = 820 SP, Day 45 = 1035 SP — every extra day worth more.
+- Final days = soul purification: surviving citizens collect dead souls, purify for bonus town points.
 
 ---
 
-## The two defense multipliers
+## Defense multipliers
 
 Never confuse — opposite functions:
 
-- **Defensive Focus** (Foundations building, no blueprint): Multiplies DP value of **defensive objects** in bank. Base 1.5×, upgrades via vote to 2.0× → 2.5× → 3.0×. Item multiplier.
-- **Defensive Adjustment** (Workshop building, uncommon blueprint): Multiplies **total town defense** by percentage. Base +10%, upgrades via vote to +11% → +12% → +13% (S18 had +11% → +13% → +15%). Applies to everything including temp defense and watchmen.
+- **Defensive Focus** (Foundations, no blueprint): multiplies DP value of defensive objects in bank. Base 1.5×, upgrades via vote: 2.0× → 2.5× → 3.0×. Item multiplier.
+- **Defensive Adjustment** (Workshop, uncommon BP): multiplies total town defense by %. Base +10%, upgrades: +11% → +12% → +13%. Applies to everything incl. temp defense + watchmen.
 
-Both upgrade through nightly citizen votes, 3 levels each. Opti towns rush both to max ASAP — Defensive Focus especially; tripling every bank defense item = massive.
+Both upgrade via nightly vote, 3 levels. Rush both to max — Defensive Focus especially; tripling every bank defense item = massive.
 
 ---
 
 ## Coordination tools
 
-Opti coordination via:
-- **Discord** — real-time between directors and citizens
-- **Gest'Hordes** — external tool: desert cell positions, bank status, organizing suite:
-  - **Jumps**: coordinated town entries
-  - **Expeditions**: desert routes with per-zone instructions (items to take/drop, actions, supply drops)
-- **Fata Morgana** — spy page: defense, buildings, scout data (MCP source). Less powerful than Gest'Hordes, no auth needed.
-
-Directors (3–4 experienced players) issue daily orders. Every citizen executes without deviation.
+- **Discord** — real-time directors ↔ citizens.
+- **Gest'Hordes** — positions, bank, Jumps (coordinated entries), Expeditions (per-zone instructions).
+- **Fata Morgana** — spy page: defense, buildings, scout data (MCP source). No auth, less powerful than Gest'Hordes.
 
 ---
 
-## The Dump as a strategic vault
+## Dump as strategic vault
 
-Dump = dual purpose beyond building defense bonus:
-- Stored items give **2 DP per item** as building bonus
-- Items **recovered by spending AP** — no withdrawal cooldown or item limit (unlike bank's 15-min / 5-item)
-- Before AoN: DOs moved to Dump to survive bank wipe; food, drugs, essentials stashed outside or in Dump
-- After AoN: DOs recovered to bank at full Defensive Focus value (3 DP each at max)
-- Dump = only way to protect hundreds of items from AoN bank wipe in time
-
----
-
-## Season 19 nerfs and meta shifts
-
-Key S18 → S19 changes:
-- **Flag removed** — devs: "trivialized survival." No replacement. Significant community pushback when devs attempted mid-S18 removal (would've invalidated rankings).
-- **Defensive Adjustment nerfed** — max bonus now +13% (was +15% in S18) fully upgraded
-- **Reclusive skill nerfed** — no longer includes Lucky Find, only camping bonus (Pro Camper)
-- **Lucky Find nerfed** — max level no longer includes Worn-out Sports Shoes (1 EP per AP refresh — was massive free-movement for desert expeditions)
-- **Current S19 meta (evolving)**: Dump + Watchmen for attack spikes. Community still discovering this season's tricks.
+- 2 DP/item as building bonus.
+- No withdrawal cooldown or item limit (unlike bank 15-min / 5-item).
+- Before AoN: DOs moved here to survive bank wipe.
+- After AoN: DOs recovered to bank at full Defensive Focus value.
+- Only way to protect hundreds of items from AoN wipe in time.
 
 ---
 
-## The Zombie Zoo (advanced tactic)
+## Zombie Zoo
 
-Advanced coordinated tactic: confines all map zombies to designated area, keeps rest of desert clean for safe scavenging. Requires dedicated "zookeeper" players and careful coordination — misplay triggers catastrophic global respawn.
+Advanced tactic: confines all map zombies to designated area, keeps rest of desert clean. Requires dedicated zookeepers + careful coordination — misplay triggers catastrophic global respawn.
 
-### Critical concept: map zombies ≠ midnight attack
+### Map zombies ≠ midnight attack
 
-Two completely independent systems:
-- **Midnight attack**: predetermined horde number set by attack schedule. Grows night by night, ~4-day spikes. Killing map zombies does NOT reduce midnight horde. Attack estimate tools track this.
-- **Map zombies (World Beyond)**: spawn and spread by own rules each night. Zoo manages these. Scout data shows these.
+Two independent systems:
+- **Midnight attack**: predetermined horde, grows nightly. Killing map zombies does NOT reduce it.
+- **Map zombies (World Beyond)**: spawn/spread by own rules. Zoo manages these. Scout data shows these.
 
-Never conflate. Town with 25,000 attack estimate and 50 visible map zombies = normal — separate populations.
+Town with 25,000 attack estimate + 50 visible map zombies = normal.
 
-### Map zombie spawn rules (nightly, after midnight attack)
+### Spawn rules (nightly, after attack)
 
-- **Empty zone, no infected neighbors**: stays empty. Clean breeds clean.
-- **Empty zone, some infected neighbors**: spawns 0–4 zombies. More infected adjacent zones = higher count.
-- **Already infected zone**: spawns 1–2 additional (1 if fully surrounded by infected zones).
+- Empty zone, no infected neighbors → stays empty.
+- Empty zone, some infected neighbors → spawns 0–4 zombies (more infected adj. = higher count).
+- Already infected zone → spawns 1–2 additional.
 
-Zombies spread like contagion. Infected zone infects adjacent empty zones. Left unchecked, entire map overruns.
+### Global Respawn trap
 
-### Global Respawn — the trap
-
-If total map zombie population drops below **25 × day number** (S18 formula), game triggers **global respawn**: zombies appear randomly across entire map until threshold reached, plus day-1 amount added.
+If total map zombies drops below **25 × day** (S18 formula) → global respawn: zombies scatter randomly until threshold + day-1 amount added.
 
 | Day | Threshold |
 |-----|-----------|
@@ -153,49 +109,35 @@ If total map zombie population drops below **25 × day number** (S18 formula), g
 | 25 | 625 |
 | 35 | 875 |
 
-**#1 danger of zoo tactic.** Zookeepers or citizens accidentally kill too many → total drops below threshold → zombies explode randomly across every zone. All clean corridors ruined. Scavenging efficiency collapses.
+Zookeepers or citizens accidentally kill too many → threshold breach → all clean corridors ruined.
 
-### How the zoo works
+### How zoo works
 
-1. **Designate zoo area** — typically map corner, away from scavenging routes. Corner ideal: map edge = natural wall on two sides, reduces boundary to patrol. In S18 Interventionist Asylum, zoo was west-southwest quadrant (roughly x=-8 to x=-11, y=-4 to y=-11).
+1. Designate corner area — map edge = natural wall on two sides.
+2. Never kill inside zoo — infected zones self-sustain, grow, act as reservoir.
+3. Empty zones with empty neighbors don't spawn — clean zones stay clean.
+4. Zookeepers patrol boundary daily — kill only leakers before they infect clean zones.
+5. Zombie Despair: ~2 killed in zone → 1 more dies overnight. Kill 2/3 of boundary leakers, despair finishes rest.
+6. Keep total above respawn threshold — zoo sustains naturally. Danger = over-killing at boundary.
 
-2. **Never kill zombies inside zoo** — infected zones spawn 1–2 nightly and spread. Zoo self-sustains, grows, acts as zombie reservoir.
+Not casual tactic. Opti-tier coordination required.
 
-3. **Clean zones stay clean** — empty zone + all-empty neighbors = no spawning. Infection boundary stable → everything outside zoo stays clear.
+### Scout patterns indicating zoo
 
-4. **Zookeepers patrol boundary** — dedicated players (typically Tamers or Scouts, good AP efficiency) walk perimeter daily, **kill any zombies leaking outward** before infecting clean zones. S18: 2–3 players running x=-7 column and y=-3 row.
-
-5. **Zombie Despair helps cleanup** — per ~2 zombies killed in zone during day, 1 more dies from despair overnight. Kill 2/3 of zombies in boundary zone, despair finishes rest by morning.
-
-6. **Keep total above global respawn threshold** — zoo population sustains threshold naturally. Danger = over-killing at boundary. Kill only leakers, never push into zoo.
-
-### Why it requires heavy coordination
-
-- **Zookeeper assignment**: 2–3 dedicated players patrol boundary daily, consuming AP from scavenging/construction. Only pays off in large, long-lived towns.
-- **All citizens must avoid zoo**: anyone entering and killing risks global respawn. Every citizen needs zoo boundary knowledge.
-- **Threshold monitoring**: someone tracks approximate total map zombie count vs 25×day threshold.
-- **Area sizing**: too small = over-killing risk. Too large = wasted scavengable territory. Must adjust as threshold rises.
-- **Communication**: zookeeper reports ("boundary clean", "3 leakers killed at [-7|-5]") flow to directors daily.
-
-**Not casual tactic.** Opti-tier coordination requirement. Loose town = someone wanders in, triggers global respawn, benefit wiped.
-
-### Scout data patterns that indicate a zoo
-
-- **Large unscouted quadrant** with static "dangerous" estimates unchanging day-to-day — zoo interior, deliberately untouched.
-- **Inner zones (within ~6 km) almost always clean** — zero zombies in operational area.
-- **Occasional 1–3 zombies at consistent boundary line** (e.g., always at x=-7) — zookeepers intercepting leakers.
-- **Days with 0 zombies spotted** across 150+ scouted zones — zoo contained, no leakers today.
+- Large unscouted quadrant with static "dangerous" estimates day-to-day — zoo interior, untouched.
+- Inner zones (~6 km) almost always clean.
+- 1–3 zombies at consistent boundary line (e.g. always x=-7) — zookeepers intercepting leakers.
+- 0 zombies across 150+ scouted zones = zoo contained, no leakers.
 
 ---
 
-## General heuristics for Opti towns
+## Heuristics
 
-- Zero deaths before planned Ghoul sacrifice = run on track
-- Massive Tamer majority + animal-filled bank = Opti setup
-- Large poison/toxin stockpile = AoN fuel, not poison deployment
-- Flag in bank throughout = flag strategy active, apparent defense deficit acceptable (S18 only)
-- Citizens all exiting simultaneously = planned endgame, town falls, correct
-- "All or Nothing" + large item bank = single building covering hundreds of defense
-- One quadrant permanently unscouted + clean inner zones = zombie zoo active
-- 2–3 citizens making daily runs along same map line = zookeepers on boundary patrol
-- Zero map zombies in 150+ scouted zones ≠ "no zombies on map" — penned in zoo
+- Zero deaths before planned Ghoul sacrifice = run on track.
+- Massive Tamer majority + animal-filled bank = Opti setup.
+- Large poison/toxin stockpile = AoN fuel, not poison deployment.
+- Citizens all exiting simultaneously = planned endgame.
+- "All or Nothing" + large item bank = hundreds of defense in one build.
+- One quadrant permanently unscouted + clean inner zones = zombie zoo active.
+- 2–3 citizens running same map line daily = zookeepers on patrol.
+- Zero map zombies in 150+ scouted zones ≠ "no zombies on map" — penned in zoo.

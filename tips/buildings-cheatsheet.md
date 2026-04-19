@@ -1,14 +1,18 @@
+Here's the compressed output:
+
+---
+
 # Buildings Cheat Sheet
 
-Complete reference for all 156 standard-mode town constructions (excludes 4 private-town-only buildings). For descriptions, effects, and strategic notes use `search_knowledge_base`. For current town status (built/available/locked) use `get_buildings`.
+156 standard-mode buildings (excludes 4 private-town-only). Descriptions/effects/strategy: `search_knowledge_base`. Built/available/locked status: `get_buildings`.
 
 **Flags:** `T` = temporary (destroyed after attack) · `I` = impervious (survives attacks) · `BP-C/U/R/VR` = blueprint required (common/uncommon/rare/very rare) · `UP` = upgradable
 
-Resources shown are **standard mode**. Hardcore costs differ — check the knowledge base if needed.
+Resources: **standard mode**. Hardcore costs differ — check knowledge base.
 
 **Resource abbreviations:** `MS`=Metal Support · `PB`=Patchwork Beam · `TP`=Twisted Plank · `WI`=Wrought Iron · `HNB`=Handful of nuts and bolts · `WR`=Water Ration · `SM`=Sheet Metal · `CP`=Copper Pipe · `UCB`=Unshaped Concrete Blocks · `BDG`=Bag of Damp Grass · `WiR`=Wire Reel · `LD`=Laser Diode · `EOC`=Empty Oil Can · `DT`=Duct Tape · `EC`=Electronic component · `PP`=Pharmaceutical Products · `CD`=Compact detonator
 
-**Efficiency column (Eff):** Defense per unit of scarce resource. `A:n` = defense ÷ AP cost. `W:n` = defense ÷ water rations used. `H:n` = defense ÷ nuts-and-bolts used. Higher = better value. `—` = no defense provided.
+**Efficiency column (Eff):** Def per scarce resource. `A:n` = def÷AP. `W:n` = def÷water rations. `H:n` = def÷nuts-and-bolts. Higher = better. `—` = no def.
 
 **Quick efficiency reference (top 5 per metric):**
 - **Best Def/AP:** Reactor (5.0), Bait (3.0), Abject Panic (2.8), Frat House (2.5), Vita-Mines (2.5)
@@ -16,7 +20,7 @@ Resources shown are **standard mode**. Hardcore costs differ — check the knowl
 - **Best Def/HNB:** Gas Gun (140), Underground city (133.3), Labyrinth (75), Abject Panic (70), Dump Upgrade (65)
 - **Water-producing buildings (add to well):** Pump (+15), Drilling Rig (+50), Eden Project (+50), Divining Rocket (+60), Mechanical Pump (+75), Divining Rods (+100), No Holes Barred (+100), Hydraulic Network (+5), Water Catcher (+2/day)
 
-Indentation shows the **unlock tree** (a building requires its parent to be built first). Top-level buildings require only the basic town.
+Indentation = **unlock tree** (parent required first). Top-level = basic town only.
 
 | Building | AP | Def | Resources | Flags | Eff |
 |---|---|---|---|---|---|
