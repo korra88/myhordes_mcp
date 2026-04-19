@@ -13,6 +13,7 @@ myhordes_mcp/
 ├── sources/
 │   └── fatamorgana.py       # Fata Morgana spy page scraper
 ├── tips/                    # All shared meta-knowledge (loaded as system prompts)
+├── personas/                # Persona files (town-elder.md = default)
 ├── towns/                   # Per-town daily logs and notes
 ├── personal/                # Player-specific private data (gitignored contents)
 ├── kb_build/                # Knowledge base build pipeline
@@ -80,24 +81,19 @@ Replace `/absolute/path/to/myhordes_mcp` with the actual path to this repo, and 
 
 > **Note:** The `.env` file is loaded by `python-dotenv` inside `main.py`, so you can either put values in `.env` or in the `"env"` block above. The `"env"` block in `.mcp.json` takes precedence.
 
-### 2. Load the agent personality (recommended)
+### 2. Select and load the agent persona
 
-To use the advisor persona and community tips as system prompts (more token-efficient than loading them as context):
+Personas live in `personas/`. The active persona is a symlink at `AGENT-PERSONALITY.md` (gitignored — local state).
 
 ```bash
-claude --append-system-prompt-file ./AGENT-PERSONALITY.md \
-       --append-system-prompt-file ./tips/game-mechanics.md \
-       --append-system-prompt-file ./tips/mcp-guidelines.md \
-       --append-system-prompt-file ./tips/player-behavior.md \
-       --append-system-prompt-file ./tips/strategy-quirks.md \
-       --append-system-prompt-file ./tips/buildings-cheatsheet.md \
-       --append-system-prompt-file ./tips/opti-town-meta.md \
-       --append-system-prompt-file ./tips/expedition-planning.md \
-       --append-system-prompt-file ./tips/s19-meta.md \
-       --append-system-prompt-file ./tips/session-protocols.md
+# Select a persona (default: town-elder)
+make use-persona p=town-elder
+
+# Start the advisor — loads active persona + all tips/ files as system prompts
+make desert-veteran
 ```
 
-This keeps all advisory content out of the conversation context window, leaving more room for actual game data. Add new `tips/*.md` files and include them here as the knowledge grows.
+This keeps all advisory content out of the conversation context window, leaving more room for actual game data. Add new personas to `personas/` and switch between them with `make use-persona`.
 
 ### 3. Restart Claude Code
 
@@ -109,7 +105,7 @@ claude
 claude mcp list
 ```
 
-### 3. Test the tools
+### 4. Test the tools
 
 In a Claude Code conversation, ask something like:
 

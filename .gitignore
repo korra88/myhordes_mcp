@@ -23,5 +23,9 @@ knowledge_base/processed/
 
 # Local-only folders
 agent-notes/
+
+# Active persona symlink (local state — set via make use-persona)
+AGENT-PERSONALITY.md
+
 # Gemini
 .gemini_history

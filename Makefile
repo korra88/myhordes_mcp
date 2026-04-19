@@ -13,7 +13,7 @@ WIKI_DIR      := knowledge_base/wiki
 PROC_DIR      := knowledge_base/processed
 ENTITIES_JSON := $(PROC_DIR)/entities.json
 INDEX_JSON    := $(PROC_DIR)/index.json
-PERSONA	      := persona-town-elder.md
+PERSONA       ?= town-elder
 
 TIPS_FILES        := $(wildcard ./tips/*.md)
 PERSONAL_FILES    := $(wildcard ./personal/*.md)
@@ -23,25 +23,30 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 
 # ─── Main targets ─────────────────────────────────────────────
 
-.PHONY: kb fetch process clean-kb clean-all help desert-veteran gemini-veteran install-persona
+.PHONY: kb fetch process clean-kb clean-all help desert-veteran gemini-veteran use-persona
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
-install-persona:
-	rm -rf .claude/output-styles/persona.md || true
-	ln -s $(shell pwd)/$(PERSONA) .claude/output-styles/persona.md
+use-persona: ## Switch active persona: make use-persona p=town-elder
+	@test -f personas/$(or $(p),$(PERSONA)).md || (echo "ERROR: personas/$(or $(p),$(PERSONA)).md not found"; exit 1)
+	rm -f AGENT-PERSONALITY.md
+	ln -s personas/$(or $(p),$(PERSONA)).md AGENT-PERSONALITY.md
+	rm -f .claude/output-styles/persona.md
+	ln -s $(shell pwd)/personas/$(or $(p),$(PERSONA)).md .claude/output-styles/persona.md
+	@echo "Active persona: $(or $(p),$(PERSONA))"
 
 gemini-veteran: ## Start Gemini as the Desert Veteran advisor (embedded agent, proper CLI)
 	.venv/bin/python gemini_client.py
 
 desert-veteran: ## Start Claude as the Desert Veteran advisor (loads personality + tips)
+	@test -f AGENT-PERSONALITY.md || (echo "ERROR: AGENT-PERSONALITY.md not found. Run: make use-persona p=<name>"; exit 1)
 	claude \
 		$(foreach f,$(TIPS_FILES),--append-system-prompt-file $(f)) \
 		$(foreach f,$(PERSONAL_FILES),--append-system-prompt-file $(f)) \
-		--append-system-prompt-file persona-town-elder.md \
-		"Read persona-town-elder.md and adopt the persona described in it completely before responding to anything else."
+		--append-system-prompt-file AGENT-PERSONALITY.md \
+		"Read AGENT-PERSONALITY.md and adopt the persona described in it completely before responding to anything else."
 
 kb: process ## Build the full knowledge base (fetch if needed, then process)
 
