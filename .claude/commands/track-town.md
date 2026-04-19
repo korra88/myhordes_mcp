@@ -1,27 +1,23 @@
-Set up a recurring cron job to monitor citizen positions and town status for the current town.
+Set up recurring cron to monitor citizen positions and town status. Pass `no-cron` to seed baseline and run once without scheduling.
 
-## Log file structure
+## Log structure
 
-Each town folder uses a per-day structure:
-- `towns/{folder}/daily-log.md` — index only (one summary row per day, links to day files)
-- `towns/{folder}/day-01.md`, `day-02.md`, … — one file per game day (active file grows during play)
-- `towns/{folder}/_baseline.md` — small sidecar holding last-known state for cron delta checks
+- `towns/{folder}/daily-log.md` — index, one summary row per day
+- `towns/{folder}/day-{NN}.md` — one file per game day
+- `towns/{folder}/_baseline.md` — last-known state for delta checks
 
-## Step 1 — Resolve the town folder and active day log
+## Step 1 — Resolve town folder and active day log
 
-- Read `.env` in the project root and note the `FATAMORGANA_TOWN_ID` value.
-- Call `get_town_overview` to fetch the current town's name and **current game day number**.
-- List subdirectories under `towns/` (excluding `_template`).
-- Match the town name to the correct folder. The folder naming convention is `s{season}-{slugified-town-name}` (e.g. "Tortuous Valleys" → `s19-tortuous-valleys`). Do a case-insensitive match on the slug portion.
-- If no match is found, tell the user and stop — do not create the cron.
-- Determine the active day log: `towns/{matched-folder}/day-{NN}.md` where NN is the current game day zero-padded to 2 digits (e.g. Day 3 → `day-03.md`).
-- If `day-{NN}.md` does not exist yet, create it with a `# Day N — {dates}` header and add a row for it in `daily-log.md`.
-- Confirm `towns/{matched-folder}/daily-log.md` exists.
+- Read `.env`, note `FATAMORGANA_TOWN_ID`.
+- Call `get_town_overview` → town name + current game day N.
+- List `towns/` subdirs (exclude `_template`). Case-insensitive slug match on `s{season}-{slug}`.
+- No match → tell user, stop.
+- Active day log: `towns/{folder}/day-{NN}.md` (NN zero-padded). If missing, create with `# Day N — {date}` header and add row to `daily-log.md`.
+- Confirm `towns/{folder}/daily-log.md` exists.
 
-## Step 2 — Seed the baseline sidecar
+## Step 2 — Seed baseline sidecar
 
-Check if `towns/{matched-folder}/_baseline.md` exists.
-- If it does not exist, call `get_town_overview` and `get_buildings` (to check Observation Platform level) and create `_baseline.md` with the following structure:
+If `_baseline.md` missing: call `get_town_overview` + `get_buildings` (Observation Platform level). Create:
 
 ```markdown
 # Cron baseline — {folder}
@@ -30,7 +26,7 @@ _Last updated: {datetime} (Day N)_
 ## Platform
 Observation Platform: Level N (N AP return discount)
 ```
-*(Level 3 → 2 AP discount; Level 4 → 3 AP discount. If the building does not exist yet, omit the discount line and note "not built".)*
+*(Level 3 → 2 AP discount; Level 4 → 3 AP discount. Not built → omit discount line, note "not built".)*
 
 ```markdown
 ## State
@@ -64,22 +60,22 @@ Observation Platform: Level N (N AP return discount)
 | Iron Chest | N |
 ```
 
-All citizens start with `~0` AP spent. Citizens already in town at seeding time are not listed in the Outside table.
+Citizens in town at seed time: not listed in Outside table. All start at `~0` AP spent.
 
-## Step 3 — Determine the interval
+## Step 3 — Determine interval
 
-- If `$ARGUMENTS` is provided, treat it as the interval (e.g. `30m`, `1h`, `2h`). Supported suffixes: `m` (minutes), `h` (hours).
-- If no argument is provided, default to `1h`.
-- Convert to a cron expression:
-  - `Nm` where N ≤ 59 → `*/N * * * *`
-  - `Nh` where N ≤ 23 → `7 */N * * *` (use minute :07 to avoid thundering-herd at :00)
+If `$ARGUMENTS` contains `no-cron`: skip Steps 4–6. Run prompt once immediately (Step 5), then confirm to user (Step 6, omit cron details).
 
-## Step 4 — Create the cron job
+Otherwise parse interval from `$ARGUMENTS` (e.g. `30m`, `1h`, `2h`). Default: `1h`. Convert:
+- `Nm` (N ≤ 59) → `*/N * * * *`
+- `Nh` (N ≤ 23) → `7 */N * * *`
+
+## Step 4 — Create cron job
 
 Use CronCreate with:
 - `recurring: true`
-- `cron`: the expression from Step 3
-- `prompt` (substitute the resolved folder from Step 1):
+- `cron`: expression from Step 3
+- `prompt` (substitute resolved folder):
 
 ```
 Call get_town_overview(detail='compact') and get_bank_inventory(detail='summary') in parallel. Read `towns/{resolved-folder}/_baseline.md` for last known state.
@@ -91,105 +87,99 @@ Call get_town_overview(detail='compact') and get_bank_inventory(detail='summary'
 Compare baseline day number to current game day.
 
 **If baseline day < current game day (new day detected):**
-- Check if `towns/{resolved-folder}/day-{NN-1}.md` (previous day file) contains a `### Night outcome` section.
-  - If NOT found: prepend `⚠ Day N-1 not yet closed — run /close-day when ready.` as the first line of today's log entry.
+- Check if `towns/{resolved-folder}/day-{NN-1}.md` contains `### Night outcome`.
+  - If NOT found: prepend `⚠ Day N-1 not yet closed — run /close-day when ready.` as first line of today's log entry.
 - Reset ALL ap_spent to 0 for every citizen (outside and returned).
-- Use current positions as the new Day N baseline reference. Do NOT compute movement deltas from previous day positions.
-- Update baseline day to current day N.
+- Use current positions as new Day N baseline. Do NOT compute deltas from previous day positions.
+- Update baseline day to N.
 
 ---
 
 ## STEP 2 — ACTIVE DAY LOG
 
-Determine active day log: `towns/{resolved-folder}/day-{NN}.md` (NN = current game day, zero-padded to 2 digits). If it does not exist, create it with a `# Day N — {date}` header and add a row to `towns/{resolved-folder}/daily-log.md` (outcome TBD).
+Active log: `towns/{resolved-folder}/day-{NN}.md`. If missing, create with `# Day N — {date}` header and add row to `daily-log.md` (outcome TBD).
 
 ---
 
 ## STEP 3 — MOVEMENTS
 
-Compare current citizen list to baseline. Identify:
-- Returned to town: citizen was in "Outside citizens" table, now IN TOWN.
-- Went outside: citizen was IN TOWN (not in any baseline table), now has coordinates.
-- Position changes: citizen was outside, still outside, but at different coordinates.
+Compare current citizen list to baseline:
+- Returned: was in Outside table, now IN TOWN.
+- Went out: was IN TOWN (not in any baseline table), now has coordinates.
+- Position change: outside → outside at different coords.
 
 ---
 
 ## STEP 4 — AP SPENT TRACKING
 
-Read platform level from baseline `## Platform` section (default Level 3 = 2 AP return discount; Level 4 = 3 AP return discount).
-
-For each citizen who changed position:
+Read platform level from baseline `## Platform` (default Level 3 = 2 AP return discount; Level 4 = 3 AP return discount).
 
 **Outside → new outside position:**
-  - delta = Manhattan(old_position, new_position)
-  - ap_spent += delta
+- delta = Manhattan(old, new)
+- ap_spent += delta
 
 **Outside → IN TOWN (returned):**
-  - raw_leg = Manhattan(last_known_position, [0|0])
-  - ap_spent += max(0, raw_leg − platform_discount)
-  - Move citizen from "Outside citizens" to "Returned today" table in baseline.
+- raw_leg = Manhattan(last_pos, [0|0])
+- ap_spent += max(0, raw_leg − platform_discount)
+- Move citizen from Outside → Returned today in baseline.
 
 **IN TOWN → outside (freshly departed):**
-  - If citizen already appears in "Returned today" (went out and back earlier today): carry their existing ap_spent.
-  - Otherwise: ap_spent starts at 0.
-  - Add citizen to "Outside citizens" table.
+- Already in Returned today → carry existing ap_spent.
+- Otherwise → ap_spent = 0.
+- Add to Outside citizens table.
 
-Citizens with no position change: ap_spent unchanged (carry forward as-is).
+No position change → ap_spent unchanged.
 
-Note ap_spent in the log entry for every citizen who moved, e.g.:
-  `PlayerD [-6|-2]→[-6|-4] (+2 AP, ~15 AP total)`
-  `PlayerC returned from [-2|-4] (4 AP net, ~4 AP total)`
+Log format: `PlayerD [-6|-2]→[-6|-4] (+2 AP, ~15 AP total)` / `PlayerC returned from [-2|-4] (4 AP net, ~4 AP total)`
 
 ---
 
 ## STEP 5 — PLAYER DEPLETED ZONE CHECK
 
-Read PLAYER_NAME from `.env`. If that citizen is outside town, call get_zone_details(x1=X, y1=Y, x2=X, y2=Y) for their current coordinates. If the zone is marked "depleted", flag: `⚠ {PLAYER_NAME} in depleted zone [X|Y] — consider moving`.
+Read `PLAYER_NAME` from `.env`. If player outside, call `get_zone_details(x1=X, y1=Y, x2=X, y2=Y)` for current coords. If depleted: `⚠ {PLAYER_NAME} in depleted zone [X|Y] — consider moving`.
 
 ---
 
 ## STEP 6 — GATE
 
-Flag as urgent if gate is OPEN at 23:30 CET or later.
+Flag urgent if gate OPEN at 23:30 CET or later.
 
 ---
 
 ## STEP 7 — BANK
 
-Flag any decrease as PULLED (old→new) for these tracked items:
+Flag decreases as PULLED (old→new) and increases (deposits) for:
 HNB · Wire Reel · Electronic component · Laser Diode · Compact detonator · Copper Pipe · Semtex · Anabolic Steroids · Vodka Marinostov · Blueprint (rare) · Blueprint (very rare)
-Also flag increases (deposits) for the same items.
 
 ---
 
 ## STEP 8 — WRITE LOG ENTRY
 
-If nothing changed at all, write a single line: `no changes — {time}`.
-Otherwise append a full timestamped entry to the active day log, including the State line (alive/inside/outside/defense/tonight).
+No changes → write single line: `no changes — {time}`.
+Otherwise append full timestamped entry to active day log with State line (alive/inside/outside/defense/tonight).
 
 ---
 
 ## STEP 9 — OVERWRITE BASELINE
 
-Overwrite `towns/{resolved-folder}/_baseline.md` with updated state:
-- Timestamp and day number
-- Platform section (preserve level — do not overwrite unless get_buildings confirms a change)
+Overwrite `_baseline.md`:
+- Timestamp + day number
+- Platform section (preserve level unless get_buildings confirms change)
 - State (alive/inside/outside counts, defense, gate)
-- Outside citizens table: Citizen | Position | AP spent (updated)
-- Returned today table: Citizen | AP spent (updated, cumulative for the day)
-- Critical items table (updated counts)
+- Outside citizens: Citizen | Position | AP spent (updated)
+- Returned today: Citizen | AP spent (cumulative for day)
+- Critical items (updated counts)
 ```
 
-## Step 5 — Execute once immediately
+## Step 5 — Run once immediately
 
-After creating the cron, run the prompt once immediately so the first check happens now rather than waiting for the first scheduled fire.
+After cron created (or if `no-cron`), run prompt once now.
 
-## Step 6 — Confirm to the user
+## Step 6 — Confirm to user
 
 Report:
-- The active day log path (e.g. `towns/s19-tortuous-valleys/day-03.md`)
-- The baseline sidecar path (`towns/{folder}/_baseline.md`)
-- The index path (`towns/{folder}/daily-log.md`)
-- The cron job ID
-- The interval and cron expression
-- That it will auto-expire after 7 days, and can be cancelled with `CronDelete {job-id}`
+- Active day log path
+- Baseline sidecar path
+- Index path
+- If cron: job ID, interval, cron expression, note it auto-expires after 7 days, cancel with `CronDelete {job-id}`
+- If `no-cron`: note "one-time run only, no cron scheduled"

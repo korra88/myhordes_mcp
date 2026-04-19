@@ -1,70 +1,82 @@
-Finalize the **previous** day's log using the current morning MCP snapshot (which reflects the post-attack state).
+Finalize previous day's log using current morning MCP snapshot (post-attack state). Run at start of new game day. Pass `backfill` to close all unclosed days from day-01 up to N-1.
 
-Run this at the start of a new game day to close out yesterday's entry: record night deaths, confirm survival, and update the daily-log index.
+## Step 1 — Resolve town, current day, target days
 
-## Step 1 — Resolve town, current day, and previous day file
+- Read `.env`, note `FATAMORGANA_TOWN_ID`.
+- Call `get_town_overview` → town name + current game day N.
+- List `towns/` subdirs (exclude `_template`). Case-insensitive slug match on `s{season}-{slug}`.
+- No match → stop, tell user.
 
-- Read `.env` in the project root and note the `FATAMORGANA_TOWN_ID` value.
-- Call `get_town_overview` to get the current town name and **current game day number N**.
-- List subdirectories under `towns/` (excluding `_template`). Match the town name to the correct folder (case-insensitive slug match, convention `s{season}-{slug}`).
-- If no match is found, stop and tell the user.
-- Previous day number = N − 1. Previous day file = `towns/{folder}/day-{NN-1}.md` (zero-padded to 2 digits).
-- If the previous day file does not exist, stop and tell the user.
-- Read the previous day file fully. Extract:
-  - The **last alive count and citizen list** logged (from the final cron check or manual check section).
-  - The **last known defense** and tonight's attack estimate (look for the most recent values).
-  - The **last critical items baseline table**.
-  - Who was **outside at end of day** (last positions snapshot).
+**Normal mode** (no `backfill`):
+- Target: day N-1 only.
+- Previous day file: `towns/{folder}/day-{NN-1}.md`. Missing → stop, tell user.
+
+**Backfill mode** (`$ARGUMENTS` contains `backfill`):
+- Scan all `towns/{folder}/day-{NN}.md` files from day-01 up to day-(N-1).
+- Collect those missing `### Night outcome` section.
+- Process each in order (oldest first). Continue to next even if one is sparse.
 
 ## Step 2 — Fetch current morning state
 
-Call in parallel:
-- `get_citizen_positions` — current alive count, who is inside/outside, and (if exposed by the tool) any dead citizens.
-- `get_defense_status` — current defense total and tonight's estimate (this is now Day N's estimate).
-- `get_bank_inventory` — current bank.
+Call in parallel (once — reuse across all backfill days):
+- `get_citizen_positions` — alive count, inside/outside, any dead citizens.
+- `get_defense_status` — current defense + tonight's estimate (Day N's).
+- `get_bank_inventory` — current bank state.
 
-## Step 3 — Reconstruct the night outcome
+Note: for backfill, today's snapshot is authoritative only for the most recent night. Earlier nights use the data available in the day files themselves (last citizen list logged, last defense snapshot).
 
-- **Deaths:** Compare the previous day's last citizen list to today's alive list. Anyone present yesterday but absent today died overnight.
-  - Cross-reference with who was outside at end of day: if they were outside → "zombie attack while camping". If they were inside → "unknown / likely infection or wound".
-- **Survival verdict:** If the town has citizens alive today, it survived. Note: the previous day's defense vs. the previous day's attack estimate (partial or confirmed).
-- **Net alive change:** yesterday's last count → today's count.
+## Step 3 — Reconstruct night outcome (per target day)
 
-## Step 4 — Append night outcome to previous day file
+For each target day file:
 
-Append a section at the end of `towns/{folder}/day-{NN-1}.md`:
+- Read fully. Extract:
+  - Last alive count + citizen list (final cron check or manual section).
+  - Last known defense + attack estimate.
+  - Last critical items baseline.
+  - Who was outside at end of day (last position snapshot).
+
+- **Deaths:** Compare previous day's last citizen list to next day's first citizen list (or today's list if closing N-1).
+  - Outside at end of day → "Zombie attack while camping".
+  - Inside → "Unknown / likely infection or wound".
+- **Survival:** Citizens alive next day → survived. Note defense vs. attack estimate.
+- **Net alive change:** yesterday's count → next day's count.
+
+**Backfill sparse days:** If day file has no citizen snapshots, note "insufficient data — partial close" and record what is derivable. Do not skip.
+
+## Step 4 — Append night outcome to day file
+
+Append to `towns/{folder}/day-{NN}.md`:
 
 ```
 ---
 
-### Night outcome — {date of the attack night, e.g. "Mar 24 → 25"}
-**Result: SURVIVED** (or FAILED if applicable)
-**Defense:** {final defense from last Day N-1 snapshot} vs **{attack estimate}** zombies
-**Alive after:** {today's count} ({yesterday's last count − deaths} — {N deaths} overnight)
+### Night outcome — {date, e.g. "Mar 24 → 25"}
+**Result: SURVIVED** (or FAILED)
+**Defense:** {final defense} vs **{attack estimate}** zombies
+**Alive after:** {next day count} ({prev count − deaths} — {N deaths} overnight)
 
 #### Deaths
 | Citizen | Last position | Cause |
 |---|---|---|
 | **Name** | [x\|y] or IN TOWN | Zombie attack / Infection / Unknown |
 
-*(No deaths — all survived the night.)* [use this line if zero deaths]
+*(No deaths — all survived the night.)*
 ```
 
-If the bank changed significantly overnight (items built or deposited before the attack that weren't in the last baseline), note it briefly.
+If bank changed significantly overnight (builds/deposits after last baseline), note briefly.
 
 ## Step 5 — Update daily-log.md
 
-In `towns/{folder}/daily-log.md`, find the row for Day N−1. Replace the **TBD** outcome cell with:
+Find row for each closed day. Replace **TBD** outcome cell:
+- `Survived` — no deaths.
+- `Survived · {Name} †` — deaths (comma-separated if multiple).
+- `FAILED` — town did not survive.
 
-- `Survived` if no deaths overnight.
-- `Survived · {Name} †` for each death (comma-separated if multiple).
-- `FAILED` if the town did not survive (all dead).
-
-Also update the alive count cell if it changed from what was originally logged.
+Update alive count cell if changed from original.
 
 ## Step 6 — Report to user
 
-Tell the user:
-- Which previous day file was updated (`towns/{folder}/day-{NN-1}.md`)
-- The outcome: survived/failed, how many deaths, who died
-- The current Day N state at a glance (alive count, defense, tonight's estimate)
+- List each day file updated.
+- Per day: survived/failed, deaths count, who died.
+- Current Day N state: alive count, defense, tonight's estimate.
+- Backfill: note any days skipped or partially closed due to sparse data.
