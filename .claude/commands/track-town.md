@@ -1,4 +1,4 @@
-Set up recurring cron to monitor citizen positions and town status. Pass `no-cron` to seed baseline and run once without scheduling.
+Seed baseline and run a one-time snapshot of citizen positions and town status. Pass `set-cron` (optionally with interval e.g. `set-cron 30m`) to also schedule a recurring cron job.
 
 ## Log structure
 
@@ -64,9 +64,9 @@ Citizens in town at seed time: not listed in Outside table. All start at `~0` AP
 
 ## Step 3 — Determine interval
 
-If `$ARGUMENTS` contains `no-cron`: skip Steps 4–6. Run prompt once immediately (Step 5), then confirm to user (Step 6, omit cron details).
+If `$ARGUMENTS` does NOT contain `set-cron`: skip Steps 4–6. Run prompt once immediately (Step 5), then confirm to user (Step 6, omit cron details).
 
-Otherwise parse interval from `$ARGUMENTS` (e.g. `30m`, `1h`, `2h`). Default: `1h`. Convert:
+Otherwise parse interval from the value after `set-cron` in `$ARGUMENTS` (e.g. `set-cron 30m`, `set-cron 1h`). Default if no value given: `1h`. Convert:
 - `Nm` (N ≤ 59) → `*/N * * * *`
 - `Nh` (N ≤ 23) → `7 */N * * *`
 
@@ -155,8 +155,30 @@ HNB · Wire Reel · Electronic component · Laser Diode · Compact detonator · 
 
 ## STEP 8 — WRITE LOG ENTRY
 
-No changes → write single line: `no changes — {time}`.
-Otherwise append full timestamped entry to active day log with State line (alive/inside/outside/defense/tonight).
+**No changes:** append single line:
+```
+no changes — {HH:MM} CET
+```
+
+**With changes:** append a full entry using this format:
+```
+### Cron check ({HH:MM} CET)
+**{N} alive — {inside} inside, {outside} outside** · Defense {D} · Gate {OPEN/CLOSED} · Tonight: {estimate}
+
+**MOVEMENTS:**
+- {Citizen} [{old}] → [{new}] ({delta} AP, ~{total} AP total)
+- {Citizen} [{old}] → IN TOWN ({net} AP net, ~{total} AP total)
+- Went out: {Citizen} [{pos}] (~0 AP)
+
+**BANK — deposits:**
+- {Item}: {old} → {new} (+N deposited)
+
+**BANK — pulled:**
+- {Item}: {old} → {new} (−N)
+
+⚠ {warning if any}
+```
+Omit MOVEMENTS block if none. Omit BANK block if no tracked-item changes. Omit ⚠ lines if no warnings.
 
 ---
 
@@ -173,7 +195,14 @@ Overwrite `_baseline.md`:
 
 ## Step 5 — Run once immediately
 
-After cron created (or if `no-cron`), run prompt once now.
+After cron created (or if no `set-cron`), run the cron prompt once now.
+
+For the **initial seed** (no prior baseline existed), write this entry to the active day log instead of the standard cron format:
+```
+### {HH:MM} CET — baseline seeded
+State: {N} alive — {inside} inside, {outside} outside · Defense {D} · Gate {OPEN/CLOSED} · Tonight: {estimate}
+Baseline established. {N} citizens outside logged. No prior state to compare.
+```
 
 ## Step 6 — Confirm to user
 
