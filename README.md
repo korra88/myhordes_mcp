@@ -17,8 +17,9 @@ myhordes_mcp/
 ├── towns/                   # Per-town daily logs and notes
 ├── personal/                # Player-specific private data (gitignored contents)
 ├── kb_build/                # Knowledge base build pipeline
-│   ├── fetch_wiki.py        # MediaWiki scraper
-│   └── process_wiki.py      # Wiki → JSON + Markdown processor
+│   ├── fetch_wiki.py        # MediaWiki scraper (full re-crawl)
+│   ├── process_wiki.py      # Wiki → JSON + Markdown processor
+│   └── update_pages.py      # Targeted update from Special:Export XML
 ├── wiki/                    # Generated wiki content (gitignored)
 ├── knowledge/               # Curated advisor knowledge base (on-demand via search_knowledge)
 │   └── buildings/           #   Building guides by game phase
@@ -50,6 +51,7 @@ cp .env.example .env
 #   MYHORDES_APP_KEY  = your registered app secret
 
 # 3. Build the knowledge base (optional, for wiki search tools)
+# Full crawl — takes ~5-10 min, requires browser cookies in .env (see fetch_wiki.py)
 make kb
 
 # 4. Test the server starts
@@ -133,6 +135,35 @@ In a Claude Code conversation, ask something like:
 | `search_wiki` | Wiki | Search items, buildings, ruins, skills, statuses, and strategy guides from en.mhwiki.org. |
 | `list_wiki_categories` | Wiki | List available wiki categories. |
 | `search_knowledge` | Knowledge | Search curated advisor KB — building phase guides, strategy, post-mortems. |
+
+## Updating the Wiki
+
+The wiki cache lives in `wiki/` (gitignored). Two update paths:
+
+### Targeted update (recommended for a few changed pages)
+
+No auth or cookies needed — uses a browser export.
+
+1. Go to `https://en.mhwiki.org/wiki/Special:Export`
+2. Paste the page titles (one per line), check **"Include only the current revision"**, click **Export**
+3. Save the XML, then run:
+
+```bash
+.venv/bin/python kb_build/update_pages.py path/to/MHWiki-export.xml
+```
+
+Running without arguments prints the full instructions.
+
+### Full re-crawl
+
+Refetches all ~3000 pages. Requires Cloudflare cookies in `.env` (`MHWIKI_CF_CLEARANCE`, `MHWIKI_SESSION`, `MHWIKI_TOKEN`) copied from browser DevTools. Must be run from the same machine as the browser (cookies are IP-bound).
+
+```bash
+make kb
+# or manually:
+.venv/bin/python kb_build/fetch_wiki.py
+.venv/bin/python kb_build/process_wiki.py
+```
 
 ## Tech Stack
 

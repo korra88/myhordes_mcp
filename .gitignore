@@ -19,6 +19,8 @@ fata-spy-rendered.html
 
 # Wiki content
 wiki/
+# Wiki artifacts
+MHWiki-*.xml
 
 # Local-only folders
 agent-notes/
