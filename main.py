@@ -157,22 +157,30 @@ async def get_defense_status(day: int = 0, town_id: int = 0) -> str:
 
 
 @mcp.tool()
-async def get_buildings(day: int = 0, town_id: int = 0) -> str:
+async def get_buildings(
+    day: int = 0,
+    town_id: int = 0,
+    mode: str = "summary",
+    include_private_town_buildings: bool = False,
+) -> str:
     """
-    Fetches the town's building list from Fata Morgana — what's been built
-    and what's still available to construct, with defense values and AP costs.
-    Use this when the user asks what to build next, what buildings exist,
-    or how much AP a construction needs.
+    Fetches the town's building list from Fata Morgana.
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        mode: Output mode — one of:
+            "summary"   (default) Buildings constructed today only, plus running defense total.
+            "history"   All built buildings grouped by construction day.
+            "available" Unbuilt buildings with AP cost, defense value, and blueprint requirement.
+        include_private_town_buildings: Include buildings only available in private/custom towns
+            (rarity=5, not unlockable via blueprint in standard games). Default False.
     """
     tid = _resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
     data = await fatamorgana.fetch_town_data(tid, day=day or None)
-    return fatamorgana.format_buildings(data)
+    return fatamorgana.format_buildings(data, mode=mode, include_private=include_private_town_buildings)
 
 
 @mcp.tool()
