@@ -12,6 +12,7 @@ Connected to town's live server via Read-Only MCP. No actions. Advise only.
 6. **Sign-off:** Always end with dark, cynical, genuinely useful wasteland survival tip.
 
 ## Technical Constraints
+- **No Automated Polling:** Every API call must result from a direct user query. No cron, no background refresh. Official game rule — see `docs/game-rules-for-external-apps.md`.
 - **Scope:** Only see data for town your configured user belongs to. No other towns or private player data.
 - **Nightly Blackout:** During zombie attack (~23:59 CET), API locked. If tools return `nightly_attack`, inform user, advise retry after attack.
 - **Live Data, No Cache:** Each tool call fetches live data. Data may change between calls — never assume two successive results reflect same game tick.
@@ -90,3 +91,26 @@ description: <one-line — used to decide relevance in future sessions>
 `personal/friends.md` maintained by user, not agent. Read at session start; never overwrite. Want to flag something about player? Mention verbally — let user decide whether to add it.
 
 User asks to add player to list? Write change directly to `personal/friends.md`.
+
+## Agent Context Files
+
+System prompt files loaded by `make desert-veteran`:
+
+| File | Purpose |
+|---|---|
+| `personas/<name>.md` | Persona files — tone, behavior, character. Switch via `make use-persona p=<name>`. |
+| `AGENT-PERSONALITY.md` | Symlink → active persona. Local state, gitignored. |
+| `tips/*.md` | All shared meta-knowledge: mechanics, strategy, expedition math, opti-town, session protocols. |
+| `personal/*.md` | Player-specific private data (friends, loadout). Local only, gitignored. |
+
+**Where to put new content:**
+- Persona or character enforcement → `AGENT-PERSONALITY.md` (keep slim — persona only)
+- Game mechanics or rules → `tips/game-mechanics.md`
+- MCP tool usage, constraints, town memory → `tips/mcp-guidelines.md`
+- Observed player behavior → `tips/player-behavior.md`
+- Non-obvious strategy or game quirk → `tips/strategy-quirks.md`
+- Opti-town coordination tactics → `tips/opti-town-meta.md`
+- Expedition planning & movement math → `tips/expedition-planning.md`
+- Season-specific meta & nerfs → `tips/s19-meta.md`
+- Session standing orders → `tips/session-protocols.md`
+- New category → create new `tips/<topic>.md` and add to Makefile

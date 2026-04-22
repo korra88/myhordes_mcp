@@ -165,6 +165,34 @@ make kb
 .venv/bin/python kb_build/process_wiki.py
 ```
 
+## Developer Reference
+
+### Key files
+
+| File | Purpose |
+|---|---|
+| `main.py` | MCP server, tool definitions |
+| `sources/fatamorgana.py` | Fata Morgana httpx scraper + formatters |
+| `sources/official_api.py` | *(planned)* Official API client |
+| `knowledge.py` | Wiki search engine (indexes `wiki/processed/`) |
+| `AGENT-PERSONALITY.md` | Symlink → active persona in `personas/`. Set via `make use-persona p=<name>`. Gitignored. |
+| `personas/` | All persona files. `town-elder.md` = current default. Add new personas here. |
+| `docs/source-map.md` | Navigation guide for game PHP source (`myhordes-docker/myhordes/`) |
+| `docs/external-api-reference.md` | Every JSON v1 endpoint, field, and SURLL syntax |
+| `docs/auth-and-rate-limits.md` | Two-key auth model, rate limit buckets, attack lockout |
+| `docs/game-rules-for-external-apps.md` | Official rules translated from German — authoritative compliance reference |
+| `docs/implementation-notes.md` | Design decisions with rationale — read before changing architecture |
+| `towns/_template/` | Templates for new town folders |
+| `knowledge/buildings/` | Building guides by game phase: `basic.md`, `intermediate.md`, `defense-focus.md`, `advanced.md`, `wonders.md` |
+
+### Game source
+
+PHP/Symfony source at `myhordes-docker/myhordes/` (git submodule). See `docs/source-map.md` for full navigation. Key paths:
+- API controllers: `src/Controller/API/JSONv1Controller.php` (primary), `XMLv2Controller.php`
+- Entities: `src/Entity/` — `Town.php`, `Citizen.php`, `Inventory.php`, `Item.php`, `Building.php`, `Zone.php`
+- Services: `src/Service/` — `TownHandler.php`, `CitizenHandler.php`, `InventoryHandler.php`
+- Auth listener: `src/EventSubscriber/APIRequestListener.php`
+
 ## Tech Stack
 
 - Python 3.10+

@@ -46,7 +46,7 @@ desert-veteran: ## Start Claude as the Desert Veteran advisor (loads personality
 		$(foreach f,$(TIPS_FILES),--append-system-prompt-file $(f)) \
 		$(foreach f,$(PERSONAL_FILES),--append-system-prompt-file $(f)) \
 		--append-system-prompt-file AGENT-PERSONALITY.md \
-		"Read AGENT-PERSONALITY.md and adopt the persona described in it completely before responding to anything else."
+		"Persona and tips loaded. Introduce yourself briefly and await orders."
 
 kb: process ## Build the full knowledge base (fetch if needed, then process)
 
