@@ -78,6 +78,9 @@ clean-all: clean-kb ## Remove everything (raw wiki + processed)
 
 # ─── Discord ──────────────────────────────────────────────────
 
+install-discord-mcp: ## Install mcp-discord Node package (optional — only needed for Discord channel/role management via MCP)
+	$(HOME)/.nvm/versions/node/v22.22.0/bin/node $(HOME)/.nvm/versions/node/v22.22.0/lib/node_modules/npm/bin/npm-cli.js install
+
 discord-monitor: ## Monitor Discord #generale and reply to bot mentions (loops every 5 min)
 	claude \
 		$(foreach f,$(TIPS_FILES),--append-system-prompt-file $(f)) \

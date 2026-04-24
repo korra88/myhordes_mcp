@@ -87,6 +87,11 @@ Set `DISCORD_TOKEN` (or `DISCORD_BOT_TOKEN`) in `.env` to enable Discord tools (
 
 Optionally set `DISCORD_CHANNEL_ID` to override the default monitored channel.
 
+For full Discord channel/role management via MCP (optional), install the Node package and configure `.mcp.json`:
+```bash
+make install-discord-mcp
+```
+
 > **Note:** The `.env` file is loaded by `python-dotenv` inside `main.py`, so you can either put values in `.env` or in the `"env"` block above. The `"env"` block in `.mcp.json` takes precedence.
 
 ### 2. Select and load the agent persona
