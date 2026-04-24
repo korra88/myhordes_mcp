@@ -30,3 +30,6 @@ AGENT-PERSONALITY.md
 
 # Gemini
 .gemini_history
+
+# Node modules
+node_modules/

@@ -76,12 +76,27 @@ To connect this MCP server to Claude Code so you can use the tools in conversati
       "env": {
         "FATAMORGANA_TOWN_ID": "YOUR_TOWN_ID"
       }
+    },
+    "discord": {
+      "type": "stdio",
+      "command": "/path/to/node/v18+/bin/node",
+      "args": ["node_modules/mcp-discord/build/index.js"],
+      "cwd": "/absolute/path/to/myhordes_mcp",
+      "env": {
+        "DISCORD_TOKEN": "YOUR_DISCORD_BOT_TOKEN"
+      }
     }
   }
 }
 ```
 
 Replace `/absolute/path/to/myhordes_mcp` with the actual path to this repo, and `YOUR_TOWN_ID` with your town ID.
+
+For the Discord MCP server:
+- Install the package first: `node_modules/` is populated by running `npm install mcp-discord` with Node v18+
+- `YOUR_DISCORD_BOT_TOKEN` — from [Discord Developer Portal](https://discord.com/developers/applications) → Bot tab
+- Bot requires **Message Content**, **Server Members**, and **Presence** privileged intents enabled in the Developer Portal
+- Node v18+ required (`node --version` to check). On nvm: use the full path, e.g. `~/.nvm/versions/node/v22.22.0/bin/node`
 
 > **Note:** The `.env` file is loaded by `python-dotenv` inside `main.py`, so you can either put values in `.env` or in the `"env"` block above. The `"env"` block in `.mcp.json` takes precedence.
 

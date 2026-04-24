@@ -7,6 +7,9 @@
 #   make clean-kb     Remove processed output (keeps raw wiki)
 #   make clean-all    Remove everything (raw wiki + processed)
 
+include .env
+export
+
 PYTHON ?= python3
 
 WIKI_DIR      := wiki/wiki
@@ -71,3 +74,13 @@ clean-kb: ## Remove processed output (keeps raw wiki)
 
 clean-all: clean-kb ## Remove everything (raw wiki + processed)
 	rm -rf $(WIKI_DIR)
+
+
+# ─── Discord ──────────────────────────────────────────────────
+
+discord-monitor: ## Monitor Discord #generale and reply to bot mentions (loops every 5 min)
+	claude \
+		$(foreach f,$(TIPS_FILES),--append-system-prompt-file $(f)) \
+		$(foreach f,$(PERSONAL_FILES),--append-system-prompt-file $(f)) \
+		--append-system-prompt-file personas/town-elder.md \
+		--loop 5m /discord-monitor loop
