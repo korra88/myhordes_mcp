@@ -34,7 +34,7 @@ Restores AP to max (6), gives "Drunk" status. Drunk citizens suffer -20% scaveng
 Taking drug gives "Drugged" status, restores AP. Second drug while Drugged → "Hooked!" status — permanent, irreversible. Hooked citizen MUST take drug every day or die from withdrawal overnight.
 
 ## Midnight Attack
-Every night at 23:59 CET, zombie horde attacks. Town total defense must exceed zombie attack estimation or citizens slaughtered. Town Gates MUST be closed before attack.
+Every night at 23:59 CET, zombie horde attacks. Town total defense must exceed zombie attack estimation or citizens slaughtered. Town Gates MUST be closed before attack, usually after 23:00, or if every citizen is in town.
 
 **Unfilled towns:** Town without 40 citizens by midnight — attack skipped entirely. No AP refresh, no status reset, no status progression (thirst, infection, etc.). Day extends 24 hours. Repeats until town fills.
 

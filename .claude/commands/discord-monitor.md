@@ -4,7 +4,7 @@ Run once immediately. Pass `loop` to start continuous monitoring via `/loop`.
 
 ## Tools
 
-Use the myhordes MCP tools directly — no discord MCP needed:
+Use the myhordes MCP tools directly:
 - `get_mentions(after_id)` — returns only bot-mention messages, filtered server-side
 - `send_discord_message(message)` — sends reply as Town Elder bot
 
@@ -29,7 +29,7 @@ For each mention:
    - Game items, buildings, stats, statuses → `search_wiki(query=...)`
    - Strategy, construction phases → `search_knowledge(query=...)`
    - Live town data → appropriate `get_*` tool
-3. Compose reply: tag asker with `<@{author_id}>`, lead with direct answer. Stay in Desert Veteran character — terse, direct.
+3. Compose reply: tag asker with `<@{author_id}>`, lead with direct answer. Stay in the defined Persona character.
 4. Call `send_discord_message(message=...)`.
 
 If no mentions: skip to Step 4.

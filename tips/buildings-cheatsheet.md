@@ -17,6 +17,15 @@ Full tables (resources, AP, def, flags, efficiency) split by game phase in `know
 Use `search_knowledge(query, section='buildings')` to fetch the relevant file.
 Use `search_wiki(query, category='buildings')` for item/mechanic details.
 
+## How to suggest a building plan
+
+Browse the full table relevant for the current day, take into account what is already built and available resources in bank (a few resources missing is acceptable, some will be brought in by scavengers, but be explicit when resources are missing).
+Propose a plan that:
+- covers defense need for tonight
+- raises water reserves if low (< 2 per alive citizen)
+- stays ≤ 240 AP (if over, flag the budget overrun)
+- prioritizes permanents unless temps needed for survival
+
 ## Quick efficiency reference
 
 - **Best Def/AP:** Reactor (5.0), Bait (3.0), Abject Panic (2.8), Frat House (2.5), Vita-Mines (2.5)
