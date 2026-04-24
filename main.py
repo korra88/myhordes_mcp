@@ -3,7 +3,7 @@ import sys
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 import knowledge
-from sources import fatamorgana, gesthordes
+from sources import fatamorgana, gesthordes, discord as discord_source
 
 # IMPORTANT: MyHordes rules prohibit automated/scheduled API polling.
 # All API calls must be triggered by explicit user queries via MCP tools.
@@ -459,6 +459,94 @@ def search_knowledge(query: str, section: str = "") -> str:
         parts.append(content)
         parts.append("\n---\n")
     return "\n".join(parts)
+
+
+DISCORD_CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID", "CHANNEL_ID")
+
+
+@mcp.tool()
+def get_mentions(after_id: str = "") -> str:
+    """Get unread Discord messages that mention the Town Elder bot.
+
+    Returns only messages containing the bot mention, newest-last.
+    Filters out messages sent by the bot itself.
+
+    Args:
+        after_id: Discord snowflake ID. Only return messages after this ID.
+                  Leave empty to fetch the most recent 100 messages.
+    """
+    try:
+        messages = discord_source.get_mentions(
+            channel_id=DISCORD_CHANNEL_ID,
+            after=after_id or None,
+        )
+    except ValueError as e:
+        return f"Configuration error: {e}"
+    except Exception as e:
+        return f"Discord API error: {e}"
+
+    if not messages:
+        return "No unread mentions."
+
+    lines = [f"Found {len(messages)} mention(s):\n"]
+    for m in messages:
+        lines.append(f"[{m['id']}] @{m['author']} ({m['author_id']}): {m['content']}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def get_discord_messages(
+    after_id: str = "",
+    limit: int = 50,
+    regex_filter: str = "",
+) -> str:
+    """Browse Discord channel messages with optional regex filtering.
+
+    Args:
+        after_id: Discord snowflake ID. Only return messages after this ID.
+                  Leave empty to fetch recent messages.
+        limit: Number of messages to fetch (max 100).
+        regex_filter: Optional regex pattern to filter message content.
+                      Case-insensitive. Leave empty to return all messages.
+    """
+    try:
+        messages = discord_source.get_messages(
+            channel_id=DISCORD_CHANNEL_ID,
+            after=after_id or None,
+            limit=min(limit, 100),
+        )
+    except ValueError as e:
+        return f"Configuration error: {e}"
+    except Exception as e:
+        return f"Discord API error: {e}"
+
+    if regex_filter:
+        messages = discord_source.filter_messages(messages, regex_filter)
+
+    if not messages:
+        return "No messages found."
+
+    lines = [f"Found {len(messages)} message(s):\n"]
+    for m in messages:
+        bot_tag = " [bot]" if m["bot"] else ""
+        lines.append(f"[{m['id']}] @{m['author']}{bot_tag}: {m['content']}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def send_discord_message(message: str) -> str:
+    """Send a message to the Discord channel as the Town Elder bot.
+
+    Args:
+        message: Message content to send. Use <@USER_ID> to mention users.
+    """
+    try:
+        result = discord_source.send_message(DISCORD_CHANNEL_ID, message)
+        return f"Message sent (id: {result['id']})."
+    except ValueError as e:
+        return f"Configuration error: {e}"
+    except Exception as e:
+        return f"Discord API error: {e}"
 
 
 if __name__ == "__main__":

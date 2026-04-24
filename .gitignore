@@ -33,3 +33,6 @@ AGENT-PERSONALITY.md
 
 # Node modules
 node_modules/
+
+# Discord monitor state & other artifacts
+.discord-*.json

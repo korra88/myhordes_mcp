@@ -83,4 +83,4 @@ discord-monitor: ## Monitor Discord #generale and reply to bot mentions (loops e
 		$(foreach f,$(TIPS_FILES),--append-system-prompt-file $(f)) \
 		$(foreach f,$(PERSONAL_FILES),--append-system-prompt-file $(f)) \
 		--append-system-prompt-file personas/town-elder.md \
-		--loop 5m /discord-monitor loop
+		"/loop 5m /discord-monitor loop"

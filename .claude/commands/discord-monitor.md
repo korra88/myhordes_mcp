@@ -2,51 +2,46 @@ Monitor Discord `#generale` for unanswered mentions of the Town Elder bot and re
 
 Run once immediately. Pass `loop` to start continuous monitoring via `/loop`.
 
-## Channel config
+## Tools
 
-- Guild ID: `GUILD_ID`
-- Channel ID: `CHANNEL_ID` (`#generale`)
-- Bot user ID: `BOT_USER_ID` (Town Elder#9092)
+Use the myhordes MCP tools directly — no discord MCP needed:
+- `get_mentions(after_id)` — returns only bot-mention messages, filtered server-side
+- `send_discord_message(message)` — sends reply as Town Elder bot
 
-## Step 1 — Login
+## Step 1 — Load state
 
-Call `discord_login`. If already logged in, continue.
+Read `.discord-monitor-state.json` if it exists:
+```json
+{"last_message_id": "SNOWFLAKE_OR_NULL"}
+```
+Use `last_message_id` as `after_id` for `get_mentions`. If file missing or id null: call with empty `after_id`.
 
-## Step 2 — Read messages
+## Step 2 — Fetch mentions
 
-Call `discord_read_messages(channelId="CHANNEL_ID", limit=20)`.
+Call `get_mentions(after_id=LAST_ID)`. Returns only messages mentioning the bot, authored by non-bot users.
 
-## Step 3 — Find unanswered mentions
+## Step 3 — Answer each mention
 
-A message requires a reply if ALL of these are true:
-- Contains `<@BOT_USER_ID>` (bot mention)
-- Was NOT authored by the bot itself
-- No subsequent message from the bot (`author.bot == true`) exists after it in the list
+For each mention:
 
-Collect all such messages.
-
-## Step 4 — Reply to each
-
-For each unanswered mention:
-
-1. Extract the question from the message content (strip the mention tag).
-2. Look up the answer:
+1. Extract question (strip `<@BOT_USER_ID>` tag).
+2. Look up answer:
    - Game items, buildings, stats, statuses → `search_wiki(query=...)`
    - Strategy, construction phases → `search_knowledge(query=...)`
-   - Live town data (defense, bank, citizens) → appropriate `get_*` MCP tool
-   - General game rules → `search_wiki` or knowledge
-3. Compose a concise reply. Tag the asker with `<@{author.id}>`. Lead with the direct answer, add context only if useful. Stay in Desert Veteran character — terse, direct, no fluff.
-4. Call `discord_send(channelId="CHANNEL_ID", message=...)`.
+   - Live town data → appropriate `get_*` tool
+3. Compose reply: tag asker with `<@{author_id}>`, lead with direct answer. Stay in Desert Veteran character — terse, direct.
+4. Call `send_discord_message(message=...)`.
 
-If no unanswered mentions: log `no new mentions` and stop.
+If no mentions: skip to Step 4.
+
+## Step 4 — Update state
+
+Write highest message ID seen (from `get_mentions` result or previous state if no new messages) to `.discord-monitor-state.json`. Parse IDs from lines starting with `[ID]`.
 
 ## Step 5 — Report
 
-Tell the user:
-- How many messages checked
-- How many mentions found and answered
-- Summary of each reply sent (question → one-line answer)
+Tell user: mentions found, replies sent, one-line summary per reply.
 
 ## Loop mode
 
-If `$ARGUMENTS` contains `loop`: after Step 5, do NOT stop. The `/loop` skill handles re-scheduling — just complete the task. The outer loop will re-invoke this skill at its own interval.
+If `$ARGUMENTS` contains `loop`: complete task and return. `/loop` handles re-invocation.
