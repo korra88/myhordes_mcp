@@ -76,15 +76,6 @@ To connect this MCP server to Claude Code so you can use the tools in conversati
       "env": {
         "FATAMORGANA_TOWN_ID": "YOUR_TOWN_ID"
       }
-    },
-    "discord": {
-      "type": "stdio",
-      "command": "/path/to/node/v18+/bin/node",
-      "args": ["node_modules/mcp-discord/build/index.js"],
-      "cwd": "/absolute/path/to/myhordes_mcp",
-      "env": {
-        "DISCORD_TOKEN": "YOUR_DISCORD_BOT_TOKEN"
-      }
     }
   }
 }
@@ -92,11 +83,9 @@ To connect this MCP server to Claude Code so you can use the tools in conversati
 
 Replace `/absolute/path/to/myhordes_mcp` with the actual path to this repo, and `YOUR_TOWN_ID` with your town ID.
 
-For the Discord MCP server:
-- Install the package first: `node_modules/` is populated by running `npm install mcp-discord` with Node v18+
-- `YOUR_DISCORD_BOT_TOKEN` — from [Discord Developer Portal](https://discord.com/developers/applications) → Bot tab
-- Bot requires **Message Content**, **Server Members**, and **Presence** privileged intents enabled in the Developer Portal
-- Node v18+ required (`node --version` to check). On nvm: use the full path, e.g. `~/.nvm/versions/node/v22.22.0/bin/node`
+Set `DISCORD_TOKEN` (or `DISCORD_BOT_TOKEN`) in `.env` to enable Discord tools (`get_mentions`, `get_discord_messages`, `send_discord_message`). Bot requires **Message Content**, **Server Members**, and **Presence** privileged intents enabled in the [Discord Developer Portal](https://discord.com/developers/applications).
+
+Optionally set `DISCORD_CHANNEL_ID` to override the default monitored channel.
 
 > **Note:** The `.env` file is loaded by `python-dotenv` inside `main.py`, so you can either put values in `.env` or in the `"env"` block above. The `"env"` block in `.mcp.json` takes precedence.
 
@@ -150,6 +139,9 @@ In a Claude Code conversation, ask something like:
 | `search_wiki` | Wiki | Search items, buildings, ruins, skills, statuses, and strategy guides from en.mhwiki.org. |
 | `list_wiki_categories` | Wiki | List available wiki categories. |
 | `search_knowledge` | Knowledge | Search curated advisor KB — building phase guides, strategy, post-mortems. |
+| `get_mentions` | Discord | Fetch unread messages mentioning the bot. Filtered server-side — no noise. Accepts optional `after_id` snowflake. |
+| `get_discord_messages` | Discord | Browse channel messages with optional regex filter. Accepts `after_id`, `limit`, `regex_filter`. |
+| `send_discord_message` | Discord | Send a message to the monitored channel as the bot. |
 
 ## Updating the Wiki
 

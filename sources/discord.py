@@ -15,9 +15,9 @@ BOT_USER_ID = "BOT_USER_ID"  # Town Elder#9092
 
 
 def _headers() -> dict:
-    token = os.getenv("DISCORD_BOT_TOKEN")
+    token = os.getenv("DISCORD_TOKEN") or os.getenv("DISCORD_BOT_TOKEN")
     if not token:
-        raise ValueError("DISCORD_BOT_TOKEN not set in environment")
+        raise ValueError("DISCORD_TOKEN (or DISCORD_BOT_TOKEN) not set in environment")
     return {"Authorization": f"Bot {token}"}
 
 
