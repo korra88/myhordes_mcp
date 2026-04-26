@@ -35,13 +35,21 @@ For each target day file:
   - Last critical items baseline.
   - Who was outside at end of day (last position snapshot).
 
-- **Deaths:** Compare previous day's last citizen list to next day's first citizen list (or today's list if closing N-1).
+- **Deaths — primary source (Fata Morgana death log):**
+  Call `get_citizen_positions(day=N-1)` for the target day. Fata returns a `### Dead citizens` section grouped by day, with name + cause of death + last coords for every recorded death. Use this as the authoritative source — it covers dehydration, infection, zombie kills, etc. without requiring a citizen-list diff.
+  - Use Fata's cause string directly in the log (no mapping).
+  - Cross-check last coords: if `last_coords` is outside town, note "camping outside".
+
+- **Deaths — fallback (citizen-list diff):**
+  Only use if Fata returns no deaths for that day (data gap or very old day). Compare previous day's last citizen list to next day's first citizen list.
   - Outside at end of day → "Zombie attack while camping".
   - Inside → "Unknown / likely infection or wound".
+  - If expected death count > identified deaths, explicitly ask the user to confirm remaining names/causes rather than writing "Unknown".
+
 - **Survival:** Citizens alive next day → survived. Note defense vs. attack estimate.
 - **Net alive change:** yesterday's count → next day's count.
 
-**Backfill sparse days:** If day file has no citizen snapshots, note "insufficient data — partial close" and record what is derivable. Do not skip.
+**Backfill sparse days:** If day file has no citizen snapshots, note "insufficient data — partial close" and record what is derivable from Fata. Do not skip.
 
 ## Step 4 — Append night outcome to day file
 

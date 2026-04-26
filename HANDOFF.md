@@ -5,34 +5,30 @@ queries, resource requirements, issue log) were already fixed. These three remai
 
 ---
 
-## Issue 3 — Unknown second death in close-day output
+## ~~Issue 3 — Unknown second death in close-day output~~ ✅ FIXED
 
-### Problem
-`close-day` identifies deaths by comparing previous day's last citizen list to next day's first.
-For Night 5→6, one death was identified as "Unknown" because the second citizen (PlayerB) could
-not be matched — the overview snapshot didn't carry enough data to diff both names.
+### What was done
+Night 5→6 had 2 deaths. `close-day` identified PlayerB (camping outside [0|-2]) but wrote
+"Unknown" for the second because day-05.md had no full citizen roster — only a movement log.
 
-### Root cause
-`get_town_overview` and `get_citizen_positions` return current state only. When `close-day` runs
-in the morning, the "previous day's citizen list" must come from the day file itself (last cron
-snapshot written before attack). If that snapshot is missing or incomplete, close-day falls back
-to "Unknown".
+Ground truth supplied by user: second death was **PlayerA**, cause **Dehydration** (inside town).
 
-### Fix approach
-`close-day` at [.claude/commands/close-day.md](.claude/commands/close-day.md) line 38 says:
-> Compare previous day's last citizen list to next day's first citizen list
+**Data fixes applied:**
+- `towns/s19-multicoloured-theatre/day-05.md` — replaced "Unknown" row with PlayerA / Dehydration
+- `towns/s19-multicoloured-theatre/daily-log.md` — Day 5 outcome updated to `PlayerB †, PlayerA †`
 
-Strengthen the rule: if the previous day file has no citizen snapshot at all, explicitly try
-`get_citizen_positions` from the *previous day's* cached Fata Morgana data (pass `day=N-1` to the
-MCP tool). The parser supports `day` param. This gives a fallback identity source.
+**Root cause fix:**
+`close-day.md` Step 3 now calls `get_citizen_positions(day=N-1)` as the **primary** death source.
+Fata Morgana returns a `### Dead citizens` section grouped by day with name + cause + coords —
+authoritative, no citizen-list diff needed. Cause string used verbatim (no mapping). Citizen-list
+diff demoted to fallback. If fallback still leaves gaps, close-day now asks the user rather than
+writing "Unknown".
 
-Also worth checking: does the cron snapshot always write the full citizen name list, or just
-counts? Check `towns/s19-multicoloured-theatre/day-05.md` for whether the last cron entry has
-names or just numbers.
-
-### Files to touch
-- `.claude/commands/close-day.md` — strengthen death-detection fallback
-- `sources/fatamorgana.py` — verify `_parse_citizens` returns names for historical days
+### Key insight
+`sources/fatamorgana.py` `_parse_deaths()` already parses the full cadaver list with `dtype` →
+human-readable cause (Dehydrated, Eaten by zombies, Infection, etc.) per day. `format_citizens()`
+renders it in `### Dead citizens (N):` / `  Day X:` / `    Name — Cause (last at [x|y])` format.
+`get_citizen_positions(day=N)` accepts historical day param — this is the right tool for close-day.
 
 ---
 
