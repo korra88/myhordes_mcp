@@ -19,7 +19,7 @@ Parse interval from `$ARGUMENTS` (e.g. `set-cron 30m`, `set-cron 1h`). Default i
 Use CronCreate with:
 - `recurring: true`
 - `cron`: expression from Step 2
-- `prompt`: `Run skill inspect-town-cron for town {resolved-folder}`
+- `prompt`: `Run skill inspect-town for town {resolved-folder}`
 
 ## Step 4 — Confirm to user
 
