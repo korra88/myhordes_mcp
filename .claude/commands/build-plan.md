@@ -28,16 +28,20 @@ Call both files in parallel when on a boundary day.
 ## Step 4 — Assess situation
 
 - **Defense buffer:** total defense − tonight's max estimate. Negative = urgent.
-- **Water ratio:** water rations ÷ alive citizens. < 2.0 = urgent water build.
+- **Water ratio:** water rations ÷ alive citizens. < 2.0 = critical — water builds jump above efficiency-sort.
 - **AP budget:** 20% of alive citizens × ~18 AP. Flag if plan exceeds 240 AP.
 - **Multiplier gap:** Defensive Focus not built + ≥40 defense items in bank (boards, sheet metal, UCBs, old doors) = highest-leverage build regardless of phase.
 
 ## Step 5 — Build priority queue
 
+**CRITICAL — only recommend buildings that appear in `get_buildings(mode='available')` (either Unlocked or Locked sections). Never invent buildings not in that list.**
+
+**Prerequisite rule:** if a building is in the "Locked — prerequisite not built" section, you MAY recommend it, but you MUST also add its prerequisite (`[needs: X]`) earlier in the queue. If that prerequisite is also locked, chain upward until you reach an unlocked building.
+
 Sort by: survival necessity → def÷AP efficiency → permanence (permanent > temporary).
 
-- **Defensive Focus** jumps to #1 if multiplier gap condition met and resources available.
-- **Water producers** (Drilling Rig, No Holes Barred, Eden Project, Divining Rocket, Mechanical Pump, Divining Rods) jump above efficiency-sort if water ratio < 1.0 AND resources are available to build them. Hydraulic Network and water-unlock buildings (Decon Shower, Sluice) do NOT trigger this — they don't produce water directly. Water Purifier/Filter only if 10+ Jerrycans in bank.
+- **Defensive Focus** jumps to #1 if multiplier gap condition met and resources available. If it's Locked, include its prerequisite first in the queue.
+- **Water producers** (Drilling Rig, No Holes Barred, Eden Project, Divining Rocket, Mechanical Pump, Divining Rods) jump above efficiency-sort if water ratio < 2.0 AND resources are available to build them. If locked, include prerequisite first. Hydraulic Network and water-unlock buildings (Decon Shower, Sluice) do NOT trigger this — they don't produce water directly. Water Purifier/Filter only if 10+ Jerrycans in bank.
 - Flag any build with missing or borderline resources.
 - Skip temporaries unless defense buffer is negative or AP budget has slack after permanents.
 - Soft cap 240 AP; hard cut at 300 AP — drop lowest-priority items and note.

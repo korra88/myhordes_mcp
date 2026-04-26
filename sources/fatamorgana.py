@@ -429,6 +429,13 @@ def _parse_buildings(js_data: dict) -> list[dict]:
         except (ValueError, TypeError):
             rarity = 0
 
+        # parent: prerequisite building ID (0 = no prerequisite)
+        parent_id = b.get("parent")
+        try:
+            parent_id = str(int(parent_id)) if parent_id is not None else None
+        except (ValueError, TypeError):
+            parent_id = None
+
         buildings.append({
             "id": bid,
             "name": name,
@@ -440,7 +447,20 @@ def _parse_buildings(js_data: dict) -> list[dict]:
             "built_day": build_day_lookup.get(bid),
             "upgrade_days": upgrade_days,
             "rarity": rarity,
+            "parent_id": parent_id,
         })
+
+    # Second pass: resolve parent names now that all buildings are parsed
+    id_to_name = {b["id"]: b["name"] for b in buildings}
+    for b in buildings:
+        pid = b["parent_id"]
+        if pid and pid != "0":
+            b["parent_name"] = id_to_name.get(pid)
+            b["parent_built"] = pid in built_ids
+        else:
+            b["parent_name"] = None
+            b["parent_built"] = True  # no prerequisite = effectively satisfied
+
     return buildings
 
 
@@ -1175,7 +1195,7 @@ def _building_line(b: dict, show_day: bool = False) -> str:
     return " — ".join(parts) if len(parts) > 1 else parts[0]
 
 
-def _available_line(b: dict) -> str:
+def _available_line(b: dict, locked: bool = False) -> str:
     parts = [f"  {b['name']}"]
     details = []
     if b["ap_cost"]:
@@ -1187,6 +1207,8 @@ def _available_line(b: dict) -> str:
     rarity_tag = _RARITY_LABEL.get(b.get("rarity", 0))
     if rarity_tag:
         details.append(f"[{rarity_tag}]")
+    if locked and b.get("parent_name"):
+        details.append(f"[needs: {b['parent_name']}]")
     if details:
         parts.append(", ".join(details))
     return " — ".join(parts) if len(parts) > 1 else parts[0]
@@ -1295,16 +1317,24 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
 
     if mode == "available":
         available_sorted = sorted(available, key=lambda b: b["ap_cost"])
-        needs_bp = [b for b in available_sorted if b.get("rarity", 0) > 0]
-        no_bp = [b for b in available_sorted if b.get("rarity", 0) == 0]
-        lines = [header, f"{len(built)} built, {len(available)} available — defense from buildings: {total_def}", ""]
-        lines.append(f"### Available to build — no blueprint needed ({len(no_bp)})")
+        # Split: unlocked = prerequisite satisfied; locked = prerequisite building not yet built
+        unlocked = [b for b in available_sorted if b.get("parent_built", True)]
+        locked = [b for b in available_sorted if not b.get("parent_built", True)]
+        no_bp = [b for b in unlocked if b.get("rarity", 0) == 0]
+        needs_bp = [b for b in unlocked if b.get("rarity", 0) > 0]
+        lines = [header, f"{len(built)} built — {len(unlocked)} unlocked, {len(locked)} locked (prerequisite unbuilt) — defense from buildings: {total_def}", ""]
+        lines.append(f"### Unlocked — no blueprint needed ({len(no_bp)})")
         for b in no_bp:
             lines.append(_available_line(b))
         lines.append("")
-        lines.append(f"### Available to build — blueprint required ({len(needs_bp)})")
+        lines.append(f"### Unlocked — blueprint required ({len(needs_bp)})")
         for b in needs_bp:
             lines.append(_available_line(b))
+        if locked:
+            lines.append("")
+            lines.append(f"### Locked — prerequisite not built ({len(locked)})")
+            for b in locked:
+                lines.append(_available_line(b, locked=True))
         return "\n".join(lines)
 
     return f"Unknown mode '{mode}'. Use: summary, history, available."
