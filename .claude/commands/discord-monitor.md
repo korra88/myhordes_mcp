@@ -29,6 +29,8 @@ For each mention:
    - Game items, buildings, stats, statuses → `search_wiki(query=...)`
    - Strategy, construction phases → `search_knowledge(query=...)`
    - Live town data → appropriate `get_*` tool
+   - "what to build today", "build plan", "construction queue" → use Skill tool with `skill='build-plan'`
+   - "building report", "construction report", "AP spent", "build history" → use Skill tool with `skill='building-report'`
 3. Compose reply: tag asker with `<@{author_id}>`, lead with direct answer. Stay in the defined Persona character.
 4. Call `send_discord_message(message=...)`.
 
