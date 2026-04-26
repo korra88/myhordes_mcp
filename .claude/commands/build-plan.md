@@ -13,17 +13,17 @@ Resolve town folder: list `towns/` subdirs, match current town from `.env` or `g
 Call in parallel:
 - `get_defense_status` → total defense, tonight's estimate, item multiplier
 - `get_bank_inventory(detail='summary')` → water count, defense items, key resources
-- `get_buildings(mode='available')` → unbuilt buildings with AP/def
+- `get_buildings(mode='available', include_resources=True)` → unbuilt buildings with AP/def/resources
 
 ## Step 3 — Load phase knowledge
 
 Determine current day N from `get_defense_status`. Load phase file(s) via `search_knowledge(section="buildings")`:
-- Day 1–4: `"basic buildings day 1"`
-- Day 5–8: `"intermediate"` (Day 5–6: also load basic)
-- Day 9–14: `"defense focus"` (Day 9–11: also load intermediate)
-- Day 15+: `"advanced dump"` (Day 15–16: also load defense-focus)
+- Day 1–4: query `"Day 1–5"`
+- Day 5–8: query `"Day 6–10"` (Day 5–6: also query `"Day 1–5"`)
+- Day 9–14: query `"Day 9–15"` (Day 9–11: also query `"Day 6–10"`)
+- Day 15+: query `"Day 15+"` (Day 15–16: also query `"Day 9–15"`)
 
-Call both files in parallel when on a boundary day.
+Call both queries in parallel when on a boundary day.
 
 ## Step 4 — Assess situation
 

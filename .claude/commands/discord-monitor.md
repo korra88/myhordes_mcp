@@ -33,6 +33,13 @@ For each mention:
    - "building report", "construction report", "AP spent", "build history" → use Skill tool with `skill='building-report'`
 3. Compose reply: tag asker with `<@{author_id}>`, lead with direct answer. Stay in the defined Persona character.
 4. Call `send_discord_message(message=...)`.
+5. **Log any issue** encountered while answering to `.discord-monitor-issues.log` (append, one line per issue):
+   ```
+   [YYYY-MM-DD HH:MM] ISSUE_TYPE | message_id=ID | detail
+   ```
+   Issue types: `TOOL_FAILURE` (MCP tool error), `NO_KNOWLEDGE` (search_knowledge returned no results),
+   `FALLBACK` (had to answer without live data), `UNKNOWN_DATA` (missing field, e.g. unknown death),
+   `SKILL_ERROR` (sub-skill failed). Only log when the issue actually affects reply quality.
 
 If no mentions: skip to Step 4.
 

@@ -192,6 +192,7 @@ async def get_buildings(
     town_id: int = 0,
     mode: str = "summary",
     include_private_town_buildings: bool = False,
+    include_resources: bool = False,
 ) -> str:
     """
     Fetches the town's building list from Fata Morgana.
@@ -208,12 +209,15 @@ async def get_buildings(
                         Use when asked what to build next, what's available, or build planning.
         include_private_town_buildings: Include buildings only available in private/custom towns
             (rarity=5, not unlockable via blueprint in standard games). Default False.
+        include_resources: Include resource requirements for each building. Only useful with
+            mode='available'. Use True for build planning when you need to check bank stock.
+            Default False to keep output compact.
     """
     tid = _resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
     data = await fatamorgana.fetch_town_data(tid, day=day or None)
-    return fatamorgana.format_buildings(data, mode=mode, include_private=include_private_town_buildings)
+    return fatamorgana.format_buildings(data, mode=mode, include_private=include_private_town_buildings, include_resources=include_resources)
 
 
 @mcp.tool()

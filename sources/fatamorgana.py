@@ -436,6 +436,15 @@ def _parse_buildings(js_data: dict) -> list[dict]:
         except (ValueError, TypeError):
             parent_id = None
 
+        # resources: list of {name, amount} from resourcesCurrent
+        resources = []
+        for r in b.get("resourcesCurrent") or []:
+            rsc = r.get("rsc", {})
+            rname = rsc.get("name", {})
+            item_name = rname.get("en") or rname.get("fr") or next(iter(rname.values()), "?")
+            amount = r.get("amount", 1)
+            resources.append({"name": item_name, "amount": amount})
+
         buildings.append({
             "id": bid,
             "name": name,
@@ -448,6 +457,7 @@ def _parse_buildings(js_data: dict) -> list[dict]:
             "upgrade_days": upgrade_days,
             "rarity": rarity,
             "parent_id": parent_id,
+            "resources": resources,
         })
 
     # Second pass: resolve parent names now that all buildings are parsed
@@ -1195,7 +1205,7 @@ def _building_line(b: dict, show_day: bool = False) -> str:
     return " — ".join(parts) if len(parts) > 1 else parts[0]
 
 
-def _available_line(b: dict, locked: bool = False) -> str:
+def _available_line(b: dict, locked: bool = False, include_resources: bool = False) -> str:
     parts = [f"  {b['name']}"]
     details = []
     if b["ap_cost"]:
@@ -1209,6 +1219,9 @@ def _available_line(b: dict, locked: bool = False) -> str:
         details.append(f"[{rarity_tag}]")
     if locked and b.get("parent_name"):
         details.append(f"[needs: {b['parent_name']}]")
+    if include_resources and b.get("resources"):
+        res_str = ", ".join(f"{r['name']} ×{r['amount']}" for r in b["resources"])
+        details.append(f"[{res_str}]")
     if details:
         parts.append(", ".join(details))
     return " — ".join(parts) if len(parts) > 1 else parts[0]
@@ -1261,7 +1274,7 @@ def _build_history_lines(built: list) -> list[str]:
     return lines
 
 
-def format_buildings(data: dict, mode: str = "summary", include_private: bool = False) -> str:
+def format_buildings(data: dict, mode: str = "summary", include_private: bool = False, include_resources: bool = False) -> str:
     """Format building list.
 
     mode:
@@ -1269,6 +1282,7 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
       "history"   — all built buildings grouped by construction day
       "available" — unbuilt buildings with AP cost, defense, blueprint requirement
     include_private: if False, exclude buildings with rarity>=5 (private/custom town only).
+    include_resources: if True, append resource requirements to each available building line.
     """
     if data.get("error"):
         return f"Error: {data['error']}"
@@ -1325,16 +1339,16 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
         lines = [header, f"{len(built)} built — {len(unlocked)} unlocked, {len(locked)} locked (prerequisite unbuilt) — defense from buildings: {total_def}", ""]
         lines.append(f"### Unlocked — no blueprint needed ({len(no_bp)})")
         for b in no_bp:
-            lines.append(_available_line(b))
+            lines.append(_available_line(b, include_resources=include_resources))
         lines.append("")
         lines.append(f"### Unlocked — blueprint required ({len(needs_bp)})")
         for b in needs_bp:
-            lines.append(_available_line(b))
+            lines.append(_available_line(b, include_resources=include_resources))
         if locked:
             lines.append("")
             lines.append(f"### Locked — prerequisite not built ({len(locked)})")
             for b in locked:
-                lines.append(_available_line(b, locked=True))
+                lines.append(_available_line(b, locked=True, include_resources=include_resources))
         return "\n".join(lines)
 
     return f"Unknown mode '{mode}'. Use: summary, history, available."
