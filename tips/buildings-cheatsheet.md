@@ -17,21 +17,13 @@ Full tables (resources, AP, def, flags, efficiency) split by game phase in `know
 Use `search_knowledge(query, section='buildings')` to fetch the relevant file.
 Use `search_wiki(query, category='buildings')` for item/mechanic details.
 
-## How to suggest a building plan
-
-Browse the full table relevant for the current day, take into account what is already built and available resources in bank (a few resources missing is acceptable, some will be brought in by scavengers, but be explicit when resources are missing).
-Propose a plan that:
-- covers defense need for tonight
-- raises water reserves if low (< 2 per alive citizen)
-- stays ≤ 240 AP (if over, flag the budget overrun)
-- prioritizes permanents unless temps needed for survival
-
 ## Quick efficiency reference
 
+Rankings are theoretical — verify availability in `get_buildings` before recommending.
 - **Best Def/AP:** Reactor (5.0), Bait (3.0), Abject Panic (2.8), Frat House (2.5), Vita-Mines (2.5)
 - **Best Def/WR:** Abject Panic (35), Gas Gun (28), Acid Spray (13.3), Mines (11.5), Sprinkler System (9.2)
 - **Best Def/HNB:** Gas Gun (140), Underground city (133.3), Labyrinth (75), Abject Panic (70), Dump Upgrade (65)
-- **Water-producing buildings (add to well):** Pump (+15), Drilling Rig (+50), Eden Project (+50), Divining Rocket (+60), Mechanical Pump (+75), Divining Rods (+100), No Holes Barred (+100), Hydraulic Network (+5), Water Catcher (+2/day)
+- **Water-producing buildings (add to well):** Pump (+15), Drilling Rig (+50), Eden Project (+50), Divining Rocket (+60), Mechanical Pump (+75), Divining Rods (+100), No Holes Barred (+100), Water Catcher (+2/day)
 
 ## Flags
 

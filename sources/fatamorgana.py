@@ -423,11 +423,15 @@ def _parse_buildings(js_data: dict) -> list[dict]:
                 upgrade_days = None
 
         # rarity: blueprint tier required (0=none, 1=common, 2=uncommon, 3=rare, 4=very rare)
-        rarity = b.get("rarity")
+        rarity = b.get("rarityCurrent")
         try:
             rarity = int(rarity) if rarity is not None else 0
         except (ValueError, TypeError):
             rarity = 0
+
+        # blueprint_found: True = blueprint submitted for this town (buildable despite rarity>0)
+        # None/False = blueprint not yet found → building is blocked even if prerequisite met
+        blueprint_found = b.get("found") is True
 
         # parent: prerequisite building ID (0 = no prerequisite)
         parent_id = b.get("parent")
@@ -456,6 +460,7 @@ def _parse_buildings(js_data: dict) -> list[dict]:
             "built_day": build_day_lookup.get(bid),
             "upgrade_days": upgrade_days,
             "rarity": rarity,
+            "blueprint_found": blueprint_found,
             "parent_id": parent_id,
             "resources": resources,
         })
@@ -1331,23 +1336,36 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
 
     if mode == "available":
         available_sorted = sorted(available, key=lambda b: b["ap_cost"])
-        # Split: unlocked = prerequisite satisfied; locked = prerequisite building not yet built
-        unlocked = [b for b in available_sorted if b.get("parent_built", True)]
-        locked = [b for b in available_sorted if not b.get("parent_built", True)]
-        no_bp = [b for b in unlocked if b.get("rarity", 0) == 0]
-        needs_bp = [b for b in unlocked if b.get("rarity", 0) > 0]
-        lines = [header, f"{len(built)} built — {len(unlocked)} unlocked, {len(locked)} locked (prerequisite unbuilt) — defense from buildings: {total_def}", ""]
+        # Split by prerequisite first
+        prereq_ok = [b for b in available_sorted if b.get("parent_built", True)]
+        prereq_locked = [b for b in available_sorted if not b.get("parent_built", True)]
+        # Among prerequisite-ok: split by blueprint status
+        # no_bp: rarity==0 (no blueprint needed at all)
+        # bp_found: rarity>0 but blueprint already submitted → buildable
+        # bp_blocked: rarity>0 and blueprint not yet found → NOT buildable
+        no_bp = [b for b in prereq_ok if b.get("rarity", 0) == 0]
+        bp_found = [b for b in prereq_ok if b.get("rarity", 0) > 0 and b.get("blueprint_found", False)]
+        bp_blocked = [b for b in prereq_ok if b.get("rarity", 0) > 0 and not b.get("blueprint_found", False)]
+        unlocked_count = len(no_bp) + len(bp_found)
+        locked_count = len(bp_blocked) + len(prereq_locked)
+        lines = [header, f"{len(built)} built — {unlocked_count} unlocked, {locked_count} locked — defense from buildings: {total_def}", ""]
         lines.append(f"### Unlocked — no blueprint needed ({len(no_bp)})")
         for b in no_bp:
             lines.append(_available_line(b, include_resources=include_resources))
-        lines.append("")
-        lines.append(f"### Unlocked — blueprint required ({len(needs_bp)})")
-        for b in needs_bp:
-            lines.append(_available_line(b, include_resources=include_resources))
-        if locked:
+        if bp_found:
             lines.append("")
-            lines.append(f"### Locked — prerequisite not built ({len(locked)})")
-            for b in locked:
+            lines.append(f"### Unlocked — blueprint found ({len(bp_found)})")
+            for b in bp_found:
+                lines.append(_available_line(b, include_resources=include_resources))
+        if bp_blocked:
+            lines.append("")
+            lines.append(f"### Locked — blueprint not found ({len(bp_blocked)})")
+            for b in bp_blocked:
+                lines.append(_available_line(b, locked=False, include_resources=include_resources))
+        if prereq_locked:
+            lines.append("")
+            lines.append(f"### Locked — prerequisite not built ({len(prereq_locked)})")
+            for b in prereq_locked:
                 lines.append(_available_line(b, locked=True, include_resources=include_resources))
         return "\n".join(lines)
 

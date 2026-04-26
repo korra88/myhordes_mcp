@@ -34,14 +34,20 @@ Call both queries in parallel when on a boundary day.
 
 ## Step 5 — Build priority queue
 
-**CRITICAL — only recommend buildings that appear in `get_buildings(mode='available')` (either Unlocked or Locked sections). Never invent buildings not in that list.**
+**CRITICAL — before building the queue, extract your buildable set first:**
 
-**Prerequisite rule:** if a building is in the "Locked — prerequisite not built" section, you MAY recommend it, but you MUST also add its prerequisite (`[needs: X]`) earlier in the queue. If that prerequisite is also locked, chain upward until you reach an unlocked building.
+From the `get_buildings` output, collect buildings from exactly these two sections:
+- `Unlocked — no blueprint needed`
+- `Unlocked — blueprint found`
+
+This is your **buildable set**. Only recommend buildings from this set. Never recommend anything outside it, regardless of water urgency or defense need.
+
+**Prerequisite exception:** buildings in `Locked — prerequisite not built` MAY be added to the queue only if you also add their unlocked prerequisite earlier in the queue. Chain upward until you reach a building in the buildable set. The chained buildings must themselves be in the buildable set.
 
 Sort by: survival necessity → def÷AP efficiency → permanence (permanent > temporary).
 
 - **Defensive Focus** jumps to #1 if multiplier gap condition met and resources available. If it's Locked, include its prerequisite first in the queue.
-- **Water producers** (Drilling Rig, No Holes Barred, Eden Project, Divining Rocket, Mechanical Pump, Divining Rods) jump above efficiency-sort if water ratio < 2.0 AND resources are available to build them. If locked, include prerequisite first. Hydraulic Network and water-unlock buildings (Decon Shower, Sluice) do NOT trigger this — they don't produce water directly. Water Purifier/Filter only if 10+ Jerrycans in bank.
+- **Water producers** (Drilling Rig, No Holes Barred, Eden Project, Divining Rocket, Mechanical Pump, Divining Rods) jump above efficiency-sort if water ratio < 2.0 AND resources are available to build them AND building appears in an Unlocked or prerequisite-locked section. Skip any water producer in "Locked — blueprint not found". If prerequisite-locked, include prerequisite first. Hydraulic Network and water-unlock buildings (Decon Shower, Sluice) do NOT trigger this — they don't produce water directly. Water Purifier/Filter only if 10+ Jerrycans in bank.
 - Flag any build with missing or borderline resources.
 - Skip temporaries unless defense buffer is negative or AP budget has slack after permanents.
 - Soft cap 240 AP; hard cut at 300 AP — drop lowest-priority items and note.
