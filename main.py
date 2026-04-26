@@ -220,13 +220,6 @@ async def get_buildings(
 async def get_scout_map(
     day: int = 0,
     town_id: int = 0,
-    x1: int | None = None,
-    y1: int | None = None,
-    x2: int | None = None,
-    y2: int | None = None,
-    group_cp: int = 2,
-    escape_items: int = 0,
-    scout_mode: bool = False,
 ) -> str:
     """
     Fetches zombie counts per zone from scout data (Fata Morgana).
@@ -235,19 +228,42 @@ async def get_scout_map(
     Use this when the user asks about zombie positions, safe scavenging routes,
     or where the horde is concentrated.
 
-    When x1/y1/x2/y2 are provided, runs CP-aware Dijkstra pathfinding between
-    those two coordinates. Returns up to two paths:
-    - Safest path: minimises zombie exposure, avoids traps entirely.
-    - Shortest path: minimises AP, using escape items to pass through traps.
-    Hard cap: 40 AP.
-
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
-        x1: X coordinate of the starting point (town-relative). Omit for full map.
+    """
+    tid = _resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data = await fatamorgana.fetch_town_data(tid, day=day or None)
+    return fatamorgana.format_scout(data)
+
+
+@mcp.tool()
+async def find_expedition_path(
+    x1: int,
+    y1: int,
+    x2: int,
+    y2: int,
+    group_cp: int = 2,
+    escape_items: int = 0,
+    scout_mode: bool = False,
+    day: int = 0,
+    town_id: int = 0,
+) -> str:
+    """
+    Runs CP-aware Dijkstra pathfinding between two map coordinates.
+    Returns up to two paths:
+    - Safest path: minimises zombie exposure, avoids traps entirely.
+    - Shortest path: minimises AP, using escape items to pass through traps.
+    Hard cap: 40 AP.
+    Use this when planning an expedition route between two points.
+
+    Args:
+        x1: X coordinate of the starting point (town-relative).
         y1: Y coordinate of the starting point.
-        x2: X coordinate of the destination. Required if x1/y1 are set.
-        y2: Y coordinate of the destination. Required if x1/y1 are set.
+        x2: X coordinate of the destination.
+        y2: Y coordinate of the destination.
         group_cp: Total Control Points of the expedition party. Default 2
                   (solo citizen, no bonuses). Each citizen = 2 CP base; add
                   bonuses for Prepared skill, Car Door, Riot Shield, etc.
@@ -258,21 +274,19 @@ async def get_scout_map(
         scout_mode: Set True when a Scout with Camouflage Vest is leading.
                     Trapped zones become passable at a detection risk cost
                     instead of being impassable.
+        day: Specific day number to inspect. Use 0 or omit for the current day.
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
     """
     tid = _resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
     data = await fatamorgana.fetch_town_data(tid, day=day or None)
-
-    coords_provided = all(v is not None for v in (x1, y1, x2, y2))
-    if coords_provided:
-        return fatamorgana.find_safe_path(
-            data, x1, y1, x2, y2,
-            group_cp=group_cp,
-            escape_items=escape_items,
-            scout_mode=scout_mode,
-        )
-    return fatamorgana.format_scout(data)
+    return fatamorgana.find_safe_path(
+        data, x1, y1, x2, y2,
+        group_cp=group_cp,
+        escape_items=escape_items,
+        scout_mode=scout_mode,
+    )
 
 
 @mcp.tool()
@@ -362,9 +376,6 @@ async def get_attack_forecast(town_id: int = 0) -> str:
 # TODO: Uncomment once official API app key is obtained and sources/official_api.py
 # is implemented. These tools need the official API because Fata Morgana doesn't
 # provide construction progress details or last night's attack report.
-
-# TODO: Split get_scout_map into get_scout_map() and find_expedition_path(x1,y1,x2,y2,...)
-# when building the prepare-expedition skill — dual-behavior confuses small models (Haiku).
 
 # @mcp.tool()
 # async def get_construction_progress() -> str:
