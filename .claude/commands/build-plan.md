@@ -18,10 +18,10 @@ Call in parallel:
 ## Step 3 — Load phase knowledge
 
 Determine current day N from `get_defense_status`. Load phase file(s) via `search_knowledge(section="buildings")`:
-- Day 1–4: query `"Day 1–5"`
-- Day 5–8: query `"Day 6–10"` (Day 5–6: also query `"Day 1–5"`)
-- Day 9–14: query `"Day 9–15"` (Day 9–11: also query `"Day 6–10"`)
-- Day 15+: query `"Day 15+"` (Day 15–16: also query `"Day 9–15"`)
+- Day 1–5: query `"basic"`
+- Day 6–8: query `"intermediate"` (Day 6: also query `"basic"`)
+- Day 9–14: query `"defense-focus"` (Day 9–10: also query `"intermediate"`)
+- Day 15+: query `"advanced"` (Day 15: also query `"defense-focus"`)
 
 Call both queries in parallel when on a boundary day.
 
