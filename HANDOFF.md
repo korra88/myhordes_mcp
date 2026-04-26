@@ -32,64 +32,27 @@ renders it in `### Dead citizens (N):` / `  Day X:` / `    Name — Cause (last 
 
 ---
 
-## Issue 4 — Cron prompt is 280+ lines embedded in CronCreate call
+## Issue 5 — Day-transition logic in inspect-town untested
 
 ### Problem
-`track-town` skill ([.claude/commands/track-town.md](.claude/commands/track-town.md)) embeds the
-full cron prompt inline in the `CronCreate` call (lines 78–196, ~120 lines of instructions).
-This is hard to read, impossible to edit without re-running `/track-town set-cron`, and any
-prompt change requires recreating the cron job.
+`inspect-town.md` Step 3 detects when `baseline day < current game day` and resets AP counters,
+creates new day file, etc. This has never fired — town has been Day 6 since cron was set up.
 
-### Fix approach
-Two options:
+### How to test
+Manually edit `towns/s19-multicoloured-theatre/_baseline.md` to set day to a past day (e.g. 5),
+then run `/inspect-town`. It should fire the transition branch. Restore baseline after.
 
-**Option A — External skill file (recommended)**
-Extract the cron body into `.claude/commands/track-town-cron.md`. In the CronCreate `prompt`
-field, write a short dispatch: `"Run skill track-town-cron for town {resolved-folder}"`. The
-cron agent loads the skill file fresh each run — edits take effect immediately without
-recreating the job.
-
-**Option B — Inline but trimmed**
-Compress the embedded prompt using `/caveman:compress`. Reduces token cost per cron tick but
-doesn't solve the maintainability problem.
-
-Option A is cleaner. The CronCreate prompt then becomes ~3 lines. Skill resolution works the
-same way as `/build-plan` or `/close-day` — the cron agent has skill access.
-
-### Files to touch
-- `.claude/commands/track-town.md` — replace embedded prompt block with skill dispatch
-- `.claude/commands/track-town-cron.md` — new file, extracted cron body
-
-**Warning:** After changing track-town.md, the live cron job (if any) still has the old embedded
-prompt. It must be recreated: `CronDelete {job-id}` then `/track-town set-cron`. Check
-`.discord-monitor-state.json` or ask user for the current job ID.
-
----
-
-## Issue 5 — Day-transition logic in cron untested
-
-### Problem
-The cron prompt in `track-town.md` has a `STEP 1 — DAY TRANSITION CHECK` block (line 85–94)
-that detects when `baseline day < current game day`. This has never fired — the town has been on
-Day 6 since the cron was set up.
-
-### What to verify when Day 7 arrives
-1. Cron runs and detects the day change (baseline day=6, game day=7).
+### What to verify
+1. Detects day change (baseline day=6, game day=7).
 2. AP counters reset to 0 for all citizens.
-3. Day-7 log file is created with `# Day 7 — {date}` header.
-4. `daily-log.md` gets a new row for Day 7.
-5. If `day-06.md` has no `### Night outcome`, the warning line is prepended.
+3. Day-7 log file created with `# Day 7 — {date}` header.
+4. `daily-log.md` gets new row for Day 7.
+5. If `day-06.md` has no `### Night outcome`, warning line prepended.
 6. `_baseline.md` updates to Day 7 with fresh positions.
 
-### How to test without waiting
-Manually edit `_baseline.md` to set day=5 (or any past day), then trigger the cron prompt
-manually (run `/track-town` without `set-cron`). It should fire the transition branch.
-Restore baseline after.
-
-### Files to watch
-- `towns/s19-multicoloured-theatre/_baseline.md` — day field drives the transition check
-- `towns/s19-multicoloured-theatre/day-07.md` — should be created on first Day 7 cron run
-- `.claude/commands/track-town.md` lines 85–94 — the transition logic itself
+### Files
+- `towns/s19-multicoloured-theatre/_baseline.md` — day field drives the check
+- `.claude/commands/inspect-town.md` Step 3 — transition logic
 
 ---
 
@@ -102,3 +65,5 @@ Restore baseline after.
 | Build-plan recommended locked/unbuilt buildings | MCP now splits Unlocked vs Locked; skill rules updated |
 | Water urgency threshold too low | Changed `< 1.0` → `< 2.0` WR/citizen |
 | Discord-monitor had no issue logging | Added `.discord-monitor-issues.log` append in Step 3 |
+| close-day wrote "Unknown" for second death | Now calls `get_citizen_positions(day=N-1)` as primary source; Fata cadaver list is authoritative |
+| track-town had 120+ lines inline in CronCreate | Split into `inspect-town` (snapshot) + `track-town` (cron setup); cron dispatches `"Run skill inspect-town"` |
