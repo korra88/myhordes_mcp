@@ -34,6 +34,19 @@ Documented in `docs/implementation-notes.md`. Consult before changing data sourc
 - Format tool output as human-readable text for LLM, not raw JSON.
 - Batch API fields via SURLL to minimize calls (rate limits apply).
 
+## Skill triggers — natural language
+
+When user says any of these, invoke the matching skill:
+
+| Skill | Trigger phrases |
+|---|---|
+| `/build-plan` | "build plan", "what to build today", "construction queue", "what should we build", "building recommendations" |
+| `/close-day` | "close the day", "finalize day", "close day logs", "wrap up yesterday", "night outcome" |
+| `/close-day backfill` | "backfill days", "close all days", "close missing logs" |
+| `/track-town` | "track town", "snapshot town", "take a town snapshot", "seed baseline", "update town state" |
+| `/track-town set-cron` | "set up town cron", "schedule town tracking", "auto track town" |
+| `/building-report` | "building report", "construction report", "throughput report", "how much AP we spent", "build history" |
+
 ## Developer reference
 
 Full key files table, tech stack, game source paths: see **README.md** and `docs/`.
