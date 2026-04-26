@@ -205,10 +205,11 @@ async def get_buildings(
                         Use when asked what was built today or current defense from buildings.
             "history"   All built buildings grouped by construction day.
                         Use when asked what was built on past days or full construction history.
-            "available" Unbuilt buildings with AP cost, defense value, and blueprint requirement.
+            "available" Buildable unbuilt buildings (unlocked or prereq-only locked).
+                        Blueprint-locked buildings are excluded — not actionable without the blueprint.
                         Use when asked what to build next, what's available, or build planning.
         include_private_town_buildings: Include buildings only available in private/custom towns
-            (rarity=5, not unlockable via blueprint in standard games). Default False.
+            (Holy Raincloud, Spirit Mirage, Sword of Bokor, XXL Voodoo Doll). Default False.
         include_resources: Include resource requirements for each building. Only useful with
             mode='available'. Use True for build planning when you need to check bank stock.
             Default False to keep output compact.

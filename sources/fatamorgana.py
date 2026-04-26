@@ -980,6 +980,7 @@ _STATUS_DRUGS = {
 _DEFENSE_ITEMS = {
     "Old Door", "Sheet Metal",
     "Trestle", "Solid Wooden Board", "Unshaped Concrete Blocks",
+    "Jarpen Table",  # required for Building Registry — must not be hidden in Furniture bucket
 }
 _METAL = {"Wrought Iron", "Scrap Metal", "Metal Support"}
 _WOOD = {"Rotting Log", "Twisted Plank", "Patchwork Beam"}
@@ -1161,8 +1162,8 @@ def format_bank_summary(data: dict) -> str:
                      if i["category"] == "Weapon" and i["name"] not in _STRONG_WEAPONS)
     lines.append(f"**Weak weapons:** {weak_count}")
 
-    # Furniture — count only
-    tfurn = sum(i["count"] for i in bank if i["category"] == "Furniture")
+    # Furniture — count only (exclude items already shown in named buckets above)
+    tfurn = sum(i["count"] for i in bank if i["category"] == "Furniture" and i["name"] not in _DEFENSE_ITEMS)
     lines.append(f"**Furniture:** {tfurn} items")
 
     # Boxes / containers — count only
@@ -1286,7 +1287,7 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
       "summary"   — buildings constructed today only + running defense total
       "history"   — all built buildings grouped by construction day
       "available" — unbuilt buildings with AP cost, defense, blueprint requirement
-    include_private: if False, exclude buildings with rarity>=5 (private/custom town only).
+    include_private: if False, exclude the 4 private/custom-town-only buildings (hardcoded list).
     include_resources: if True, append resource requirements to each available building line.
     """
     if data.get("error"):
@@ -1299,7 +1300,10 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
         return "No building data available."
 
     if not include_private:
-        buildings = [b for b in buildings if b.get("rarity", 0) < 5]
+        # Fata returns rarityCurrent=0 for private-town buildings — rarity filter won't catch them.
+        # Hardcoded exclusion list is the only reliable approach.
+        _PRIVATE_TOWN_BUILDINGS = {"Holy Raincloud", "Spirit Mirage", "Sword of Bokor", "XXL Voodoo Doll"}
+        buildings = [b for b in buildings if b["name"] not in _PRIVATE_TOWN_BUILDINGS]
 
     current_day = meta.get("day")
     built = [b for b in buildings if b["built"]]
@@ -1345,10 +1349,8 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
         # bp_blocked: rarity>0 and blueprint not yet found → NOT buildable
         no_bp = [b for b in prereq_ok if b.get("rarity", 0) == 0]
         bp_found = [b for b in prereq_ok if b.get("rarity", 0) > 0 and b.get("blueprint_found", False)]
-        bp_blocked = [b for b in prereq_ok if b.get("rarity", 0) > 0 and not b.get("blueprint_found", False)]
         unlocked_count = len(no_bp) + len(bp_found)
-        locked_count = len(bp_blocked) + len(prereq_locked)
-        lines = [header, f"{len(built)} built — {unlocked_count} unlocked, {locked_count} locked — defense from buildings: {total_def}", ""]
+        lines = [header, f"{len(built)} built — {unlocked_count} unlocked, {len(prereq_locked)} locked (prereq) — defense from buildings: {total_def}", ""]
         lines.append(f"### Unlocked — no blueprint needed ({len(no_bp)})")
         for b in no_bp:
             lines.append(_available_line(b, include_resources=include_resources))
@@ -1357,11 +1359,6 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
             lines.append(f"### Unlocked — blueprint found ({len(bp_found)})")
             for b in bp_found:
                 lines.append(_available_line(b, include_resources=include_resources))
-        if bp_blocked:
-            lines.append("")
-            lines.append(f"### Locked — blueprint not found ({len(bp_blocked)})")
-            for b in bp_blocked:
-                lines.append(_available_line(b, locked=False, include_resources=include_resources))
         if prereq_locked:
             lines.append("")
             lines.append(f"### Locked — prerequisite not built ({len(prereq_locked)})")
