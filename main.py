@@ -23,6 +23,7 @@ MYHORDES_USER_KEY = os.getenv("MYHORDES_USER_KEY")
 MYHORDES_APP_KEY = os.getenv("MYHORDES_APP_KEY")
 
 FATAMORGANA_TOWN_ID = os.getenv("FATAMORGANA_TOWN_ID")
+FATAMORGANA_TOKEN = os.getenv("FATAMORGANA_TOKEN")
 
 if not MYHORDES_USER_KEY:
     print("Warning: MYHORDES_USER_KEY not found in environment variables.", file=sys.stderr, flush=True)
@@ -84,6 +85,36 @@ async def get_bank_inventory(day: int = 0, town_id: int = 0, detail: str = "summ
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
+async def refresh_fata_data(token: str = "") -> str:
+    """
+    Triggers a live data refresh in Fata Morgana by calling the game API on your behalf.
+    Refreshes: bank inventory, building status, citizen positions, zombie attack estimate.
+    After this call, re-fetch any tool (get_bank_inventory, get_buildings, etc.) to see
+    updated data.
+
+    Requires a Fata Morgana auth token — a JWT from fatamorgana.md26.eu encoding your
+    player key and town ID. Get it from browser DevTools (Application → Cookies →
+    fatamorgana.md26.eu → auth_token) while logged in. Store it as FATAMORGANA_TOKEN
+    in .env to avoid passing it each time.
+
+    Can only be called while in-town (game enforces this).
+
+    Args:
+        token: Fata Morgana JWT auth token. Leave empty to use FATAMORGANA_TOKEN from .env.
+    """
+    t = token.strip() or FATAMORGANA_TOKEN
+    if not t:
+        return (
+            "Error: No token provided. Pass token= or set FATAMORGANA_TOKEN in .env.\n"
+            "Get it from browser DevTools: Application → Cookies → fatamorgana.md26.eu → auth_token."
+        )
+    result = await fatamorgana.trigger_update(t)
+    if result["ok"]:
+        return result["message"]
+    return f"Refresh failed: {result['message']}"
+
+
+@mcp.tool()
 async def get_town_overview(day: int = 0, town_id: int = 0, detail: str = "full") -> str:
     """
     Fetches a complete overview of the town from Fata Morgana (community spy service).
@@ -97,8 +128,7 @@ async def get_town_overview(day: int = 0, town_id: int = 0, detail: str = "full"
              the current/latest day. Useful for comparing town progress over time.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
         detail: 'full' (default) includes bank inventory and deaths. 'compact' omits
-                both — use for cron/delta checks where bank is fetched separately via
-                get_bank_inventory.
+                both — use when bank is fetched separately via get_bank_inventory.
     """
     tid = _resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -171,8 +201,11 @@ async def get_buildings(
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
         mode: Output mode — one of:
             "summary"   (default) Buildings constructed today only, plus running defense total.
+                        Use when asked what was built today or current defense from buildings.
             "history"   All built buildings grouped by construction day.
+                        Use when asked what was built on past days or full construction history.
             "available" Unbuilt buildings with AP cost, defense value, and blueprint requirement.
+                        Use when asked what to build next, what's available, or build planning.
         include_private_town_buildings: Include buildings only available in private/custom towns
             (rarity=5, not unlockable via blueprint in standard games). Default False.
     """
@@ -269,7 +302,8 @@ async def get_zone_details(
         y1: Y coordinate of the first corner of the area to inspect (town-relative).
         x2: X coordinate of the second corner. Required if x1/y1 are set.
         y2: Y coordinate of the second corner. Required if x1/y1 are set.
-        max_ap: Optional AP budget. Cells beyond this cost are shown separately.
+        max_ap: Optional AP budget to filter results (e.g. 8). Cells beyond this cost
+                are shown separately. Typical range: 4–15.
     """
     tid = _resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -328,6 +362,9 @@ async def get_attack_forecast(town_id: int = 0) -> str:
 # TODO: Uncomment once official API app key is obtained and sources/official_api.py
 # is implemented. These tools need the official API because Fata Morgana doesn't
 # provide construction progress details or last night's attack report.
+
+# TODO: Split get_scout_map into get_scout_map() and find_expedition_path(x1,y1,x2,y2,...)
+# when building the prepare-expedition skill — dual-behavior confuses small models (Haiku).
 
 # @mcp.tool()
 # async def get_construction_progress() -> str:
@@ -429,7 +466,9 @@ def search_knowledge(query: str, section: str = "") -> str:
 
     Args:
         query: Search terms (e.g. "day 5 buildings", "water defense", "wonders")
-        section: Optional subfolder filter (e.g. "buildings"). Leave empty to search all.
+        section: Optional subfolder filter. Valid sections:
+            "buildings" — AP costs, defense values, build priority by game phase, wonders.
+            Leave empty to search all sections.
     """
     import os
     from pathlib import Path

@@ -25,6 +25,7 @@ from sources import cache
 
 FATA_SPY_URL = "https://fatamorgana.md26.eu/spy/town/{town_id}"
 FATA_SPY_DAY_URL = "https://fatamorgana.md26.eu/spy/town/{town_id}/{day}"
+FATA_UPDATE_URL = "https://fatamorgana.md26.eu/map/updatemyzone"
 
 # dtype int → human-readable cause of death
 DEATH_TYPES = {
@@ -149,6 +150,40 @@ async def fetch_town_data(town_id: int, day: int | None = None) -> dict:
 
     _cache[url] = (now, result)
     return result
+
+
+async def trigger_update(token: str) -> dict:
+    """POST to Fata Morgana's updatemyzone endpoint to pull fresh data from the game API.
+
+    The token is a JWT issued by Fata that encodes the player's user_skey and town gid.
+    Fata uses it to call the official MyHordes API on the player's behalf, refreshing
+    bank, buildings, citizen positions, and zombie estimates in their database.
+
+    Returns a dict with 'ok' (bool) and 'message' (str).
+    """
+    headers = {
+        "authorization": f"Bearer {token}",
+        "content-type": "application/x-www-form-urlencoded",
+        "x-requested-with": "XMLHttpRequest",
+        "origin": "https://fatamorgana.md26.eu",
+        "referer": "https://fatamorgana.md26.eu/map",
+    }
+    cookies = {"auth_token": token}
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(FATA_UPDATE_URL, headers=headers, cookies=cookies)
+        if resp.status_code == 200:
+            if "MYZONEUPDATEDFAILEDINSIDE" in resp.text:
+                return {"ok": True, "message": "Fata Morgana refreshed (bank, buildings, citizens updated). Zone/desert data skipped — must be outside town to refresh that."}
+            return {"ok": True, "message": "Fata Morgana data refreshed from game API."}
+        try:
+            body = resp.json()
+            detail = body.get("message") or body.get("error") or resp.text[:200]
+        except Exception:
+            detail = resp.text[:200]
+        return {"ok": False, "message": f"HTTP {resp.status_code}: {detail}"}
+    except httpx.RequestError as e:
+        return {"ok": False, "message": f"Could not reach Fata Morgana: {e}"}
 
 
 def _build_result(town_id: int, js_data: dict) -> dict:
