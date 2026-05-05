@@ -83,7 +83,7 @@ install-discord-mcp: ## Install mcp-discord Node package (optional — only need
 
 discord-monitor: ## Monitor Discord #generale and reply to bot mentions (loops every 5 min, Haiku)
 	claude \
-		--model claude-haiku-4-5-20251001 \
+		--model sonnet \
 		$(foreach f,$(TIPS_FILES),--append-system-prompt-file $(f)) \
 		$(foreach f,$(PERSONAL_FILES),--append-system-prompt-file $(f)) \
 		--append-system-prompt-file personas/town-elder.md \
