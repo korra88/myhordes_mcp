@@ -62,14 +62,18 @@ def _resolve_town_id(town_id: int = 0) -> int | str:
 async def get_bank_inventory(day: int = 0, town_id: int = 0, detail: str = "summary") -> str:
     """
     Fetches the current bank inventory of the MyHordes town.
-    Default view is a strategic summary grouped by priority (water, food by AP,
-    drugs, defense items, key resources, weapons). Use detail='full' for the
-    complete item list grouped by raw category.
+    The default 'summary' is the right choice for almost every question —
+    "do we have water/food/weapons?", "what's in the bank?", build planning.
+    It groups items by strategic priority (water, food by AP, drugs, defense
+    items, key resources, weapons) with totals per group.
+    Use detail='full' ONLY when the user explicitly asks for the complete
+    raw item list — it is very long and rarely needed.
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
-        detail: 'summary' (default) for strategic overview, 'full' for every item.
+        detail: 'summary' (default, almost always correct) or 'full'
+                (complete item list — only on explicit user request).
     """
     tid = _resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -115,20 +119,24 @@ async def refresh_fata_data(token: str = "") -> str:
 
 
 @mcp.tool()
-async def get_town_overview(day: int = 0, town_id: int = 0, detail: str = "full") -> str:
+async def get_town_overview(day: int = 0, town_id: int = 0, detail: str = "compact") -> str:
     """
-    Fetches a complete overview of the town from Fata Morgana (community spy service).
-    Returns: town name/day, gate status, defense breakdown, attack estimation,
-    water supply, consumables, and citizen positions.
-    Use this as the first tool when the user asks about general town status.
+    One-call town status snapshot: day, gate, defense total, attack estimate,
+    water supply, citizen positions, deaths count, bank size.
+    Use this single tool for "how is the town", "status", "overview" questions —
+    the default 'compact' answer is complete for those. Do NOT also call
+    get_bank_inventory, get_defense_status or get_citizen_positions unless the
+    user asks specifically about bank contents, defense breakdown or deaths.
     Data is crowd-sourced by players and may lag behind real-time game state.
 
     Args:
         day: Specific day number to inspect (e.g. 5 for day 5). Use 0 or omit for
              the current/latest day. Useful for comparing town progress over time.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
-        detail: 'full' (default) includes bank inventory and deaths. 'compact' omits
-                both — use when bank is fetched separately via get_bank_inventory.
+        detail: 'compact' (default, almost always correct) — condensed citizen
+                roster, deaths count and bank size only.
+                'full' — every citizen on its own line plus the complete bank
+                item list and death log; only on explicit user request.
     """
     tid = _resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -310,8 +318,13 @@ async def get_zone_details(
     Use this when the user asks about ruins, what items are on the ground outside,
     or what's available at specific map coordinates.
 
+    Without coordinates: returns only zones that have a ruin or ground items
+    (empty zones are omitted, count noted).
     When x1/y1/x2/y2 are provided, restricts output to the bounding box between
     those two coordinates, sorted by AP cost (Manhattan distance from town).
+    Zones with nothing to report (no ruin, no items, no threat) are collapsed
+    into one-line coordinate lists — the output stays compact for large areas,
+    so prefer one call with a generous box over many small calls.
     Use this for expedition planning: "what's between [2|3] and [5|6] within 8 AP?"
 
     Args:

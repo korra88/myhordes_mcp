@@ -15,6 +15,8 @@ Call in parallel:
 - `get_bank_inventory(detail='summary')` → water count, defense items, key resources
 - `get_buildings(mode='available', include_resources=True)` → unbuilt buildings with AP/def/resources
 
+These three calls with these exact parameters are all the live data this skill needs — do not call `get_town_overview`, `get_bank_inventory(detail='full')`, or any other `get_*` tool.
+
 ## Step 3 — Load phase knowledge
 
 Determine current day N from `get_defense_status`. Load phase file(s) via `search_knowledge(section="buildings")`:

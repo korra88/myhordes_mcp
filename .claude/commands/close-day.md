@@ -21,7 +21,7 @@ Finalize previous day's log using current morning MCP snapshot (post-attack stat
 Call in parallel (once — reuse across all backfill days):
 - `get_citizen_positions` — alive count, inside/outside, any dead citizens.
 - `get_defense_status` — current defense + tonight's estimate (Day N's).
-- `get_bank_inventory` — current bank state.
+- `get_bank_inventory(detail='summary')` — current bank state. Never `detail='full'`.
 
 Note: for backfill, today's snapshot is authoritative only for the most recent night. Earlier nights use the data available in the day files themselves (last citizen list logged, last defense snapshot).
 

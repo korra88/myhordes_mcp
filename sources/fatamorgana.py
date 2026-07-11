@@ -749,14 +749,16 @@ def _zone_freshness(zone: dict, current_day: int | None) -> str:
         tag += " [STALE]"
     return tag
 
-def format_town_overview(data: dict, season_points: int | None = None, detail: str = "full") -> str:
+def format_town_overview(data: dict, season_points: int | None = None, detail: str = "compact") -> str:
     """Format a complete town overview.
 
     Args:
         data: Fata Morgana town data dict.
         season_points: Optional season point total from Gest'Hordes, shown in header.
-        detail: 'full' (default) includes bank and deaths. 'compact' omits both —
-                useful for cron/delta checks where bank is fetched separately.
+        detail: 'compact' (default) — outside citizens one per line, inside
+                citizens as one comma-joined roster, deaths as a count line,
+                bank as a size line. 'full' — every citizen on its own line
+                plus the complete bank item list and death log.
     """
     if data.get("error"):
         return f"Error fetching town data: {data['error']}"
@@ -808,24 +810,50 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
     ]
     # Citizen positions are auto-synced unless town is in chaos/devastated mode
     show_citizen_stale = meta.get("chaos") or meta.get("devastated")
+
+    if detail == "compact":
+        # Outside citizens keep individual lines (coordinates matter);
+        # inside citizens collapse to one comma-joined roster line.
+        for c in citizens:
+            if c["inside_town"]:
+                continue
+            shaman = " [Shaman]" if c["is_shaman"] else ""
+            stale = _staleness_tag(c.get("last_update_day"), current_day) if show_citizen_stale else ""
+            lines.append(f"  {c['name']} ({c['job']}{shaman}) — {c['coords']}{stale}")
+        inside_c = [c for c in citizens if c["inside_town"]]
+        if inside_c:
+            roster = ", ".join(
+                c["name"] + (" [Shaman]" if c["is_shaman"] else "")
+                for c in inside_c
+            )
+            lines.append(f"  In town: {roster}")
+        lines.append("")
+        if deaths:
+            d = deaths[0]
+            lines.append(
+                f"## Deaths: {len(deaths)} total — most recent Day {d['day']}: "
+                f"{d['name']} ({d['cause']}). Full list: get_citizen_positions."
+            )
+        lines.append(f"## Bank: {len(bank)} item types — contents: get_bank_inventory.")
+        return "\n".join(lines)
+
     for c in citizens:
         loc = "IN TOWN" if c["inside_town"] else c["coords"]
         shaman = " [Shaman]" if c["is_shaman"] else ""
         stale = _staleness_tag(c.get("last_update_day"), current_day) if show_citizen_stale else ""
         lines.append(f"  {c['name']} ({c['job']}{shaman}) — {loc}{stale}")
 
-    if detail != "compact":
-        if deaths:
-            lines.append("")
-            lines.append(f"## Deaths ({len(deaths)})")
-            for d in deaths:
-                lines.append(f"  Day {d['day']}: {d['name']} — {d['cause']} (last at {d['last_coords']})")
-
+    if deaths:
         lines.append("")
-        lines.append(f"## Bank ({len(bank)} items)")
-        for item in bank:
-            broken = " [BROKEN]" if item["broken"] else ""
-            lines.append(f"  {item['name']}: {item['count']}{broken}")
+        lines.append(f"## Deaths ({len(deaths)})")
+        for d in deaths:
+            lines.append(f"  Day {d['day']}: {d['name']} — {d['cause']} (last at {d['last_coords']})")
+
+    lines.append("")
+    lines.append(f"## Bank ({len(bank)} items)")
+    for item in bank:
+        broken = " [BROKEN]" if item["broken"] else ""
+        lines.append(f"  {item['name']}: {item['count']}{broken}")
 
     return "\n".join(lines)
 
@@ -1478,10 +1506,12 @@ def format_zones(data: dict) -> str:
     # Separate ruins from regular zones
     ruin_zones = [z for z in zones if z.get("ruin")]
     item_zones = [z for z in zones if z.get("items") and not z.get("ruin")]
+    empty_count = len(zones) - len(ruin_zones) - len(item_zones)
 
     lines = [
         f"## Zone Map — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
-        f"{len(zones)} zones explored, {len(ruin_zones)} ruins found",
+        f"{len(zones)} zones explored, {len(ruin_zones)} ruins found"
+        + (f" ({empty_count} zones with no ruin or ground items omitted)" if empty_count else ""),
         "",
     ]
 
@@ -1616,16 +1646,62 @@ def format_zone_path(
             entry.append(f"    Items: {item_list}")
         return entry
 
+    def _split_empty(entries: list) -> tuple[list, dict]:
+        """Partition entries into (detailed, empty_groups).
+
+        Zones with a ruin or ground items keep a full line each. Zones with
+        nothing on the ground are grouped by (threat, freshness day, dried)
+        so identical zones share one line — no information is dropped except
+        the name of the player who scouted them.
+        """
+        detailed, groups = [], {}
+        for ap, z, rx, ry in entries:
+            if z.get("ruin") or z.get("items"):
+                detailed.append((ap, z, rx, ry))
+                continue
+            threat = _zone_threat(z, current_day, spread_map=spread_map, coords=(rx, ry))
+            key = (threat, z.get("updated_day"), bool(z.get("dried")), z.get("zombies", -1) < 0)
+            groups.setdefault(key, []).append((ap, z))
+        return detailed, groups
+
+    def _compact_lines(groups: dict) -> list[str]:
+        """One line per (threat, day, dried) group of empty zones."""
+        if not groups:
+            return []
+        total = sum(len(v) for v in groups.values())
+        out = [f"  Nothing on ground ({total} zones, grouped by threat/freshness):"]
+        # Threatened groups first (most dangerous info up top), then clear/no-data
+        def _order(key):
+            threat, day, dried, noscout = key
+            return (threat == "", noscout, threat, -(day if day is not None else -1))
+        for key in sorted(groups, key=_order):
+            threat, day, dried, noscout = key
+            desc = threat.lstrip(", ") or ("never scouted" if noscout else "clear")
+            if dried:
+                desc += ", dried"
+            when = ""
+            if day is not None:
+                stale = " STALE" if (isinstance(current_day, int) and current_day - day >= 1) else ""
+                when = f" (day {day}{stale})"
+            cells = sorted(groups[key], key=lambda t: (t[0], t[1]["coords"]))
+            coords = ", ".join(f"{z['coords']} {ap}AP" for ap, z in cells)
+            out.append(f"    {desc}{when}: {coords}")
+        return out
+
     if in_budget:
+        detailed, empty_groups = _split_empty(in_budget)
         lines.append(f"### Zones in range ({len(in_budget)})")
-        for ap, z, rx, ry in in_budget:
+        for ap, z, rx, ry in detailed:
             lines.extend(_render_zone(ap, z, rx, ry))
+        lines.extend(_compact_lines(empty_groups))
         lines.append("")
 
     if over_budget:
+        detailed, empty_groups = _split_empty(over_budget)
         lines.append(f"### Beyond AP budget ({len(over_budget)})")
-        for ap, z, rx, ry in over_budget:
+        for ap, z, rx, ry in detailed:
             lines.extend(_render_zone(ap, z, rx, ry, budget_exceeded=True))
+        lines.extend(_compact_lines(empty_groups))
 
     return "\n".join(lines)
 

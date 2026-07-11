@@ -16,7 +16,7 @@ Seed baseline (if needed) and run a town snapshot: movements, AP spend, bank cha
 
 ## Step 2 — Seed baseline (first run only)
 
-If `_baseline.md` missing: call `get_town_overview` + `get_buildings` (Observation Platform level). Create:
+If `_baseline.md` missing: call `get_town_overview(detail='compact')` + `get_buildings(mode='history')` (Observation Platform level shows as `[Lv.N]` in the built list). Create:
 
 ```markdown
 # Cron baseline — {folder}
@@ -86,6 +86,8 @@ Compare baseline day to current game day.
 Active log: `towns/{folder}/day-{NN}.md`. If missing, create with `# Day N — {date}` header and add row to `daily-log.md` (outcome TBD).
 
 ## Step 5 — Movements
+
+Compact overview format: outside citizens are listed one per line with coordinates; inside citizens appear on a single `In town: Name, Name, …` roster line. A citizen absent from the outside lines but present in the roster is IN TOWN.
 
 Compare current citizen list to baseline:
 - Returned: was in Outside table, now IN TOWN.

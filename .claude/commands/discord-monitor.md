@@ -28,7 +28,10 @@ For each mention:
 2. Look up answer:
    - Game items, buildings, stats, statuses → `search_wiki(query=...)`
    - Strategy, construction phases → `search_knowledge(query=...)`
-   - Live town data → appropriate `get_*` tool
+   - Live town data → appropriate `get_*` tool. Keep the condensed defaults
+     (`get_town_overview` → compact, `get_bank_inventory` → summary); pass
+     `detail='full'` only if the asker explicitly wants the complete item list.
+     One tool call usually answers the question — don't chain overview + bank + defense.
    - "what to build today", "build plan", "construction queue" → use Skill tool with `skill='build-plan'`
    - "building report", "construction report", "AP spent", "build history" → use Skill tool with `skill='building-report'`
 3. Compose reply: tag asker with `<@{author_id}>`, lead with direct answer. Stay in the defined Persona character.

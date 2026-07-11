@@ -33,6 +33,10 @@ Documented in `docs/implementation-notes.md`. Consult before changing data sourc
 - Each tool maps to one clear player question.
 - Format tool output as human-readable text for LLM, not raw JSON.
 - Batch API fields via SURLL to minimize calls (rate limits apply).
+- **Condensed by default.** Tool defaults return condensed views (overview→compact,
+  bank→summary, buildings→summary); full detail is opt-in via explicit args, and
+  docstrings must tell the model when NOT to fetch more. Server is also used by
+  small models (Sonnet, local gemma) — keep defaults small and steering explicit.
 
 ## Skill triggers — natural language
 
