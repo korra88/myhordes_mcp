@@ -26,7 +26,7 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 
 # ─── Main targets ─────────────────────────────────────────────
 
-.PHONY: kb fetch process clean-kb clean-all help desert-veteran gemini-veteran use-persona
+.PHONY: kb fetch process clean-kb clean-all help desert-veteran gemini-veteran use-persona hermes-skills hermes-gateway
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -80,6 +80,26 @@ clean-all: clean-kb ## Remove everything (raw wiki + processed)
 
 install-discord-mcp: ## Install mcp-discord Node package (optional — only needed for Discord channel/role management via MCP)
 	$(HOME)/.nvm/versions/node/v22.22.0/bin/node $(HOME)/.nvm/versions/node/v22.22.0/lib/node_modules/npm/bin/npm-cli.js install
+
+
+# ─── Hermes gateway ───────────────────────────────────────────
+# HERMES_SKILLS_LINK: where Hermes discovers skills. Symlinking the repo's
+# hermes-skills/ dir here means new skills appear with no re-install, and the
+# SKILL.md stubs read the .claude/commands/*.md source of truth each run — so
+# improving a command file needs no skill edit.
+HERMES_HOME ?= $(HOME)/.hermes
+HERMES_SKILLS_LINK := $(HERMES_HOME)/skills/myhordes
+
+hermes-skills: ## Symlink repo skills into Hermes (~/.hermes/skills/myhordes)
+	@test -d $(HERMES_HOME)/skills || (echo "ERROR: $(HERMES_HOME)/skills not found — is Hermes installed?"; exit 1)
+	rm -f $(HERMES_SKILLS_LINK)
+	ln -s $(shell pwd)/hermes-skills $(HERMES_SKILLS_LINK)
+	@echo "Linked $(HERMES_SKILLS_LINK) -> $(shell pwd)/hermes-skills"
+	@echo "Skills now visible to Hermes:"
+	@ls hermes-skills/
+
+hermes-gateway: hermes-skills ## Run the Hermes Discord gateway from this repo (cwd loads AGENTS.md)
+	cd $(shell pwd) && hermes gateway run
 
 discord-monitor: ## Monitor Discord #generale and reply to bot mentions (loops every 5 min, Haiku)
 	claude \
