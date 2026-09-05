@@ -1,0 +1,1 @@
+../../tips/strategy-quirks.md

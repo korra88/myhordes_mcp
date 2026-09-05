@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
@@ -487,45 +488,80 @@ def list_wiki_categories() -> str:
 @mcp.tool()
 def search_knowledge(query: str, section: str = "") -> str:
     """
-    Search the advisor's curated knowledge base for strategy, building guides,
-    and tactical notes not found in the wiki. Content lives in knowledge/ dir.
+    Search the advisor's curated knowledge base for strategy, mechanics, building
+    guides and tactical notes not found in the wiki. Content lives in knowledge/.
 
-    Use for: building priority by game phase, opti-town tactics, zoo strategy,
-    expedition planning, post-mortem analysis.
+    Use for: expedition planning (AP/EP, thirst step counter, consumable order),
+    building priority by game phase, opti-town tactics, wonders, player meta.
 
     Args:
-        query: Search terms (e.g. "day 5 buildings", "water defense", "wonders")
+        query: Search terms (e.g. "thirst step counter", "day 5 buildings",
+            "restore to max", "exploration points").
         section: Optional subfolder filter. Valid sections:
-            "buildings" — AP costs, defense values, build priority by game phase, wonders.
+            "buildings" — AP costs, defense values, build priority by phase, wonders.
+            "tactics"   — expedition planning, game mechanics, strategy, meta.
             Leave empty to search all sections.
     """
-    import os
     from pathlib import Path
 
-    kb_dir = Path(__file__).parent / "knowledge"
-    if section:
-        kb_dir = kb_dir / section
+    root = Path(__file__).parent / "knowledge"
+    kb_dir = root / section if section else root
 
     if not kb_dir.exists():
-        return f"Knowledge section '{section}' not found." if section else "Knowledge base not found."
+        avail = ", ".join(sorted(d.name for d in root.iterdir() if d.is_dir()))
+        return f"Knowledge section '{section}' not found. Available: {avail}."
 
-    results = []
-    query_lower = query.lower()
+    # Score per term, not by exact-substring of the whole query: a query like
+    # "thirst step counter" matched nothing before, even though the file explains
+    # exactly that -- the phrase simply never appears verbatim. Terms are matched
+    # on a word-prefix boundary so "counter"/"counters" and "zone"/"zones" hit.
+    terms = [t for t in re.split(r"[^\w]+", query.lower()) if len(t) > 2]
+    if not terms:
+        return "Query too short — give at least one word of 3+ characters."
 
-    for md_file in sorted(kb_dir.rglob("*.md")):
-        content = md_file.read_text(encoding="utf-8")
-        if query_lower in content.lower():
-            rel = md_file.relative_to(Path(__file__).parent / "knowledge")
-            results.append((str(rel), content))
+    scored = []
+    for md in sorted(kb_dir.rglob("*.md")):
+        text = md.read_text(encoding="utf-8")
+        low = text.lower()
+        hits = {t: len(re.findall(r"\b" + re.escape(t), low)) for t in terms}
+        matched = [t for t, n in hits.items() if n]
+        if not matched:
+            continue
+        # rank by how many distinct terms matched first, then total occurrences
+        scored.append((len(matched), sum(hits.values()), md, text, matched))
 
-    if not results:
-        return f"No knowledge entries found for '{query}'" + (f" in section '{section}'" if section else "") + "."
+    if not scored:
+        return (f"No knowledge entries found for '{query}'"
+                + (f" in section '{section}'" if section else "")
+                + f". Terms tried: {', '.join(terms)}.")
 
-    parts = [f"Found {len(results)} file(s) matching '{query}':\n"]
-    for name, content in results:
-        parts.append(f"## {name}\n")
-        parts.append(content)
+    scored.sort(key=lambda x: (-x[0], -x[1]))
+
+    # Returning whole files blows the context once tips/ is indexed (60 KB+), so
+    # send the matching sections instead, and only fall back to the head of the
+    # file when no heading contains a term.
+    parts = [f"Found {len(scored)} file(s) for '{query}':\n"]
+    for nterms, total, md, text, matched in scored[:4]:
+        rel = md.relative_to(root)
+        parts.append(f"## {rel}  (matched: {', '.join(matched)})\n")
+        blocks, cur = [], []
+        for line in text.splitlines():
+            if line.startswith("#") and cur:
+                blocks.append(cur)
+                cur = [line]
+            else:
+                cur.append(line)
+        if cur:
+            blocks.append(cur)
+        keep = [b for b in blocks
+                if any(re.search(r"\b" + re.escape(t), "\n".join(b).lower())
+                       for t in terms)]
+        chosen = keep[:6] if keep else blocks[:2]
+        body = "\n\n".join("\n".join(b).strip() for b in chosen)
+        parts.append(body[:6000] + ("\n… (section truncated)" if len(body) > 6000 else ""))
         parts.append("\n---\n")
+    if len(scored) > 4:
+        parts.append(f"({len(scored) - 4} more file(s) matched; narrow the query.)")
     return "\n".join(parts)
 
 

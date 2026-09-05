@@ -1,0 +1,1 @@
+../../tips/expedition-planning.md

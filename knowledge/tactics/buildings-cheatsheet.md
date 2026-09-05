@@ -1,0 +1,1 @@
+../../tips/buildings-cheatsheet.md

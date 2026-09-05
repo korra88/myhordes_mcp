@@ -1,0 +1,1 @@
+../../tips/mcp-guidelines.md

@@ -1,0 +1,1 @@
+../../tips/player-behavior.md
