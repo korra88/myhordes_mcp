@@ -50,6 +50,7 @@ When user says any of these, invoke the matching skill:
 | `/inspect-town` | "track town", "snapshot town", "take a town snapshot", "seed baseline", "update town state" |
 | `/track-town` | "set up town cron", "schedule town tracking", "auto track town" |
 | `/building-report` | "building report", "construction report", "throughput report", "how much AP we spent", "build history" |
+| `/expedition-report` | "expedition list", "check the expedition list", "who is outside", "who is not on the list", "expedition roster", "count the scrappers" |
 
 ## Developer reference
 
