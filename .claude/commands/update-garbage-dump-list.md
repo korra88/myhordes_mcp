@@ -53,9 +53,13 @@ composio execute GOOGLESHEETS_BATCH_GET -d '{"spreadsheet_id":"<ID>","ranges":["
 Row 5 is the header: `A` Item group, `B` Item, `C` Defence, `D` **Towns Bank**,
 `E` Left to dump, `F` Dump Quantity, `G` Sum.
 
-Item rows start at 6 and run to the last non-empty row in column B — **do not assume
-109**. Layouts drift between seasons and coalitions. Derive the last row from the
-response and use it for every range afterwards.
+Item rows start at 6 and run to the last non-empty row in column B — **do not assume a
+fixed end**. Rows get added and deleted, and layouts drift between seasons and
+coalitions. Derive the last row from the response and use it for every range afterwards.
+
+`docs/garbage-dump-sheet/` holds the full structure — config cells, every formula, the
+103-row item list and the `List 11` lookup — for rebuilding the sheet from scratch.
+Consult it if the layout you find does not match what this skill expects.
 
 Groups seen so far: Resources, Weapons, Foods, Animals, Defences.
 
