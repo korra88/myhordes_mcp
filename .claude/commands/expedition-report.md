@@ -36,7 +36,13 @@ and re-check — a name was misread or a citizen walked home.
 Report in this order:
 1. **Unaccounted** — outside, distance ≥2, on no list. Table: name, class, position, distance. This is the headline; it is what the user asked for.
 2. **Scrapper count** — one total, plus their tiles.
-3. **Ghosts** — names on the list not found outside (returned to town, or died).
+3. **Ghosts** — names on the list not found outside (in town, or died).
+
+**Never remove a name from the list.** A name on the list is a reserved slot: that
+citizen may have already run their trip and walked home, or may be leaving later in
+the day. A citizen found inside town keeps their slot — annotate it (e.g.
+`[i](in town)[/i]`) and say so in the summary. Only death removes a name, and then
+say so explicitly.
 
 ## Step 4 — Verify class tags
 
@@ -79,14 +85,18 @@ sitting on three tiles is not a convoy, and the organiser needs to know.
 
 Reproduce the user's own BBCode structure verbatim: same section order, same
 `{hr}` separators, same `[b][big]...[/big][/b]` headers, same numbering, same
-`@name:userid` handles. This gets pasted straight into the forum — a reformatted
-list is a useless list.
+handles. This gets pasted straight into the forum — a reformatted list is a
+useless list.
 
 Preserve struck-through cancelled sections (`[s]...[/s]`) and their italic notes.
 
 Place newly found citizens in existing empty `???` slots before adding new ones.
-When a user ID is unknown, write `@name:?????` and say in the summary that the
-organiser must fill it in — never invent an ID.
+
+Write every name the way it already appears on the user's list. If an entry carries
+an `@name:userid` handle, keep that handle verbatim. For a name you are adding, or
+one whose user ID you do not have, write the **bare name** — `PlayerName`, not
+`@PlayerName:?????`. Never invent an ID and never emit a `?????` placeholder: the forum
+does not parse it and the organiser has to hand-edit every one.
 
 Close the list with the scrapper total:
 
