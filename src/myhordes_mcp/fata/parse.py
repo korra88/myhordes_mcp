@@ -407,11 +407,26 @@ def _parse_map(js_data: dict) -> list[dict]:
                     "dried": int(bld.get("dried", 0)),
                 }
 
+            # Zombie fields, confirmed against in-game values (town 8212 [5|-4],
+            # day 1 end: z=6, zm=8, danger=3) and getdata's details.z == z:
+            #   z      — current count at the last zone update (after kills)
+            #   zm     — day's maximum, before kills; -1 (or missing) = unknown
+            #   danger — 0 none, 1 = 1-2, 2 = 3-5, 3 = 6+
+            # z defaults to 0 on zones nobody reported, so it only counts when
+            # the zone has an update. z=0 with danger>0 is ambiguous (3488
+            # archived cases): treat as unknown and fall back to danger.
+            z = int(zone.get("z") or 0)
+            zm = int(zone["zm"]) if zone.get("zm") not in (None, "") else -1
+            danger = int(zone.get("danger", 0))
+            observed = zone.get("updatedOnDay") is not None or zm >= 0
+            if not observed or (z == 0 and danger > 0):
+                z = -1
+
             entry = {
                 "coords": f"[{rx}|{ry}]",
-                "zombies": int(zone.get("zm", 0)),
-                "zombies_max": int(zone.get("z", 0)),
-                "danger": int(zone.get("danger", 0)),
+                "zombies": z,
+                "zombies_max": zm if zm >= 0 else None,
+                "danger": danger,
                 "dried": int(zone.get("dried", 0)),
                 "tag": zone.get("tag"),
                 "items": zone_items,
