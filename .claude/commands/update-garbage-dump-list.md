@@ -85,11 +85,17 @@ items, and they dump for full value.
 
 **Name aliases** confirmed so far:
 
-| Sheet name | Bank name |
+| Sheet name | Bank name(s) — sum all of them into the one row |
 |---|---|
-| `Water Bomb` | `Plastic Bag` |
-| `Exploding Water Bomb` | `Plastic Bag and Semtex` |
+| `Water Bomb` | `Water Bomb` + `Plastic Bag` |
+| `Exploding Water Bomb` | `Exploding Water Bomb` + `Plastic Bag and Semtex` |
 | `Unshaped Concre` (truncated in sheet) | `Unshaped Concrete Blocks` |
+
+A bank may list the filled and unfilled forms as separate lines (`Water Bomb: 135`
+*and* `Plastic Bag: 54`). **Sum them anyway.** An unfilled bag is not dumpable in the
+wiki data, but the town fills bags for free at the Faucet, so every Plastic Bag in the
+bank is a Water Bomb in practice. Same for `Plastic Bag and Semtex`. Do not "correct"
+this by mapping 1:1 — the sheet row is the dumpable total, not the current item name.
 
 **Emptied weapons.** The sheet has rows only for loaded variants; the bank reports
 spent ones (`Water Pistol (empty)`, `Battery Launcher 1-ITF (empty)`,
@@ -99,9 +105,8 @@ zeroing it. Ask first if the sheet's layout differs from the one described here.
 
 Do **not** map `(incomplete)` items — those are Misc components, not weapons.
 
-**Duplicate rows.** `Fat Serpent` appears under both Weapons and Animals. Fill the
-**Animals** row and leave the Weapons row at 0, or the defence total double-counts.
-If you find any other item on two rows, ask which one owns it.
+**Duplicate rows.** If you find the same item on two rows, ask which one owns it —
+filling both double-counts the defence total.
 
 **Unmapped bank items.** Compute the list of bank items with quantity > 0 that match
 no sheet row. Most are correctly excluded (water, drugs, blueprints, box items), but
@@ -188,6 +193,8 @@ and other tabs reference them.
    (`sum(D6:D)`, `sum(G6:G)`); a hardcoded end row misses anything added below it.
 3. Duplicate item rows across groups (see Step 4). Zeroing one is a stopgap; the row
    should be deleted, because the two groups carry different tempDP rates at lvl2.
+   (The historical `Fat Serpent` Weapons/Animals duplicate was deleted by the owner
+   on 2026-09-14 — do not expect it.)
 4. No column models dump AP. Each citizen gets one free action per day covering 1-20
    items **of a single type**; further actions cost 2 AP, or 1 AP with Organized Dump.
    A planned quantity of 500 in column F is 25 actions. Suggest `=CEILING(F/20)`.
