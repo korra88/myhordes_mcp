@@ -3,7 +3,7 @@ Recommend today's construction queue based on live town state, bank inventory, a
 ## Step 1 — Load context
 
 Read in parallel:
-- `tips/buildings-cheatsheet.md` — efficiency reference, flags, resource abbreviations
+- `knowledge/tactics/buildings-cheatsheet.md` — efficiency reference, flags, resource abbreviations
 - `towns/{folder}/_baseline.md` — current resource snapshot
 
 Resolve town folder: list `towns/` subdirs, match current town from `.env` or `get_town_overview`.
