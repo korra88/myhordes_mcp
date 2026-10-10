@@ -52,7 +52,6 @@ When user says any of these, invoke the matching skill:
 | `/close-day` | "close the day", "finalize day", "close day logs", "wrap up yesterday", "night outcome" |
 | `/close-day backfill` | "backfill days", "close all days", "close missing logs" |
 | `/inspect-town` | "track town", "snapshot town", "take a town snapshot", "seed baseline", "update town state" |
-| `/track-town` | "set up town cron", "schedule town tracking", "auto track town" |
 | `/building-report` | "building report", "construction report", "throughput report", "how much AP we spent", "build history" |
 | `/expedition-report` | "expedition list", "check the expedition list", "who is outside", "who is not on the list", "expedition roster", "count the scrappers" |
 | `/update-garbage-dump-list` | "update the dump list", "update garbage dump", "refresh the dump sheet", "update the bank items in the spreadsheet", "sync bank to the dump calculator" |

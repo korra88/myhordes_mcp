@@ -33,7 +33,7 @@ allowed_tools = [
   "mcp__myhordes__search_wiki",
   "mcp__myhordes__list_wiki_categories",
   "mcp__myhordes__search_knowledge",
-  # inspect-town, close-day and track-town write the town logs. Writes stay in towns/.
+  # inspect-town and close-day write the town logs. Writes stay in towns/.
   "Write(./towns/**)",
   "Edit(./towns/**)",
 ]

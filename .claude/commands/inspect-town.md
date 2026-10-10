@@ -1,4 +1,4 @@
-Seed baseline (if needed) and run a town snapshot: movements, AP spend, bank changes, write to day log. For recurring cron, use `track-town`.
+Seed baseline (if needed) and run a town snapshot: movements, AP spend, bank changes, write to day log.
 
 ## Log structure
 
@@ -96,7 +96,7 @@ Compare current citizen list to baseline:
 
 ## Step 6 — AP spent tracking
 
-Read platform level from baseline `## Platform` (default Level 3 = 2 AP return discount; Level 4 = 3 AP return discount).
+Read platform level from baseline `## Platform` (default Level 3 = 2 AP return discount; Level 4 = 3 AP return discount — see `knowledge/tactics/game-mechanics.md`, "Return to town").
 
 **Outside → new outside position:**
 - delta = Manhattan(old, new)
