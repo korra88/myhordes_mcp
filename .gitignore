@@ -25,14 +25,5 @@ MHWiki-*.xml
 # Local-only folders
 agent-notes/
 
-# Active persona symlink (local state — set via make use-persona)
-AGENT-PERSONALITY.md
-
-# Gemini
-.gemini_history
-
-# Node modules
-node_modules/
-
-# Discord monitor state & other artifacts
-.discord-monitor*
+# Active persona (local — copy from persona.example.md)
+persona.md

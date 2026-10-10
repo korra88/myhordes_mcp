@@ -1,6 +1,6 @@
 # Personal Notes Index
 
-Private, local-only notes (not tracked in git). The Desert Veteran reads these at session start.
+Private, local-only notes (not tracked in git). The advisor reads these at session start.
 This file is the entry point — keep it under 100 lines.
 
 ## Notes files

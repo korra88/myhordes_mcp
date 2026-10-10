@@ -6,7 +6,7 @@ Design decisions made during development, with rationale. Revisit these if requi
 
 ## Agent Memory: Local Files via Claude Code (Option A)
 
-**Decision:** The Desert Veteran agent maintains town memory as local markdown files in `towns/`, written by Claude Code's file tools during a session.
+**Decision:** The advisor agent maintains town memory as local markdown files in `towns/`, written by Claude Code's file tools during a session.
 
 **Alternatives considered:**
 - **Option B — MCP tools (`read_town_log` / `append_town_log`):** Would expose memory via the MCP protocol, making it client-agnostic. Rejected for now: adds code complexity, and bends the "read-only MCP" mental model even though local file I/O is not a game action.
@@ -16,7 +16,7 @@ Design decisions made during development, with rationale. Revisit these if requi
 - No new code required — Claude Code already has Read/Write tools
 - Memory files are human-readable and directly editable by the user
 - The read-only constraint applies to game actions only; local filesystem writes are fine
-- Files live alongside `tips/` in the repo, same mental model
+- Files live alongside `knowledge/` in the repo, same mental model
 
 **Revisit if:**
 - A non-Claude Code client needs access to town memory (→ upgrade to Option B)

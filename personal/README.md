@@ -8,5 +8,5 @@ Your private notes about known players — friends, allies, people to watch out 
 
 - `friends.md` — player roster with notes (allies, neutral, do-not-trust)
 
-The Desert Veteran reads this at session start to recognize your friends in the active town roster.
+The advisor reads this at session start to recognize your friends in the active town roster.
 Edit freely. The agent will never overwrite your notes unless you explicitly ask it to.

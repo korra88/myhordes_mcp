@@ -42,7 +42,7 @@ def search(query: str, section: str = "") -> str:
 
     scored.sort(key=lambda x: (-x[0], -x[1]))
 
-    # Returning whole files blows the context once tips/ is indexed (60 KB+), so
+    # Returning whole files blows the context on knowledge/tactics/ (60 KB+), so
     # send the matching sections instead, and only fall back to the head of the
     # file when no heading contains a term.
     parts = [f"Found {len(scored)} file(s) for '{query}':\n"]

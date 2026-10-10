@@ -16,7 +16,7 @@ max_turns_per_hour = 60
 [claude]
 cwd = "."
 model = "sonnet"
-append_system_prompt_files = ["personas/gazetteer.md", "personas/discord.md"]
+append_system_prompt_files = ["persona.md", "prompts/discord.md"]
 mcp_config = ["discord-listener.mcp.json"]
 # Read-only game and wiki tools, by name. Never mcp__myhordes__*.
 allowed_tools = [

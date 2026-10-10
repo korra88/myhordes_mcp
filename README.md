@@ -15,8 +15,8 @@ myhordes_mcp/
 │   ├── gesthordes/          # Gest'Hordes attack/defence statistics
 │   ├── myhordes/            # Official MyHordes API (disabled)
 │   └── knowledgebase/       # Wiki search (wiki/processed/) + curated knowledge/ search
-├── tips/                    # All shared meta-knowledge (loaded as system prompts)
-├── personas/                # Persona files (town-elder.md = default)
+├── persona.example.md       # Example persona — copy to persona.md (gitignored)
+├── prompts/discord.md       # Discord channel context for the listener
 ├── towns/                   # Per-town daily logs and notes
 ├── personal/                # Player-specific private data (gitignored contents)
 ├── kb_build/                # Knowledge base build pipeline
@@ -91,26 +91,20 @@ listener in [`../discord_mcp`](https://github.com/korra88/discord_mcp), configur
 `discord-listener.toml` and `discord-listener.mcp.json`. Start it with `make discord-listen`
 (`make discord-listen-once` for one poll cycle). The bot token lives in `../discord_mcp/.env`.
 
-For full Discord channel/role management via MCP (optional), install the Node package and configure `.mcp.json`:
-```bash
-make install-discord-mcp
-```
-
 > **Note:** The `.env` file is loaded by `python-dotenv` inside `main.py`, so you can either put values in `.env` or in the `"env"` block above. The `"env"` block in `.mcp.json` takes precedence.
 
-### 2. Select and load the agent persona
+### 2. Set up the persona and start the advisor
 
-Personas live in `personas/`. The active persona is a symlink at `AGENT-PERSONALITY.md` (gitignored — local state).
+The advisor's voice comes from `persona.md` (gitignored, yours to edit). Start from the example:
 
 ```bash
-# Select a persona (default: town-elder)
-make use-persona p=town-elder
+cp persona.example.md persona.md
 
-# Start the advisor — loads active persona + all tips/ files as system prompts
-make desert-veteran
+# Start the advisor — loads persona.md + knowledge/tactics/*.md + personal/*.md as system prompts
+make advisor
 ```
 
-This keeps all advisory content out of the conversation context window, leaving more room for actual game data. Add new personas to `personas/` and switch between them with `make use-persona`.
+This keeps all advisory content out of the conversation context window, leaving more room for actual game data. The Discord listener loads the same `persona.md`.
 
 ### 3. Restart Claude Code
 
@@ -191,8 +185,8 @@ make kb
 | `src/myhordes_mcp/myhordes/official_api.py` | *(disabled)* Official API client placeholder |
 | `src/myhordes_mcp/knowledgebase/` | `wiki.py` (indexes `wiki/processed/`), `curated.py` (searches `knowledge/`) |
 | `src/myhordes_mcp/utils/` | `config.py` (.env, town ID, paths), `cache.py` (single-flight TTL cache) |
-| `AGENT-PERSONALITY.md` | Symlink → active persona in `personas/`. Set via `make use-persona p=<name>`. Gitignored. |
-| `personas/` | All persona files. `town-elder.md` = current default. Add new personas here. |
+| `persona.md` | Active persona (gitignored). Copy from `persona.example.md`. Loaded by `make advisor` and the Discord listener. |
+| `prompts/discord.md` | Discord channel context appended by the listener. |
 | `docs/source-map.md` | Navigation guide for game PHP source (`myhordes-docker/myhordes/`) |
 | `docs/external-api-reference.md` | Every JSON v1 endpoint, field, and SURLL syntax |
 | `docs/auth-and-rate-limits.md` | Two-key auth model, rate limit buckets, attack lockout |

@@ -1,5 +1,3 @@
 mcp
 httpx
 python-dotenv
-google-generativeai
-prompt_toolkit
