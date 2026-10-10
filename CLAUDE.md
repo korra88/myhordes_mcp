@@ -12,17 +12,21 @@ Read-only MCP server in Python for **MyHordes** (browser survival game, Eternalt
 
 ## Architecture
 
-- **Entry point:** `main.py` — FastMCP server, runs over stdio.
-- **Data source:** `sources/fatamorgana.py` — scrapes Fata Morgana spy pages via httpx + regex. No auth needed, just `FATAMORGANA_TOWN_ID`.
-- **Planned:** `sources/official_api.py` — official JSON v1 API (needs `userkey` + `appkey`).
+- **Entry point:** `main.py` — FastMCP server, runs over stdio. Tool declarations only; logic lives in `src/myhordes_mcp/`.
+- **Data source:** `src/myhordes_mcp/fata/` — scrapes Fata Morgana spy pages. No auth needed, just `FATAMORGANA_TOWN_ID`.
+  Every Fata request goes through `fata/client.py:fetch_town_data()` (single-flight + TTL cache, `FATA_CACHE_TTL` default 180 s). Never add another HTTP path to Fata.
+- **Secondary:** `src/myhordes_mcp/gesthordes/` — Gest'Hordes attack stats (same cache pattern).
+- **Disabled:** `src/myhordes_mcp/myhordes/official_api.py` — official JSON v1 API (needs `userkey` + `appkey`), not wired as tools.
 - **Game API:** `https://myhordes.eu/api/x/json/{type}`. Full reference: `docs/external-api-reference.md`.
 - **API blocked ~23:59 CET** during nightly attack. Handle `nightly_attack` errors gracefully.
 
 ## Current state
 
-- Live: `get_town_overview`, `get_citizen_positions`, `get_defense_status`, `get_bank_inventory`, `get_buildings`, `get_scout_map`, `search_wiki`, `list_wiki_categories`, `search_knowledge`
-- Planned (blocked on app key): `get_construction_progress`, `get_last_night_report` — stubs commented out in `main.py`
-- Next: `sources/official_api.py` once app key obtained
+- Live (Fata): `get_town_overview`, `get_citizen_positions`, `get_defense_status`, `get_bank_inventory`, `get_buildings`, `get_scout_map`, `get_zone_details`, `find_expedition_path`
+- Live (Gest'Hordes): `get_attack_distribution`, `get_attack_forecast`
+- Live (offline knowledge): `search_wiki`, `list_wiki_categories`, `search_knowledge`
+- Removed: `refresh_fata_data` (wrote to Fata, little value)
+- Official API disabled; planned tools described in `myhordes/official_api.py`
 
 ## Design decisions
 

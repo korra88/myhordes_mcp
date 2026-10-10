@@ -37,10 +37,8 @@ allowed_tools = [
   "Write(./towns/**)",
   "Edit(./towns/**)",
 ]
-# refresh_fata_data writes to Fata Morgana.
-disallowed_tools = ["mcp__myhordes__refresh_fata_data"]
 # personal/ holds private notes on other players; answers are public.
-deny = ["mcp__myhordes__refresh_fata_data", "Read(./personal/**)"]
+deny = ["Read(./personal/**)"]
 # Lifts the baseline deny on writes so the allows above can apply. Acceptable while
 # the owner is the only allowed user; revisit before opening allow_users.
 unsafe_allow = ["Write", "Edit"]

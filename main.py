@@ -1,63 +1,28 @@
-import os
-import re
 import sys
-from dotenv import load_dotenv
+from pathlib import Path
+
 from mcp.server.fastmcp import FastMCP
-import knowledge
-from sources import fatamorgana, gesthordes
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+
+from myhordes_mcp import fata, gesthordes  # noqa: E402
+from myhordes_mcp.knowledgebase import curated, wiki  # noqa: E402
+from myhordes_mcp.utils.config import FATAMORGANA_TOWN_ID, resolve_town_id  # noqa: E402
 
 # IMPORTANT: MyHordes rules prohibit automated/scheduled API polling.
 # All API calls must be triggered by explicit user queries via MCP tools.
 # Never add cron jobs, background refresh, or periodic data fetching.
 # See: docs/game-rules-for-external-apps.md
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Initialize the MCP Server
 mcp = FastMCP("MyHordes Advisor")
 
-# Fetch API credentials from the environment
-# userkey: the player's External ID (identifies whose data to fetch)
-# appkey: the registered app secret (identifies this application)
-MYHORDES_USER_KEY = os.getenv("MYHORDES_USER_KEY")
-MYHORDES_APP_KEY = os.getenv("MYHORDES_APP_KEY")
-
-FATAMORGANA_TOWN_ID = os.getenv("FATAMORGANA_TOWN_ID")
-FATAMORGANA_TOKEN = os.getenv("FATAMORGANA_TOKEN")
-
-if not MYHORDES_USER_KEY:
-    print("Warning: MYHORDES_USER_KEY not found in environment variables.", file=sys.stderr, flush=True)
-if not MYHORDES_APP_KEY:
-    print("Warning: MYHORDES_APP_KEY not found in environment variables.", file=sys.stderr, flush=True)
 if not FATAMORGANA_TOWN_ID:
     print("Warning: FATAMORGANA_TOWN_ID not found in environment variables.", file=sys.stderr, flush=True)
 
 
-def _check_auth() -> str | None:
-    """Return an error message if official API credentials are missing, None if OK."""
-    missing = []
-    if not MYHORDES_USER_KEY:
-        missing.append("MYHORDES_USER_KEY")
-    if not MYHORDES_APP_KEY:
-        missing.append("MYHORDES_APP_KEY")
-    if missing:
-        return f"Authentication Error: {', '.join(missing)} not configured. See .env.example."
-    return None
-
-
-def _resolve_town_id(town_id: int = 0) -> int | str:
-    """Return a valid town ID (int) or an error message (str).
-
-    If town_id is provided and non-zero, use it directly.
-    Otherwise fall back to the FATAMORGANA_TOWN_ID env var.
-    """
-    if town_id:
-        return int(town_id)
-    if FATAMORGANA_TOWN_ID:
-        return int(FATAMORGANA_TOWN_ID)
-    return "Error: No town ID provided and FATAMORGANA_TOWN_ID not configured in .env."
-
+# ---------------------------------------------------------------------------
+# Fata Morgana tools — live town data from community-maintained spy service
+# ---------------------------------------------------------------------------
 
 @mcp.tool()
 async def get_bank_inventory(day: int = 0, town_id: int = 0, detail: str = "summary") -> str:
@@ -76,47 +41,13 @@ async def get_bank_inventory(day: int = 0, town_id: int = 0, detail: str = "summ
         detail: 'summary' (default, almost always correct) or 'full'
                 (complete item list — only on explicit user request).
     """
-    tid = _resolve_town_id(town_id)
+    tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
-    data = await fatamorgana.fetch_town_data(tid, day=day or None)
+    data = await fata.fetch_town_data(tid, day=day or None)
     if detail == "full":
-        return fatamorgana.format_bank(data)
-    return fatamorgana.format_bank_summary(data)
-
-
-# ---------------------------------------------------------------------------
-# Fata Morgana tools — live town data from community-maintained spy service
-# ---------------------------------------------------------------------------
-
-@mcp.tool()
-async def refresh_fata_data(token: str = "") -> str:
-    """
-    Triggers a live data refresh in Fata Morgana by calling the game API on your behalf.
-    Refreshes: bank inventory, building status, citizen positions, zombie attack estimate.
-    After this call, re-fetch any tool (get_bank_inventory, get_buildings, etc.) to see
-    updated data.
-
-    Requires a Fata Morgana auth token — a JWT from fatamorgana.md26.eu encoding your
-    player key and town ID. Get it from browser DevTools (Application → Cookies →
-    fatamorgana.md26.eu → auth_token) while logged in. Store it as FATAMORGANA_TOKEN
-    in .env to avoid passing it each time.
-
-    Can only be called while in-town (game enforces this).
-
-    Args:
-        token: Fata Morgana JWT auth token. Leave empty to use FATAMORGANA_TOKEN from .env.
-    """
-    t = token.strip() or FATAMORGANA_TOKEN
-    if not t:
-        return (
-            "Error: No token provided. Pass token= or set FATAMORGANA_TOKEN in .env.\n"
-            "Get it from browser DevTools: Application → Cookies → fatamorgana.md26.eu → auth_token."
-        )
-    result = await fatamorgana.trigger_update(t)
-    if result["ok"]:
-        return result["message"]
-    return f"Refresh failed: {result['message']}"
+        return fata.format_bank(data)
+    return fata.format_bank_summary(data)
 
 
 @mcp.tool()
@@ -139,16 +70,16 @@ async def get_town_overview(day: int = 0, town_id: int = 0, detail: str = "compa
                 'full' — every citizen on its own line plus the complete bank
                 item list and death log; only on explicit user request.
     """
-    tid = _resolve_town_id(town_id)
+    tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
-    data = await fatamorgana.fetch_town_data(tid, day=day or None)
+    data = await fata.fetch_town_data(tid, day=day or None)
     # Enrich with season points from Gest'Hordes (current day only)
     season_points = None
     if not (day and day != data.get("meta", {}).get("day")):
         gh_data = await gesthordes.fetch_stats(tid)
         season_points = gesthordes.extract_season_points(gh_data)
-    return fatamorgana.format_town_overview(data, season_points=season_points, detail=detail)
+    return fata.format_town_overview(data, season_points=season_points, detail=detail)
 
 
 @mcp.tool()
@@ -162,11 +93,11 @@ async def get_citizen_positions(day: int = 0, town_id: int = 0) -> str:
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
     """
-    tid = _resolve_town_id(town_id)
+    tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
-    data = await fatamorgana.fetch_town_data(tid, day=day or None)
-    return fatamorgana.format_citizens(data)
+    data = await fata.fetch_town_data(tid, day=day or None)
+    return fata.format_citizens(data)
 
 
 @mcp.tool()
@@ -183,16 +114,16 @@ async def get_defense_status(day: int = 0, town_id: int = 0) -> str:
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
     """
-    tid = _resolve_town_id(town_id)
+    tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
-    data = await fatamorgana.fetch_town_data(tid, day=day or None)
+    data = await fata.fetch_town_data(tid, day=day or None)
     # Enrich current-day defense with Gest'Hordes breakdown (watchmen, temps, dead bonus)
     gh_defense = None
     if not (day and day != data.get("meta", {}).get("day")):
         gh_data = await gesthordes.fetch_stats(tid)
         gh_defense = gesthordes.extract_current_defense(gh_data)
-    return fatamorgana.format_defense(data, gh_defense=gh_defense)
+    return fata.format_defense(data, gh_defense=gh_defense)
 
 
 @mcp.tool()
@@ -223,11 +154,11 @@ async def get_buildings(
             mode='available'. Use True for build planning when you need to check bank stock.
             Default False to keep output compact.
     """
-    tid = _resolve_town_id(town_id)
+    tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
-    data = await fatamorgana.fetch_town_data(tid, day=day or None)
-    return fatamorgana.format_buildings(data, mode=mode, include_private=include_private_town_buildings, include_resources=include_resources)
+    data = await fata.fetch_town_data(tid, day=day or None)
+    return fata.format_buildings(data, mode=mode, include_private=include_private_town_buildings, include_resources=include_resources)
 
 
 @mcp.tool()
@@ -246,11 +177,11 @@ async def get_scout_map(
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
     """
-    tid = _resolve_town_id(town_id)
+    tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
-    data = await fatamorgana.fetch_town_data(tid, day=day or None)
-    return fatamorgana.format_scout(data)
+    data = await fata.fetch_town_data(tid, day=day or None)
+    return fata.format_scout(data)
 
 
 @mcp.tool()
@@ -291,11 +222,11 @@ async def find_expedition_path(
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
     """
-    tid = _resolve_town_id(town_id)
+    tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
-    data = await fatamorgana.fetch_town_data(tid, day=day or None)
-    return fatamorgana.find_safe_path(
+    data = await fata.fetch_town_data(tid, day=day or None)
+    return fata.find_safe_path(
         data, x1, y1, x2, y2,
         group_cp=group_cp,
         escape_items=escape_items,
@@ -338,16 +269,20 @@ async def get_zone_details(
         max_ap: Optional AP budget to filter results (e.g. 8). Cells beyond this cost
                 are shown separately. Typical range: 4–15.
     """
-    tid = _resolve_town_id(town_id)
+    tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
-    data = await fatamorgana.fetch_town_data(tid, day=day or None)
+    data = await fata.fetch_town_data(tid, day=day or None)
 
     coords_provided = all(v is not None for v in (x1, y1, x2, y2))
     if coords_provided:
-        return fatamorgana.format_zone_path(data, x1, y1, x2, y2, max_ap=max_ap)
-    return fatamorgana.format_zones(data)
+        return fata.format_zone_path(data, x1, y1, x2, y2, max_ap=max_ap)
+    return fata.format_zones(data)
 
+
+# ---------------------------------------------------------------------------
+# Gest'Hordes tools — public attack/defence statistics
+# ---------------------------------------------------------------------------
 
 @mcp.tool()
 async def get_attack_distribution(town_id: int = 0) -> str:
@@ -361,7 +296,7 @@ async def get_attack_distribution(town_id: int = 0) -> str:
     Args:
         town_id: Gest'Hordes map ID. Omit to use the default from .env.
     """
-    tid = _resolve_town_id(town_id)
+    tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
     data = await gesthordes.fetch_stats(tid)
@@ -381,46 +316,14 @@ async def get_attack_forecast(town_id: int = 0) -> str:
     Args:
         town_id: Gest'Hordes map ID. Omit to use the default from .env.
     """
-    tid = _resolve_town_id(town_id)
+    tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
     data = await gesthordes.fetch_stats(tid)
     return gesthordes.format_attack_forecast(data)
 
 
-# ---------------------------------------------------------------------------
-# Official API tools — requires MYHORDES_APP_KEY (not yet available)
-# ---------------------------------------------------------------------------
-
-# TODO: Uncomment once official API app key is obtained and sources/official_api.py
-# is implemented. These tools need the official API because Fata Morgana doesn't
-# provide construction progress details or last night's attack report.
-
-# @mcp.tool()
-# async def get_construction_progress() -> str:
-#     """
-#     Fetches construction site progress from the official API.
-#     Shows buildings currently under construction: AP invested vs. AP needed,
-#     resources deposited vs. required, and estimated completion.
-#     Use this when the user asks what's closest to being finished,
-#     where to spend AP, or what resources are still needed for a build.
-#     """
-#     if err := _check_auth():
-#         return err
-#     # return await official_api.get_construction_progress(MYHORDES_USER_KEY, MYHORDES_APP_KEY)
-
-# @mcp.tool()
-# async def get_last_night_report() -> str:
-#     """
-#     Fetches last night's attack gazette from the official API.
-#     Includes: zombies killed, defense used, water lost overnight,
-#     wind direction (if Search Tower built), and citizen casualties.
-#     Use this for post-attack analysis — was defense tight or comfortable,
-#     and how should the town adjust today?
-#     """
-#     if err := _check_auth():
-#         return err
-#     # return await official_api.get_last_night_report(MYHORDES_USER_KEY, MYHORDES_APP_KEY)
+# Official MyHordes API tools are disabled — see src/myhordes_mcp/myhordes/official_api.py.
 
 
 # ---------------------------------------------------------------------------
@@ -442,23 +345,7 @@ def search_wiki(query: str, category: str = "", limit: int = 5) -> str:
         limit: Max results to return (1-10, default 5). Use 1-2 for specific lookups,
                higher for broad searches.
     """
-    if not knowledge.is_loaded():
-        return "Error: Wiki not loaded. Run 'make process' to build it."
-
-    limit = max(1, min(10, limit))
-    cat = category.strip().lower() or None
-    results = knowledge.search(query, category=cat, limit=limit)
-
-    if not results:
-        return f"No results found for '{query}'" + (f" in category '{category}'" if category else "") + "."
-
-    parts = [f"Found {len(results)} result(s) for '{query}':\n"]
-    for r in results:
-        parts.append(f"## {r['name']} [{r['category']}]\n")
-        parts.append(r["content"])
-        parts.append("\n---\n")
-
-    return "\n".join(parts)
+    return wiki.format_search(query, category=category, limit=limit)
 
 
 @mcp.tool()
@@ -467,18 +354,7 @@ def list_wiki_categories() -> str:
     List all categories in the MyHordes wiki with page counts.
     Use this to discover what wiki information is available before searching.
     """
-    if not knowledge.is_loaded():
-        return "Error: Wiki not loaded. Run 'make process' to build it."
-
-    cats = knowledge.get_categories()
-    lines = ["MyHordes Wiki Categories:\n"]
-    total = 0
-    for cat, count in cats.items():
-        lines.append(f"- {cat}: {count} pages")
-        total += count
-    lines.append(f"\nTotal: {total} pages")
-    lines.append("\nUse search_wiki(query, category='...') to search within a category.")
-    return "\n".join(lines)
+    return wiki.format_categories()
 
 
 # ---------------------------------------------------------------------------
@@ -502,67 +378,7 @@ def search_knowledge(query: str, section: str = "") -> str:
             "tactics"   — expedition planning, game mechanics, strategy, meta.
             Leave empty to search all sections.
     """
-    from pathlib import Path
-
-    root = Path(__file__).parent / "knowledge"
-    kb_dir = root / section if section else root
-
-    if not kb_dir.exists():
-        avail = ", ".join(sorted(d.name for d in root.iterdir() if d.is_dir()))
-        return f"Knowledge section '{section}' not found. Available: {avail}."
-
-    # Score per term, not by exact-substring of the whole query: a query like
-    # "thirst step counter" matched nothing before, even though the file explains
-    # exactly that -- the phrase simply never appears verbatim. Terms are matched
-    # on a word-prefix boundary so "counter"/"counters" and "zone"/"zones" hit.
-    terms = [t for t in re.split(r"[^\w]+", query.lower()) if len(t) > 2]
-    if not terms:
-        return "Query too short — give at least one word of 3+ characters."
-
-    scored = []
-    for md in sorted(kb_dir.rglob("*.md")):
-        text = md.read_text(encoding="utf-8")
-        low = text.lower()
-        hits = {t: len(re.findall(r"\b" + re.escape(t), low)) for t in terms}
-        matched = [t for t, n in hits.items() if n]
-        if not matched:
-            continue
-        # rank by how many distinct terms matched first, then total occurrences
-        scored.append((len(matched), sum(hits.values()), md, text, matched))
-
-    if not scored:
-        return (f"No knowledge entries found for '{query}'"
-                + (f" in section '{section}'" if section else "")
-                + f". Terms tried: {', '.join(terms)}.")
-
-    scored.sort(key=lambda x: (-x[0], -x[1]))
-
-    # Returning whole files blows the context once tips/ is indexed (60 KB+), so
-    # send the matching sections instead, and only fall back to the head of the
-    # file when no heading contains a term.
-    parts = [f"Found {len(scored)} file(s) for '{query}':\n"]
-    for nterms, total, md, text, matched in scored[:4]:
-        rel = md.relative_to(root)
-        parts.append(f"## {rel}  (matched: {', '.join(matched)})\n")
-        blocks, cur = [], []
-        for line in text.splitlines():
-            if line.startswith("#") and cur:
-                blocks.append(cur)
-                cur = [line]
-            else:
-                cur.append(line)
-        if cur:
-            blocks.append(cur)
-        keep = [b for b in blocks
-                if any(re.search(r"\b" + re.escape(t), "\n".join(b).lower())
-                       for t in terms)]
-        chosen = keep[:6] if keep else blocks[:2]
-        body = "\n\n".join("\n".join(b).strip() for b in chosen)
-        parts.append(body[:6000] + ("\n… (section truncated)" if len(body) > 6000 else ""))
-        parts.append("\n---\n")
-    if len(scored) > 4:
-        parts.append(f"({len(scored) - 4} more file(s) matched; narrow the query.)")
-    return "\n".join(parts)
+    return curated.search(query, section=section)
 
 
 if __name__ == "__main__":

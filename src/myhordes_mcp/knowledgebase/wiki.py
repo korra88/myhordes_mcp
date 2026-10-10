@@ -1,9 +1,11 @@
 """Knowledge base loader and search engine for the MyHordes wiki."""
 
 import json
-from pathlib import Path
 
-_BASE_DIR = Path(__file__).parent / "wiki" / "processed"
+from ..utils.config import PROJECT_ROOT
+
+# Built by kb_build/ (`make kb`).
+_BASE_DIR = PROJECT_ROOT / "wiki" / "processed"
 
 # Loaded once at import time — ~1 MB total, negligible.
 _index: dict[str, dict] = {}
@@ -134,3 +136,40 @@ def get_page(name: str) -> str | None:
 def is_loaded() -> bool:
     """Check if the knowledge base was loaded successfully."""
     return len(_index) > 0
+
+
+def format_search(query: str, category: str = "", limit: int = 5) -> str:
+    """Search the wiki and format the hits as text for the LLM."""
+    if not is_loaded():
+        return "Error: Wiki not loaded. Run 'make process' to build it."
+
+    limit = max(1, min(10, limit))
+    cat = category.strip().lower() or None
+    results = search(query, category=cat, limit=limit)
+
+    if not results:
+        return f"No results found for '{query}'" + (f" in category '{category}'" if category else "") + "."
+
+    parts = [f"Found {len(results)} result(s) for '{query}':\n"]
+    for r in results:
+        parts.append(f"## {r['name']} [{r['category']}]\n")
+        parts.append(r["content"])
+        parts.append("\n---\n")
+
+    return "\n".join(parts)
+
+
+def format_categories() -> str:
+    """List wiki categories with page counts."""
+    if not is_loaded():
+        return "Error: Wiki not loaded. Run 'make process' to build it."
+
+    cats = get_categories()
+    lines = ["MyHordes Wiki Categories:\n"]
+    total = 0
+    for cat, count in cats.items():
+        lines.append(f"- {cat}: {count} pages")
+        total += count
+    lines.append(f"\nTotal: {total} pages")
+    lines.append("\nUse search_wiki(query, category='...') to search within a category.")
+    return "\n".join(lines)

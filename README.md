@@ -8,10 +8,13 @@ A **read-only** Model Context Protocol (MCP) server that exposes MyHordes game d
 
 ```
 myhordes_mcp/
-├── main.py                  # MCP server entry point (FastMCP)
-├── knowledge.py             # Wiki knowledge base search engine
-├── sources/
-│   └── fatamorgana.py       # Fata Morgana spy page scraper
+├── main.py                  # MCP server entry point (FastMCP) — tool declarations only
+├── src/myhordes_mcp/
+│   ├── utils/               # .env config, single-flight TTL cache
+│   ├── fata/                # Fata Morgana: client (only HTTP entry), parse, formatters, pathfinding
+│   ├── gesthordes/          # Gest'Hordes attack/defence statistics
+│   ├── myhordes/            # Official MyHordes API (disabled)
+│   └── knowledgebase/       # Wiki search (wiki/processed/) + curated knowledge/ search
 ├── tips/                    # All shared meta-knowledge (loaded as system prompts)
 ├── personas/                # Persona files (town-elder.md = default)
 ├── towns/                   # Per-town daily logs and notes
@@ -181,10 +184,13 @@ make kb
 
 | File | Purpose |
 |---|---|
-| `main.py` | MCP server, tool definitions |
-| `sources/fatamorgana.py` | Fata Morgana httpx scraper + formatters |
-| `sources/official_api.py` | *(planned)* Official API client |
-| `knowledge.py` | Wiki search engine (indexes `wiki/processed/`) |
+| `main.py` | MCP server, tool definitions (thin wrappers) |
+| `src/myhordes_mcp/fata/client.py` | Single entry point for Fata Morgana requests: coalesced + cached (`FATA_CACHE_TTL`, default 180 s), disk archive for past days. Documents the `getdata` JSON endpoint. |
+| `src/myhordes_mcp/fata/` | `parse.py` (spy page → dict), `town.py` / `bank.py` / `buildings.py` / `zones.py` (formatters), `pathing.py` (expedition Dijkstra), `risk.py` (shared zone helpers), `archive.py` (disk archive) |
+| `src/myhordes_mcp/gesthordes/` | Gest'Hordes stats client + formatters |
+| `src/myhordes_mcp/myhordes/official_api.py` | *(disabled)* Official API client placeholder |
+| `src/myhordes_mcp/knowledgebase/` | `wiki.py` (indexes `wiki/processed/`), `curated.py` (searches `knowledge/`) |
+| `src/myhordes_mcp/utils/` | `config.py` (.env, town ID, paths), `cache.py` (single-flight TTL cache) |
 | `AGENT-PERSONALITY.md` | Symlink → active persona in `personas/`. Set via `make use-persona p=<name>`. Gitignored. |
 | `personas/` | All persona files. `town-elder.md` = current default. Add new personas here. |
 | `docs/source-map.md` | Navigation guide for game PHP source (`myhordes-docker/myhordes/`) |

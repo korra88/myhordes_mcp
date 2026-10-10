@@ -1,22 +1,19 @@
-"""Filesystem cache for Fata Morgana spy pages.
+"""Filesystem archive of Fata Morgana spy pages.
 
 Stores fetched HTML pages and extracted JSON data per town per day,
 so historical data is preserved even if Fata Morgana stops serving it.
 
 Layout:
-    towns/{town_slug}/cache/
+    {TOWNS_DIR}/{town_slug}/cache/      (TOWNS_DIR: MYHORDES_TOWNS_DIR, default towns/)
         day-01.html     # full raw HTML (archival)
         day-01.json     # extracted JS dict (fast access)
 """
 
 import json
-import os
 import re
 from pathlib import Path
 
-# Project root — one level up from sources/
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-TOWNS_DIR = _PROJECT_ROOT / "towns"
+from ..utils.config import TOWNS_DIR
 
 
 def _find_town_dir(town_id: int) -> Path | None:

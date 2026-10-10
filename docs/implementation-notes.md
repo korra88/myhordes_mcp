@@ -44,7 +44,7 @@ towns/
 
 ## Data Source: Fata Morgana over Official API
 
-**Decision:** All live data currently comes from the Fata Morgana spy page scraper (`sources/fatamorgana.py`), not the official JSON v1 API.
+**Decision:** All live data currently comes from the Fata Morgana spy page scraper (`src/myhordes_mcp/fata/`), not the official JSON v1 API.
 
 **Why:** The official API requires a registered `appkey` which has not yet been obtained. Fata Morgana provides a superset of the data we need (defense, citizens, buildings, scout map, bank) with no auth required beyond a town ID.
 

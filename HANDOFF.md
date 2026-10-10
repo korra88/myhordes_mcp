@@ -25,7 +25,7 @@ diff demoted to fallback. If fallback still leaves gaps, close-day now asks the 
 writing "Unknown".
 
 ### Key insight
-`sources/fatamorgana.py` `_parse_deaths()` already parses the full cadaver list with `dtype` →
+`src/myhordes_mcp/fata/parse.py` `_parse_deaths()` already parses the full cadaver list with `dtype` →
 human-readable cause (Dehydrated, Eaten by zombies, Infection, etc.) per day. `format_citizens()`
 renders it in `### Dead citizens (N):` / `  Day X:` / `    Name — Cause (last at [x|y])` format.
 `get_citizen_positions(day=N)` accepts historical day param — this is the right tool for close-day.
