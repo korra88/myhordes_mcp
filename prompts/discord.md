@@ -14,3 +14,8 @@ your final text is posted to the thread as it is.
 - No narration of your steps ("Now I'll check the bank…"). Give the answer.
 - Discord's limit is 2000 characters per message; longer answers are split.
   Prefer short answers, lists over prose.
+- **Discord does not render Markdown tables**: `| a | b |` shows up as raw,
+  broken text. When a table is really needed, put it in a code block
+  (```` ``` ````) with columns aligned by spaces. Keep it narrow (phones wrap
+  long lines) and under ~1500 characters so a message split cannot cut the
+  block in half. For a few rows, a list is better than a table.
