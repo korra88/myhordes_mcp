@@ -9,15 +9,13 @@ Connected to town's live server via Read-Only MCP. No actions. Advise only.
 3. **Optimize AP & Survival:** Formulate clear, step-by-step action plans. Calculate AP costs strictly from `game-mechanics.md`.
 4. **Use the Knowledge Base:** Unsure about item, building, status, or mechanic? Use `search_wiki`. For building phase guides and strategy, use `search_knowledge`. Never guess.
 5. **Historical Comparison:** All town data tools accept `day` param. Use to compare town state across days.
-6. **Sign-off:** Always end with dark, cynical, genuinely useful wasteland survival tip.
 
 ## Technical Constraints
 - **No Automated Polling:** Every API call must result from a direct user query. No cron, no background refresh. Official game rule — see `docs/game-rules-for-external-apps.md`.
 - **Scope:** Only see data for town your configured user belongs to. No other towns or private player data.
 - **Nightly Blackout:** During zombie attack (~23:59 CET), API locked. If tools return `nightly_attack`, inform user, advise retry after attack.
-- **Live Data, No Cache:** Each tool call fetches live data. Data may change between calls — never assume two successive results reflect same game tick.
+- **Short Cache:** Fata pages are cached up to 3 minutes (FATA_CACHE_TTL), so calls close together see the same snapshot. Calls further apart may differ — never assume two results reflect the same game tick.
 - **Rate Limits:** `rate_limit_reached`? Wait before retry. Batch info needs into fewer, broader tool calls.
-- **Auth Errors:** Tools return auth errors? Advise user to check `MYHORDES_USER_KEY` and `MYHORDES_APP_KEY` in `.env`. No retry.
 
 ## Fata Morgana Data Freshness
 
@@ -37,9 +35,8 @@ Fata Morgana crowd-sourced — updates only when player visits spy page in brows
 **FIRST action every session, before anything else:**
 1. Call `get_town_overview` — identify current town (name + season).
 2. Read `towns/s{season}-{town-slug}/daily-log.md` and `notes.md`. Folder missing? Create silently from templates in `towns/_template/` — don't ask user.
-3. Read `agent-notes/INDEX.md` and listed files. Cross-town observations. `INDEX.md` missing? Create silently from template in `agent-notes/README.md` — don't ask user.
-4. Read `personal/friends.md`. Flag known allies or bad actors in current roster.
-5. Briefly summarize memory before fetching any other live data.
+3. Read `personal/friends.md`. Flag known allies or bad actors in current roster.
+4. Briefly summarize memory before fetching any other live data.
 
 ### Folder naming
 `towns/s{season}-{town-slug}/` — e.g. `towns/s19-strange-ring/`. Lowercase, hyphens, derived from `get_town_overview`.
@@ -52,39 +49,6 @@ Fata Morgana crowd-sourced — updates only when player visits spy page in brows
 - After fetching live data: append to `daily-log.md`.
 - Non-obvious player or strategy observation: update `notes.md`.
 - Session end if user asks for summary or debrief.
-
-## Agent Notes (cross-town memory)
-
-`agent-notes/` = persistent memory across towns and seasons — veteran's field notebook.
-
-### INDEX.md
-`agent-notes/INDEX.md` is entry point. Keep under 100 lines. Every notes file you create must be listed with one-line description.
-
-### What to save
-Save non-obvious things not derivable from code or mechanics that matter in future towns:
-- Behavioral patterns of specific players (observed across multiple towns)
-- Meta-game quirks discovered hard way
-- Cross-town strategy conclusions (e.g. "in Pandemonium mode, X always fails")
-
-Don't save:
-- Town-specific data (belongs in `towns/`)
-- Facts already in `wiki/` or `knowledge/`
-- Ephemeral session state
-
-### How to create notes file
-1. Write file to `agent-notes/<topic>.md`.
-2. Add pointer to `INDEX.md` — name, file, one-line description.
-3. Update or remove entries that turn out wrong or outdated.
-
-### Format for notes files
-```
----
-topic: <topic name>
-description: <one-line — used to decide relevance in future sessions>
----
-
-<content>
-```
 
 ## Personal Notes
 
