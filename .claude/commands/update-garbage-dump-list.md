@@ -65,56 +65,31 @@ Groups seen so far: Resources, Weapons, Foods, Animals, Defences.
 
 Only column D is refreshed. E, F and G are formulas — never write to them.
 
-## Step 3 — Fetch live bank
+## Step 3 — Map the bank onto the sheet rows
 
-```
-get_bank_inventory(detail="full")
-```
+Call `map_bank_to_dump_sheet(sheet_items=...)` with column B of the item rows, one
+name per line in row order (blank rows as empty lines). It reads the live bank and
+applies the mapping rules in code:
 
-`detail='full'` is correct here and is the one case that overrides the usual
-summary-only rule: mapping every sheet row needs every item name and count.
-Say in the report which town and day the snapshot came from.
+- broken items count (they dump for full value);
+- `Water Bomb` = Water Bomb + Plastic Bag, `Exploding Water Bomb` = Exploding Water
+  Bomb + Plastic Bag and Semtex (bags are filled for free at the Faucet — do not
+  "correct" this to 1:1);
+- emptied weapons (`X (empty)`) fold into their loaded row; with several candidate
+  rows (Aqua-Splash 1–5 shots) the first one, reported as a decision;
+- a truncated sheet name (`Unshaped Concre`) takes the unique bank name it prefixes;
+  `(incomplete)` items are never mapped (Misc components, not weapons);
+- duplicate sheet rows are reported — ask which one owns the item.
 
-## Step 4 — Map bank names onto sheet rows
+It returns one value per row (ready for the write), the decisions to confirm, and
+bank items with no row by category. Most unmapped items are correctly excluded
+(water, drugs, blueprints, boxes); report any **dumpable weapon or defence** among
+them — `Collector Pins` and `Stake Launcher` have shown up this way. Adding a row
+is a structure change: propose, never do it unasked.
 
-The bank (Fata Morgana naming) and the sheet (Gest'Hordes naming) disagree. Handle:
+Say which town and day the bank snapshot came from.
 
-**Broken variants.** The bank lists `Box Cutter: 26` and `Box Cutter: 6 [BROKEN]`
-as separate lines. **Sum them** — the sheet's historical values include broken
-items, and they dump for full value.
-
-**Name aliases** confirmed so far:
-
-| Sheet name | Bank name(s) — sum all of them into the one row |
-|---|---|
-| `Water Bomb` | `Water Bomb` + `Plastic Bag` |
-| `Exploding Water Bomb` | `Exploding Water Bomb` + `Plastic Bag and Semtex` |
-| `Unshaped Concre` (truncated in sheet) | `Unshaped Concrete Blocks` |
-
-A bank may list the filled and unfilled forms as separate lines (`Water Bomb: 135`
-*and* `Plastic Bag: 54`). **Sum them anyway.** An unfilled bag is not dumpable in the
-wiki data, but the town fills bags for free at the Faucet, so every Plastic Bag in the
-bank is a Water Bomb in practice. Same for `Plastic Bag and Semtex`. Do not "correct"
-this by mapping 1:1 — the sheet row is the dumpable total, not the current item name.
-
-**Emptied weapons.** The sheet has rows only for loaded variants; the bank reports
-spent ones (`Water Pistol (empty)`, `Battery Launcher 1-ITF (empty)`,
-`Devastator (empty)`, `Jerrycan Gun (empty)`, `Aqua-Splash (empty)`). An emptied
-weapon still dumps for 6 defence, so fold each into its loaded row rather than
-zeroing it. Ask first if the sheet's layout differs from the one described here.
-
-Do **not** map `(incomplete)` items — those are Misc components, not weapons.
-
-**Duplicate rows.** If you find the same item on two rows, ask which one owns it —
-filling both double-counts the defence total.
-
-**Unmapped bank items.** Compute the list of bank items with quantity > 0 that match
-no sheet row. Most are correctly excluded (water, drugs, blueprints, box items), but
-report any *dumpable weapon* among them — `Collector Pins` and `Stake Launcher` have
-shown up this way. They need a new row, which is a structure change: propose, never
-do it unasked.
-
-## Step 5 — Show the diff, then ask
+## Step 4 — Show the diff, then ask
 
 Print every changed row as `row | group | item | old -> new`, plus the change count
 out of total rows, plus old and new column-D sums.
@@ -127,7 +102,7 @@ Then ask the user to confirm before writing, listing separately:
 Writing to a shared spreadsheet is outward-facing and hard to undo. Get the
 confirmation even when the diff looks trivial.
 
-## Step 6 — Write column D only
+## Step 5 — Write column D only
 
 Build the full column (every row, not just changed ones — a partial write misaligns
 the range) and send:
@@ -150,7 +125,7 @@ column is 104 single-element rows. Nulls are rejected — write `0`, never `""`.
 
 Check `updatedCells` equals the row count.
 
-## Step 7 — Verify and report
+## Step 6 — Verify and report
 
 Re-read `E1:I4` to get the recalculated totals. Report:
 
@@ -160,7 +135,7 @@ Re-read `E1:I4` to get the recalculated totals. Report:
 - every alias and duplicate-row decision applied
 - dumpable bank items still unrepresented, with the defence they would add
 
-## Step 8 — Audit the sheet's formulas
+## Step 7 — Audit the sheet's formulas
 
 Re-read `A1:G20` with `"valueRenderOption":"FORMULA"` and check the following.
 **Report findings only. Never fix them unasked** — they are the sheet owner's formulas
@@ -191,14 +166,14 @@ and other tabs reference them.
    again afterwards.
 2. Range consistency: `F1` and `F2` must cover the same rows. Both should be open-ended
    (`sum(D6:D)`, `sum(G6:G)`); a hardcoded end row misses anything added below it.
-3. Duplicate item rows across groups (see Step 4). Zeroing one is a stopgap; the row
+3. Duplicate item rows across groups (see Step 3). Zeroing one is a stopgap; the row
    should be deleted, because the two groups carry different tempDP rates at lvl2.
    (The historical `Fat Serpent` Weapons/Animals duplicate was deleted by the owner
    on 2026-09-14 — do not expect it.)
 4. No column models dump AP. Each citizen gets one free action per day covering 1-20
    items **of a single type**; further actions cost 2 AP, or 1 AP with Organized Dump.
    A planned quantity of 500 in column F is 25 actions. Suggest `=CEILING(F/20)`.
-5. Bank items with no sheet row (see Step 4). Report them; the owner adds rows in batches
+5. Bank items with no sheet row (see Step 3). Report them; the owner adds rows in batches
    rather than one at a time, so re-report any that are still missing without treating a
    previous mention as resolved.
 

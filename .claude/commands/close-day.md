@@ -16,40 +16,26 @@ Finalize previous day's log using current morning MCP snapshot (post-attack stat
 - Collect those missing `### Night outcome` section.
 - Process each in order (oldest first). Continue to next even if one is sparse.
 
-## Step 2 — Fetch current morning state
+## Step 2 — Night report (per target day)
 
-Call in parallel (once — reuse across all backfill days):
-- `get_citizen_positions` — alive count, inside/outside, any dead citizens.
-- `get_defense_status` — current defense + tonight's estimate (Day N's).
-- `get_bank_inventory(detail='summary')` — current bank state. Never `detail='full'`.
+For each target day D call `get_night_report(day=D)`. It returns, computed in code:
+result (survived/failed), defense vs actual attack and the estimate, alive at day
+start → next morning, and every death of day D with cause and last position
+(outside = camping or stranded). Do not recompute any of it, and do not diff
+citizen lists by hand.
 
-Note: for backfill, today's snapshot is authoritative only for the most recent night. Earlier nights use the data available in the day files themselves (last citizen list logged, last defense snapshot).
+If the report notes a mismatch with Gest'Hordes' death count, or a death you
+cannot place, ask the user to confirm names/causes rather than writing "Unknown".
 
-## Step 3 — Reconstruct night outcome (per target day)
+Read the day file `towns/{folder}/day-{DD}.md` only for context worth keeping in
+the outcome (e.g. who was flagged as camping), never to recount deaths.
 
-For each target day file:
+**Backfill:** same call per day, oldest first. If Fata has no data for a day,
+note "insufficient data — partial close" and continue.
 
-- Read fully. Extract:
-  - Last alive count + citizen list (final cron check or manual section).
-  - Last known defense + attack estimate.
-  - Last critical items baseline.
-  - Who was outside at end of day (last position snapshot).
+## Step 3 — Morning state (once)
 
-- **Deaths — primary source (Fata Morgana death log):**
-  Call `get_citizen_positions(day=N-1)` for the target day. Fata returns a `### Dead citizens` section grouped by day, with name + cause of death + last coords for every recorded death. Use this as the authoritative source — it covers dehydration, infection, zombie kills, etc. without requiring a citizen-list diff.
-  - Use Fata's cause string directly in the log (no mapping).
-  - Cross-check last coords: if `last_coords` is outside town, note "camping outside".
-
-- **Deaths — fallback (citizen-list diff):**
-  Only use if Fata returns no deaths for that day (data gap or very old day). Compare previous day's last citizen list to next day's first citizen list.
-  - Outside at end of day → "Zombie attack while camping".
-  - Inside → "Unknown / likely infection or wound".
-  - If expected death count > identified deaths, explicitly ask the user to confirm remaining names/causes rather than writing "Unknown".
-
-- **Survival:** Citizens alive next day → survived. Note defense vs. attack estimate.
-- **Net alive change:** yesterday's count → next day's count.
-
-**Backfill sparse days:** If day file has no citizen snapshots, note "insufficient data — partial close" and record what is derivable from Fata. Do not skip.
+Call `get_defense_status` for day N's defense and tonight's estimate, for the report.
 
 ## Step 4 — Append night outcome to day file
 
@@ -60,8 +46,8 @@ Append to `towns/{folder}/day-{NN}.md`:
 
 ### Night outcome — {date, e.g. "Mar 24 → 25"}
 **Result: SURVIVED** (or FAILED)
-**Defense:** {final defense} vs **{attack estimate}** zombies
-**Alive after:** {next day count} ({prev count − deaths} — {N deaths} overnight)
+**Defense:** {defense} vs **{attack}** zombies (estimate {min}–{max})
+**Alive after:** {next morning} ({day start} − {N deaths})
 
 #### Deaths
 | Citizen | Last position | Cause |

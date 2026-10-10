@@ -233,6 +233,74 @@ async def get_town_changes(town_id: int = 0, since: str = "") -> str:
 
 
 @mcp.tool()
+async def get_night_report(day: int = 0, town_id: int = 0) -> str:
+    """
+    What the attack at the end of a past day did: survived or failed, defense vs
+    actual attack (and the estimate), alive before and after, and each death with
+    cause and last position (outside = camping or stranded). Use for close-day,
+    "what happened last night", "who died". One call per night.
+
+    Args:
+        day: The game day whose night to report (its attack happened at that day's
+             end). 0 or omit = yesterday.
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+    """
+    tid = resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data, gh = await asyncio.gather(fata.fetch_town_data(tid), gesthordes.fetch_stats(tid))
+    if data.get("error"):
+        return f"Error: {data['error']}"
+    target = day or (data["meta"].get("day") or 1) - 1
+    if target < 1:
+        return "The town is on day 1: no night has passed yet."
+    day_data = await fata.fetch_town_data(tid, day=target)
+    return fata.format_night_report(data, target, gh, day_data)
+
+
+@mcp.tool()
+async def get_expedition_roster(listed: str = "", town_id: int = 0) -> str:
+    """
+    Who is outside, grouped by exact tile (with ruin names), with Manhattan distance,
+    forum class icons, and scrappers (distance 1) counted apart. With `listed`, also
+    reconciles an expedition list: unaccounted citizens (outside, distance ≥2, on no
+    list), listed names not outside (in town / dead / unknown), and the equation
+    listed + scrappers + unaccounted = outside. Use for expedition-report.
+    Items carried (bikes, kits) are not visible.
+
+    Args:
+        listed: Names on the user's expedition list, comma- or newline-separated.
+                "@Name:12345" handles are accepted. Empty = no reconciliation.
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+    """
+    tid = resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    return fata.format_roster(await fata.fetch_town_data(tid), listed)
+
+
+@mcp.tool()
+async def map_bank_to_dump_sheet(sheet_items: str, town_id: int = 0) -> str:
+    """
+    Map the live bank onto a Garbage Dump spreadsheet's item rows, for the
+    update-garbage-dump-list skill. Applies the agreed rules: broken items count,
+    Plastic Bag → Water Bomb, emptied weapons fold into their loaded row, truncated
+    sheet names match the unique bank name they prefix ("(incomplete)" items never).
+    Returns one value per row in order (ready for the column write), decisions to
+    confirm, and bank items with no row grouped by category.
+
+    Args:
+        sheet_items: Column B of the sheet's item rows, one name per line, in row
+                     order (keep blank rows as empty lines so positions line up).
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+    """
+    tid = resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    return fata.format_dump_mapping(await fata.fetch_town_data(tid), sheet_items)
+
+
+@mcp.tool()
 async def get_scout_map(
     day: int = 0,
     town_id: int = 0,

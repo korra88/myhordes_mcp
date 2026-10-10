@@ -131,17 +131,27 @@ In a Claude Code conversation, ask something like:
 
 | Tool | Source | Description |
 |------|--------|-------------|
-| `get_town_overview` | Fata Morgana | Complete town snapshot: gate, defense, water, citizens, bank, attack estimates. Accepts optional `day` param for historical data. |
-| `get_citizen_positions` | Fata Morgana | Who's inside/outside, where, plus death log. Accepts optional `day`. |
-| `get_defense_status` | Fata Morgana | Defense breakdown, attack estimates, survival assessment, attack history. Accepts optional `day`. |
-| `get_bank_inventory` | Fata Morgana | Town bank inventory grouped by category. Accepts optional `day`. |
-| `get_buildings` | Fata Morgana | Built and available construction projects with AP costs and defense values. |
+| `get_town_overview` | Fata Morgana | Town snapshot: gate, defense, water, citizens, attack estimate, possibly-trapped warning. Optional `day`. |
+| `get_citizen_positions` | Fata Morgana | Who's inside/outside, where, plus death log. Optional `day`. |
+| `get_defense_status` | Fata Morgana + Gest'Hordes | Defense breakdown, attack estimates, survival assessment. Optional `day`. |
+| `get_bank_inventory` | Fata Morgana | Bank summary by strategic group (`detail='full'` for every item). Optional `day`. |
+| `get_buildings` | Fata Morgana | Built today / history / available buildings. |
+| `get_build_options` | Fata Morgana | Buildable buildings ranked with def/AP, def/water, def/nuts-and-bolts, bank availability, and the situation (buffer, water ratio, AP budget, multiplier gap). |
+| `get_construction_history` | Fata Morgana + Gest'Hordes | Day-by-day paid AP vs budget, alive, attack, deaths, free vote upgrades. |
+| `get_town_changes` | Fata Morgana (snapshots) | Movements with AP, bank deposits/withdrawals, constructions, AP spent moving today, warnings — since the previous check, the day start or a time. |
+| `get_night_report` | Fata Morgana + Gest'Hordes | One night: survived/failed, defense vs attack, alive before/after, deaths with cause and position. |
+| `get_expedition_roster` | Fata Morgana | Outside citizens by tile with ruin names and class icons, scrappers, reconciliation with an expedition list. |
+| `map_bank_to_dump_sheet` | Fata Morgana | Bank mapped onto Garbage Dump sheet rows (aliases, broken, emptied weapons). |
 | `get_scout_map` | Fata Morgana | Zombie counts per scouted zone, grouped by threat level. |
-| `get_zone_details` | Fata Morgana | Ruins, ground items, and zombie counts per map zone. |
-| `get_attack_forecast` | Gest'Hordes | Theoretical min/max attack curve for the full game, with actual and estimated attack history and defence breakdown per day. |
+| `get_zone_details` | Fata Morgana | Ruins, ground items, and zombie counts per map zone, optionally in a box. |
+| `find_expedition_path` | Fata Morgana | CP-aware safest/shortest path; `step_table=True` adds AP/EP and thirst counter per move. |
+| `get_attack_forecast` | Gest'Hordes | Theoretical attack curve, actual and estimated attacks, defence per day. |
+| `get_attack_distribution` | Gest'Hordes | Historical attack statistics across towns per day. |
 | `search_wiki` | Wiki | Search items, buildings, ruins, skills, statuses, and strategy guides from en.mhwiki.org. |
 | `list_wiki_categories` | Wiki | List available wiki categories. |
-| `search_knowledge` | Knowledge | Search curated advisor KB — building phase guides, strategy, post-mortems. |
+| `search_knowledge` | Knowledge | Search curated advisor KB — building phase guides, strategy, mechanics. |
+
+Fata data is cached in memory for `FATA_CACHE_TTL` seconds (default 180); concurrent calls share one request. Every live fetch of the current day also stores a small snapshot under `towns/<town>/cache/snapshots/`, which `get_town_changes` compares.
 
 ## Updating the Wiki
 

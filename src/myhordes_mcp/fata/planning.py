@@ -261,6 +261,26 @@ def _at(lst: list, i: int):
     return lst[i] if 0 <= i < len(lst) else None
 
 
+def deaths_by_day(data: dict) -> dict[int, int]:
+    """Deaths per game day (a death's day is the day whose attack/end it happened on)."""
+    out: dict[int, int] = {}
+    for d in data["deaths"]:
+        out[d["day"]] = out.get(d["day"], 0) + 1
+    return out
+
+
+def alive_by_day(data: dict) -> dict[int, int | None]:
+    """Citizens alive at the start of each day, walking back from today's count.
+    A finished town has no citizens and no cadavers left in Fata: None then."""
+    current = data["meta"].get("day") or 0
+    deaths = deaths_by_day(data)
+    alive: dict[int, int | None] = {current: len(data["citizens"]) or None}
+    for day in range(current - 1, 0, -1):
+        nxt = alive[day + 1]
+        alive[day] = nxt + deaths.get(day, 0) if nxt is not None else None
+    return alive
+
+
 def construction_history(data: dict, gh: dict | None = None) -> list[dict]:
     """One row per game day: paid builds with AP, free vote upgrades, alive at
     day start, AP budget, share used and the night's attack."""
@@ -276,17 +296,8 @@ def construction_history(data: dict, gh: dict | None = None) -> list[dict]:
         for day, level in (b.get("upgrade_days") or {}).items():
             upgrades.setdefault(int(day), []).append((b["name"], level - 1, level))
 
-    # A death's "day" is the game day it happened on (attack at that day's end).
-    night_deaths: dict[int, int] = {}
-    for d in data["deaths"]:
-        night_deaths[d["day"]] = night_deaths.get(d["day"], 0) + 1
-
-    # Alive at the start of each day, walking back from today's count. A finished
-    # town has no citizens and no cadavers left in Fata: alive is unknown then.
-    alive: dict[int, int | None] = {current: len(data["citizens"]) or None}
-    for day in range(current - 1, 0, -1):
-        nxt = alive[day + 1]
-        alive[day] = nxt + night_deaths.get(day, 0) if nxt is not None else None
+    night_deaths = deaths_by_day(data)
+    alive = alive_by_day(data)
 
     series = _gh_series(gh)
     rows = []

@@ -5,6 +5,9 @@ parse or format its result.
 """
 
 from .changes import get_town_changes
+from .dump import format_dump_mapping
+from .night import format_night_report
+from .roster import format_roster
 from .bank import format_bank, format_bank_summary
 from .buildings import format_buildings
 from .client import fetch_town_data
@@ -26,6 +29,9 @@ __all__ = [
     "format_zones",
     "find_safe_path",
     "get_town_changes",
+    "format_dump_mapping",
+    "format_night_report",
+    "format_roster",
     "format_build_options",
     "format_construction_history",
 ]

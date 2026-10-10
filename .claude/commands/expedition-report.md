@@ -1,53 +1,43 @@
 Audit or generate the town's expedition roster: who is outside, who is on no list, how many are scrapping. Pass an existing BBCode list to audit it; pass nothing to build one fresh.
 
-## Step 1 — Fetch live positions
+## Step 1 — Fetch the roster
 
-Call `get_citizen_positions()` once. That is the only required call.
+Extract every name from the user's list (strip BBCode; keep `@name:id` handles as
+written) and call `get_expedition_roster(listed="Name1, Name2, …")` once. Without a
+list, call it with no arguments.
 
-It returns, per citizen: **name, class, coordinates**. Nothing else.
-It does NOT return inventory — never claim a citizen has a bike, shoes, drugs or
-any item based on this tool. Bike/booster slots stay `???` unless the user says who has what.
+It returns, computed in code: the accounting equation
+`listed + scrappers + unaccounted = outside`, the **unaccounted** citizens (outside,
+distance ≥2, on no list) with class icon and distance, listed names **not outside**
+(in town / dead / unknown spelling), everyone at distance ≥2 grouped by **exact
+tile** with ruin names, and the scrapper count (distance 1, not listed).
 
-Do not also call `get_town_overview` — its roster is condensed and redundant here.
+Distance is Manhattan (AP from town). No tool returns inventory: never claim a
+citizen carries a bike, shoes or drugs. Do not also call `get_citizen_positions`,
+`get_town_overview` or `get_zone_details` — the roster already has tiles and ruins.
 
-## Step 2 — Classify every citizen outside
-
-Distance from town = **Manhattan**: `|x| + |y|` (movement is orthogonal, so this is AP cost).
-
-| Distance | Bucket |
-|---|---|
-| 1 — exactly `[1\|0]`, `[-1\|0]`, `[0\|1]`, `[0\|-1]` | **Scrapper**. Count only, never assign to an expedition slot. |
-| ≥2 | Expedition candidate. Must appear on a list. |
-
-Citizens inside town are out of scope. Never list them.
-
-## Step 3 — Reconcile against the user's list
-
-For each name on the user's list, confirm it appears in the live outside roster.
-Then split the outside roster three ways and **verify the arithmetic**:
-
-```
-listed + scrappers + unaccounted = total outside
-```
-
-State that equation with real numbers in the report. If it does not balance, stop
-and re-check — a name was misread or a citizen walked home.
+## Step 2 — Report
 
 Report in this order:
-1. **Unaccounted** — outside, distance ≥2, on no list. Table: name, class, position, distance. This is the headline; it is what the user asked for.
+1. **Unaccounted** — from the tool. This is the headline.
 2. **Scrapper count** — one total, plus their tiles.
-3. **Ghosts** — names on the list not found outside (in town, or died).
+3. **Ghosts** — listed names not outside, with the tool's reason.
 
-**Never remove a name from the list.** A name on the list is a reserved slot: that
-citizen may have already run their trip and walked home, or may be leaving later in
-the day. A citizen found inside town keeps their slot — annotate it (e.g.
-`[i](in town)[/i]`) and say so in the summary. Only death removes a name, and then
-say so explicitly.
+Quote the tool's accounting equation. **Never remove a name from the list.** A
+name on the list is a reserved slot: that citizen may have already run their trip
+or may leave later. A citizen in town keeps their slot — annotate it (e.g.
+`[i](in town)[/i]`). Only death removes a name, and then say so explicitly.
+
+## Step 3 — Scattered groups
+
+Compare each expedition on the user's list with the tool's tile groups. Members
+of one expedition on different tiles = a split party: flag it. Group by exact
+tile, never by proximity.
 
 ## Step 4 — Verify class tags
 
 The user's list carries class icons that drift as citizens change job or get
-mislabelled at sign-up. Compare each against live data and correct silently in
+mislabelled at sign-up. Compare each against the tool's icons and correct silently in
 the rewritten list, then note every change in a one-line summary after it.
 
 | Class | Icon |
@@ -68,20 +58,7 @@ it; never add or remove it on your own.
 If unsure an icon name exists on the town's forum, use `:human:` and say so
 rather than inventing a tag.
 
-## Step 5 — Group by destination
-
-Group expedition members by **exact shared tile**, not by proximity. Citizens two
-cells apart are two groups, and saying otherwise hides a split party.
-
-To name the ruin on a tile, call `get_zone_details()` with no arguments — it lists
-every zone holding a ruin or ground items, with names. There is no lookup-by-name
-parameter; match the name yourself against the returned coordinates. Only pass
-`x1/y1/x2/y2` to narrow a large map, never to find a ruin you cannot place.
-
-Flag any group whose members are scattered across tiles — a five-person expedition
-sitting on three tiles is not a convoy, and the organiser needs to know.
-
-## Step 6 — Output
+## Step 5 — Output
 
 Reproduce the user's own BBCode structure verbatim: same section order, same
 `{hr}` separators, same `[b][big]...[/big][/b]` headers, same numbering, same
@@ -107,7 +84,7 @@ Close the list with the scrapper total:
 Then, outside the code block, a short summary of every change made: names added,
 class tags corrected, groups flagged as scattered.
 
-## Step 7 — Offer the bike pass
+## Step 6 — Offer the bike pass
 
 Mobility slots stay `???` because no tool attributes items to citizens. Close the
 report by offering the one path that does, in a single line:
@@ -129,7 +106,7 @@ Skip this offer entirely when the user already supplied bike data.
 
 ## Generate mode (no list supplied)
 
-Same steps 1–2 and 5. Build sections per ruin found at occupied tiles, plus a
+Step 1 without a list. Build sections per ruin found at occupied tiles, plus a
 `Free Expeditions` section for everyone else at distance ≥2, plus the scrapper
 total. Leave slot 1 of Free Expeditions as `:human: with a bike ???` — the town's
 convention for the mobility slot.
