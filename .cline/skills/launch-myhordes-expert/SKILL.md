@@ -21,7 +21,6 @@ There are specialized skills defined as follows:
 | `build-plan.md` | `/build-plan`, `/construction queue` | To get recommended construction priority based on live state and phase knowledge |
 | `close-day.md` | `/close-day` | To mark previous day as closed when ready (usually after night outcome logged) |
 | `track-town.md` | `/track-town` | For recurring cron monitoring — log changes across days automatically |
-| `discord-monitor.md` | `/discord-monitor` | To watch Discord #generale and reply to bot mentions (loops every 5 minutes, haiku style) |
 
 # Now
 
