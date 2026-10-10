@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from pathlib import Path
 
@@ -159,6 +160,52 @@ async def get_buildings(
         return tid
     data = await fata.fetch_town_data(tid, day=day or None)
     return fata.format_buildings(data, mode=mode, include_private=include_private_town_buildings, include_resources=include_resources)
+
+
+@mcp.tool()
+async def get_build_options(town_id: int = 0, include_resources: bool = False) -> str:
+    """
+    Ranked construction options for today, computed from live buildings and bank.
+    Use this for "what should we build", build plans and construction queues —
+    it replaces get_buildings(mode='available') plus bank/defense lookups for that job.
+    Returns the situation (defense vs tonight's estimate and buffer, water rations
+    per citizen, town AP budget, Defensive Focus multiplier gap) and every buildable
+    building grouped as water producers / permanent defense / temporary defense /
+    utility, each with AP, defense, def/AP, def/water, def/nuts-and-bolts, and
+    whether the bank holds its resources (✓ ready, or ⚠ short with have/need).
+    Also lists locked defense/water buildings whose prerequisite is buildable now.
+    You decide the order and explain trade-offs; do not recompute these numbers.
+
+    Args:
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        include_resources: Also list every resource each building needs. Default
+            False — shortages are already shown; enable only when the user asks
+            for full resource lists.
+    """
+    tid = resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data = await fata.fetch_town_data(tid)
+    return fata.format_build_options(data, include_resources=include_resources)
+
+
+@mcp.tool()
+async def get_construction_history(town_id: int = 0) -> str:
+    """
+    Day-by-day construction throughput: paid builds with AP cost, AP spent vs
+    town budget (18 AP x citizens alive at day start), share used, citizens alive,
+    the night's attack (Gest'Hordes) and deaths, plus free vote upgrades.
+    Use for building reports, "how much AP did we spend", build history questions.
+    One call is enough; do not also call get_buildings or get_attack_forecast for this.
+
+    Args:
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+    """
+    tid = resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data, gh = await asyncio.gather(fata.fetch_town_data(tid), gesthordes.fetch_stats(tid))
+    return fata.format_construction_history(data, gh)
 
 
 @mcp.tool()

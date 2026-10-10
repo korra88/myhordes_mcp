@@ -22,7 +22,7 @@ Read-only MCP server in Python for **MyHordes** (browser survival game, Eternalt
 
 ## Current state
 
-- Live (Fata): `get_town_overview`, `get_citizen_positions`, `get_defense_status`, `get_bank_inventory`, `get_buildings`, `get_scout_map`, `get_zone_details`, `find_expedition_path`
+- Live (Fata): `get_town_overview`, `get_citizen_positions`, `get_defense_status`, `get_bank_inventory`, `get_buildings`, `get_scout_map`, `get_zone_details`, `find_expedition_path`, `get_build_options`, `get_construction_history`
 - Live (Gest'Hordes): `get_attack_distribution`, `get_attack_forecast`
 - Live (offline knowledge): `search_wiki`, `list_wiki_categories`, `search_knowledge`
 - Removed: `refresh_fata_data` (wrote to Fata, little value)

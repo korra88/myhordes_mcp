@@ -8,6 +8,7 @@ from .bank import format_bank, format_bank_summary
 from .buildings import format_buildings
 from .client import fetch_town_data
 from .pathing import find_safe_path
+from .planning import format_build_options, format_construction_history
 from .town import format_citizens, format_defense, format_town_overview
 from .zones import format_scout, format_zone_path, format_zones
 
@@ -23,4 +24,6 @@ __all__ = [
     "format_zone_path",
     "format_zones",
     "find_safe_path",
+    "format_build_options",
+    "format_construction_history",
 ]

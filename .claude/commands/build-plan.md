@@ -1,70 +1,69 @@
 Recommend today's construction queue based on live town state, bank inventory, and phase-appropriate building priorities.
 
-## Step 1 — Load context
+The numbers come from `get_build_options`: do not recompute ratios, buffers or
+resource availability. Your job is the order and the reasoning.
 
-Read in parallel:
-- `knowledge/tactics/buildings-cheatsheet.md` — efficiency reference, flags, resource abbreviations
-- `towns/{folder}/_baseline.md` — current resource snapshot
+`knowledge/buildings/*.md` holds generic efficiency tables by game phase. Use them
+for questions not about the live town ("what is usually built on day 5?"). For the
+live town, the tool's numbers win: they reflect the real bank and unlocks.
 
-Resolve town folder: list `towns/` subdirs, match current town from `.env` or `get_town_overview`.
+## Step 1 — Fetch live options
 
-## Step 2 — Fetch live state
+Call `get_build_options()` once. It returns:
+- **Situation**: defense vs tonight's estimate with buffer, clean water per citizen
+  (⚠ below 2.0), town AP budget and caps, Defensive Focus status and the
+  defense-item count behind the multiplier gap.
+- **Buildable buildings** grouped as water producers / permanent defense (sorted by
+  def/AP) / temporary defense / utility, each with AP, def, ratios and
+  `✓ ready` or `⚠ short: item have/need`.
+- **Next step**: locked defense/water buildings whose prerequisite is buildable,
+  with chain AP and defense.
 
-Call in parallel:
-- `get_defense_status` → total defense, tonight's estimate, item multiplier
-- `get_bank_inventory(detail='summary')` → water count, defense items, key resources
-- `get_buildings(mode='available', include_resources=True)` → unbuilt buildings with AP/def/resources
+Do not call `get_buildings`, `get_bank_inventory` or `get_defense_status` for this.
 
-These three calls with these exact parameters are all the live data this skill needs — do not call `get_town_overview`, `get_bank_inventory(detail='full')`, or any other `get_*` tool.
+## Step 2 — Load phase knowledge
 
-## Step 3 — Load phase knowledge
-
-Determine current day N from `get_defense_status`. Load phase file(s) via `search_knowledge(section="buildings")`:
+Current day N is in the tool header. Load phase guidance via `search_knowledge(section="buildings")`:
 - Day 1–5: query `"basic"`
-- Day 6–8: query `"intermediate"` (Day 6: also query `"basic"`)
-- Day 9–14: query `"defense-focus"` (Day 9–10: also query `"intermediate"`)
-- Day 15+: query `"advanced"` (Day 15: also query `"defense-focus"`)
+- Day 6–8: query `"intermediate"` (Day 6: also `"basic"`)
+- Day 9–14: query `"defense-focus"` (Day 9–10: also `"intermediate"`)
+- Day 15+: query `"advanced"` (Day 15: also `"defense-focus"`)
 
-Call both queries in parallel when on a boundary day.
+## Step 3 — Order the queue
 
-## Step 4 — Assess situation
+Only recommend buildings listed by the tool. A "Next step" building may enter the
+queue only with its prerequisite placed before it.
 
-- **Defense buffer:** total defense − tonight's max estimate. Negative = urgent.
-- **Water ratio:** water rations ÷ alive citizens. < 2.0 = critical — water builds jump above efficiency-sort.
-- **AP budget:** 20% of alive citizens × ~18 AP. Flag if plan exceeds 240 AP.
-- **Multiplier gap:** Defensive Focus not built + ≥40 defense items in bank (boards, sheet metal, UCBs, old doors) = highest-leverage build regardless of phase.
+Priority:
+1. **Multiplier gap** — the Situation line says when Defensive Focus is the
+   highest-leverage build. If it needs a prerequisite, queue that first.
+2. **Water** — water ratio flagged below 2.0: ready water producers go above
+   everything except the multiplier. Water Purifier/Filter only when the tool
+   reports 10+ Jerrycans.
+3. **Negative buffer** — defense first, best def/AP among `✓ ready`; temporaries
+   become acceptable.
+4. Otherwise permanent defense by def/AP, then utilities the phase guide calls
+   essential. Skip temporaries unless the buffer is negative or AP is left over.
 
-## Step 5 — Build priority queue
+Prefer `✓ ready` builds. A `⚠ short` build goes in only if the missing amount is
+small and you say what must be brought back. A ready build that uses ≥50% of a
+resource ("uses X/Y") competes with others for that stock: say so when two picks
+need the same item.
 
-**CRITICAL — before building the queue, extract your buildable set first:**
+Keep the total near the construction-share AP from the Situation line; never over
+the hard cap. Drop the lowest-priority items and say so.
 
-From the `get_buildings` output, collect buildings from exactly these two sections:
-- `Unlocked — no blueprint needed`
-- `Unlocked — blueprint found`
-
-This is your **buildable set**. Only recommend buildings from this set. Never recommend anything outside it, regardless of water urgency or defense need.
-
-**Prerequisite exception:** buildings in `Locked — prerequisite not built` MAY be added to the queue only if you also add their unlocked prerequisite earlier in the queue. Chain upward until you reach a building in the buildable set. The chained buildings must themselves be in the buildable set.
-
-Sort by: survival necessity → def÷AP efficiency → permanence (permanent > temporary).
-
-- **Defensive Focus** jumps to #1 if multiplier gap condition met and resources available. If it's Locked, include its prerequisite first in the queue.
-- **Water producers** (Drilling Rig, No Holes Barred, Eden Project, Divining Rocket, Mechanical Pump, Divining Rods) jump above efficiency-sort if water ratio < 2.0 AND resources are available to build them AND building appears in an Unlocked or prerequisite-locked section. Skip any water producer in "Locked — blueprint not found". If prerequisite-locked, include prerequisite first. Hydraulic Network and water-unlock buildings (Decon Shower, Sluice) do NOT trigger this — they don't produce water directly. Water Purifier/Filter only if 10+ Jerrycans in bank.
-- Flag any build with missing or borderline resources.
-- Skip temporaries unless defense buffer is negative or AP budget has slack after permanents.
-- Soft cap 240 AP; hard cut at 300 AP — drop lowest-priority items and note.
-
-## Step 6 — Output
+## Step 4 — Output
 
 ```
 ## Build Plan — Day N
 
-Situation: {defense} def vs {max_estimate}z (+{buffer}) · {water}/{alive} WR · ×{mult} multiplier
+Situation: {defense} def vs {estimate}z ({buffer}) · {water}/citizen · Defensive Focus {status}
 
 Queue ({total_ap} AP, +{total_def} def):
-1. Building name — AP / +def — resources — ✓ ok / ⚠ short: X missing
+1. Building — AP / +def — ✓ ready | ⚠ short: X have/need
 2. …
 
-Water: safe / marginal / urgent — [one-line recommendation if not safe]
-Why: [2 sentences on key priority calls and tradeoffs]
+Water: safe / marginal / urgent — [one line if not safe]
+Why: [2 sentences on the key priority calls and trade-offs]
 ```

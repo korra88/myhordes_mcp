@@ -1,6 +1,10 @@
 """Building formatters: today's builds, history, available constructions."""
 
 
+# Fata returns rarityCurrent=0 for private-town buildings — rarity filter won't catch them.
+# Hardcoded exclusion list is the only reliable approach.
+PRIVATE_TOWN_BUILDINGS = {"Holy Raincloud", "Spirit Mirage", "Sword of Bokor", "XXL Voodoo Doll"}
+
 _RARITY_LABEL = {0: None, 1: "bp:common", 2: "bp:uncommon", 3: "bp:rare", 4: "bp:very rare"}
 
 
@@ -110,10 +114,7 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
         return "No building data available."
 
     if not include_private:
-        # Fata returns rarityCurrent=0 for private-town buildings — rarity filter won't catch them.
-        # Hardcoded exclusion list is the only reliable approach.
-        _PRIVATE_TOWN_BUILDINGS = {"Holy Raincloud", "Spirit Mirage", "Sword of Bokor", "XXL Voodoo Doll"}
-        buildings = [b for b in buildings if b["name"] not in _PRIVATE_TOWN_BUILDINGS]
+        buildings = [b for b in buildings if b["name"] not in PRIVATE_TOWN_BUILDINGS]
 
     current_day = meta.get("day")
     built = [b for b in buildings if b["built"]]
