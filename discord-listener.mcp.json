@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "myhordes": {
+      "type": "stdio",
+      "command": "/absolute/path/to/myhordes_mcp/.venv/bin/python",
+      "args": ["/absolute/path/to/myhordes_mcp/main.py"],
+      "cwd": "/absolute/path/to/myhordes_mcp"
+    }
+  }
+}

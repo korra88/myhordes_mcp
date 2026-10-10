@@ -83,9 +83,10 @@ To connect this MCP server to Claude Code so you can use the tools in conversati
 
 Replace `/absolute/path/to/myhordes_mcp` with the actual path to this repo, and `YOUR_TOWN_ID` with your town ID.
 
-Set `DISCORD_TOKEN` (or `DISCORD_BOT_TOKEN`) in `.env` to enable Discord tools (`get_mentions`, `get_discord_messages`, `send_discord_message`). Bot requires **Message Content**, **Server Members**, and **Presence** privileged intents enabled in the [Discord Developer Portal](https://discord.com/developers/applications).
-
-Optionally set `DISCORD_CHANNEL_ID` to override the default monitored channel.
+Discord is not served by this MCP any more. Mentions in #myhordes-ai are answered by the
+listener in [`../discord_mcp`](https://github.com/korra88/discord_mcp), configured by
+`discord-listener.toml` and `discord-listener.mcp.json`. Start it with `make discord-listen`
+(`make discord-listen-once` for one poll cycle). The bot token lives in `../discord_mcp/.env`.
 
 For full Discord channel/role management via MCP (optional), install the Node package and configure `.mcp.json`:
 ```bash
@@ -144,9 +145,6 @@ In a Claude Code conversation, ask something like:
 | `search_wiki` | Wiki | Search items, buildings, ruins, skills, statuses, and strategy guides from en.mhwiki.org. |
 | `list_wiki_categories` | Wiki | List available wiki categories. |
 | `search_knowledge` | Knowledge | Search curated advisor KB — building phase guides, strategy, post-mortems. |
-| `get_mentions` | Discord | Fetch unread messages mentioning the bot. Filtered server-side — no noise. Accepts optional `after_id` snowflake. |
-| `get_discord_messages` | Discord | Browse channel messages with optional regex filter. Accepts `after_id`, `limit`, `regex_filter`. |
-| `send_discord_message` | Discord | Send a message to the monitored channel as the bot. |
 
 ## Updating the Wiki
 

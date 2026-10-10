@@ -36,7 +36,7 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 
 # ─── Main targets ─────────────────────────────────────────────
 
-.PHONY: kb fetch process clean-kb clean-all help desert-veteran gemini-veteran use-persona hermes-skills hermes-gateway local-veteran local-shell local-check
+.PHONY: kb fetch process clean-kb clean-all help desert-veteran gemini-veteran use-persona hermes-skills hermes-gateway discord-listen discord-listen-once local-veteran local-shell local-check
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -111,13 +111,13 @@ hermes-skills: ## Symlink repo skills into Hermes (~/.hermes/skills/myhordes)
 hermes-gateway: hermes-skills ## Run the Hermes Discord gateway from this repo (cwd loads AGENTS.md)
 	cd $(shell pwd) && hermes gateway run
 
-discord-monitor: ## Monitor Discord #generale and reply to bot mentions (loops every 5 min, Haiku)
-	claude \
-		--model sonnet \
-		$(foreach f,$(TIPS_FILES),--append-system-prompt-file $(f)) \
-		$(foreach f,$(PERSONAL_FILES),--append-system-prompt-file $(f)) \
-		--append-system-prompt-file personas/town-elder.md \
-		"/loop 5m /discord-monitor loop"
+DISCORD_MCP ?= ../discord_mcp
+
+discord-listen: ## Answer Discord mentions with Claude Code (../discord_mcp listener, discord-listener.toml). Ctrl-C to stop
+	$(DISCORD_MCP)/.venv/bin/python $(DISCORD_MCP)/listen.py --config discord-listener.toml
+
+discord-listen-once: ## One poll cycle of the Discord listener, then exit
+	$(DISCORD_MCP)/.venv/bin/python $(DISCORD_MCP)/listen.py --config discord-listener.toml --once
 
 # ── Local-model advisor (zero API cost) ───────────────────────────────
 

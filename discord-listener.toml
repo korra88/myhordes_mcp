@@ -1,0 +1,48 @@
+# Config for the Discord listener in ../discord_mcp (listen.py). Start it with
+# `make discord-listen`. The bot token is not here: it comes from
+# ../discord_mcp/.env (DISCORD_TOKEN, and DISCORD_CHANNELS for the names below).
+# Reference: ../discord_mcp/README.md, section "The listener".
+
+channels = ["myhordes"]                  # #myhordes-ai
+allow_users = ["YOUR_DISCORD_USER_ID"]     # the owner only
+poll_seconds = 20
+backlog_minutes = 30
+settle_seconds = 8
+
+[limits]
+max_turns_per_user_per_hour = 60
+max_turns_per_hour = 60
+
+[claude]
+cwd = "."
+model = "sonnet"
+append_system_prompt_files = ["personas/gazetteer.md", "personas/discord.md"]
+mcp_config = ["discord-listener.mcp.json"]
+# Read-only game and wiki tools, by name. Never mcp__myhordes__*.
+allowed_tools = [
+  "mcp__myhordes__get_bank_inventory",
+  "mcp__myhordes__get_town_overview",
+  "mcp__myhordes__get_citizen_positions",
+  "mcp__myhordes__get_defense_status",
+  "mcp__myhordes__get_buildings",
+  "mcp__myhordes__get_scout_map",
+  "mcp__myhordes__find_expedition_path",
+  "mcp__myhordes__get_zone_details",
+  "mcp__myhordes__get_attack_distribution",
+  "mcp__myhordes__get_attack_forecast",
+  "mcp__myhordes__search_wiki",
+  "mcp__myhordes__list_wiki_categories",
+  "mcp__myhordes__search_knowledge",
+  # inspect-town, close-day and track-town write the town logs. Writes stay in towns/.
+  "Write(./towns/**)",
+  "Edit(./towns/**)",
+]
+# refresh_fata_data writes to Fata Morgana.
+disallowed_tools = ["mcp__myhordes__refresh_fata_data"]
+# personal/ holds private notes on other players; answers are public.
+deny = ["mcp__myhordes__refresh_fata_data", "Read(./personal/**)"]
+# Lifts the baseline deny on writes so the allows above can apply. Acceptable while
+# the owner is the only allowed user; revisit before opening allow_users.
+unsafe_allow = ["Write", "Edit"]
+timeout_seconds = 600
+max_budget_usd = 100   # the maximum: on the subscription this is an equivalent, not a charge
