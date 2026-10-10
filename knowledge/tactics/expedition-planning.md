@@ -135,6 +135,8 @@ Example format:
 
 Before long trip:
 
+`find_expedition_path(..., step_table=True, round_trip=True, start_ap=, start_ep=, thirst_counter=)` computes steps 1–3 and 5 for a route: AP/EP per move, where AP runs out, and the steps where the counter hits 11/22/33. Place consumables yourself (step 4) using its output.
+
 1. **Calculate Manhattan distance** (|Δx| + |Δy|) both ways. Subtract saved zones if rescue planned.
 2. **Count AP-only zones** (Chebyshev ≤2km from town, both legs).
 3. **Total EP available** (daily + regen triggers from each consumable).

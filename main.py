@@ -264,6 +264,11 @@ async def find_expedition_path(
     group_cp: int = 2,
     escape_items: int = 0,
     scout_mode: bool = False,
+    step_table: bool = False,
+    round_trip: bool = False,
+    start_ap: int = 6,
+    start_ep: int = 0,
+    thirst_counter: int = 0,
     day: int = 0,
     town_id: int = 0,
 ) -> str:
@@ -290,6 +295,16 @@ async def find_expedition_path(
         scout_mode: Set True when a Scout with Camouflage Vest is leading.
                     Trapped zones become passable at a detection risk cost
                     instead of being impassable.
+        step_table: Set True when planning an actual trip. Adds a step-by-step
+                    table for the first path: AP or EP paid per move (EP is used
+                    first when leaving a zone 3+ km from town), AP/EP left, thirst
+                    counter and status (Thirsty at 11, Dehydrated at 22, death at
+                    33). No consumables are applied: it shows where AP runs out
+                    and when water is needed; you place food/water/drugs.
+        round_trip: With step_table, continue the table back along the same path.
+        start_ap: AP at departure (default 6).
+        start_ep: EP at departure (Scout 2, shoes +1, bike +2; default 0).
+        thirst_counter: Zones already walked since the last water ration.
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit to use the default from .env.
     """
@@ -302,6 +317,11 @@ async def find_expedition_path(
         group_cp=group_cp,
         escape_items=escape_items,
         scout_mode=scout_mode,
+        step_table=step_table,
+        round_trip=round_trip,
+        start_ap=start_ap,
+        start_ep=start_ep,
+        thirst_counter=thirst_counter,
     )
 
 

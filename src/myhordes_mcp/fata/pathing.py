@@ -186,6 +186,11 @@ def find_safe_path(
     group_cp: int = 2,
     escape_items: int = 0,
     scout_mode: bool = False,
+    step_table: bool = False,
+    round_trip: bool = False,
+    start_ap: int = 6,
+    start_ep: int = 0,
+    thirst_counter: int = 0,
 ) -> str:
     """Find paths between two map coordinates using CP-aware Dijkstra.
 
@@ -455,6 +460,14 @@ def find_safe_path(
             lines.append(_format_step(i, px, py, flash_cells=flash_cells, total_flashes=flashes, flash_counter=counter))
         lines.append("")
 
+    first = safest if safest is not None else shortest
+    if step_table and first is not None:
+        route = list(first[2])
+        if round_trip:
+            route += list(reversed(route[:-1]))
+        lines.extend(format_step_table(route, start_ap, start_ep, thirst_counter))
+        lines.append("")
+
     if safest is not None:
         if shortest is None:
             _render_path("Path (safest = shortest)" if escape_items == 0 and not scout_mode else "Safest Path", safest)
@@ -465,3 +478,76 @@ def find_safe_path(
         _render_path("Shortest Path", shortest)
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Step table: AP/EP and thirst counter along a route
+# (knowledge/tactics/expedition-planning.md)
+# ---------------------------------------------------------------------------
+
+EP_MIN_KM = 3            # EP pays for moves starting 3+ km (Chebyshev) from town
+THIRSTY_AT, DEHYDRATED_AT, DEATH_AT = 11, 22, 33
+
+
+def _thirst(counter: int) -> str:
+    if counter >= DEATH_AT:
+        return "DEAD"
+    if counter >= DEHYDRATED_AT:
+        return "Dehydrated"
+    if counter >= THIRSTY_AT:
+        return "Thirsty"
+    return "OK"
+
+
+def step_rows(route: list[tuple[int, int]], start_ap: int = 6, start_ep: int = 0,
+              thirst_counter: int = 0) -> list[dict]:
+    """Walk a route cell by cell. No consumables are applied: when AP runs out
+    the row says so, and AP goes negative to show the total still needed."""
+    ap, ep, counter = start_ap, start_ep, thirst_counter
+    rows = []
+    for (x0, y0), (x1, y1) in zip(route, route[1:]):
+        km_from = max(abs(x0), abs(y0))
+        use_ep = ep > 0 and km_from >= EP_MIN_KM
+        if use_ep:
+            ep -= 1
+        else:
+            ap -= 1
+        counter += 1
+        rows.append({
+            "zone": (x1, y1), "km": max(abs(x1), abs(y1)), "paid": "EP" if use_ep else "AP",
+            "ap": ap, "ep": ep, "counter": counter, "thirst": _thirst(counter),
+            "empty": not use_ep and ap < 0,
+        })
+    return rows
+
+
+def format_step_table(route: list[tuple[int, int]], start_ap: int = 6, start_ep: int = 0,
+                      thirst_counter: int = 0) -> list[str]:
+    rows = step_rows(route, start_ap, start_ep, thirst_counter)
+    if not rows:
+        return []
+    lines = [
+        f"### Step table — start {start_ap} AP, {start_ep} EP, thirst counter {thirst_counter}; no consumables applied",
+        "",
+        "| Step | Zone | km | Paid | AP left | EP left | Counter | Thirst |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for i, r in enumerate(rows, 1):
+        ap = f"{r['ap']}" + (" ⚠" if r["empty"] else "")
+        lines.append(f"| {i} | [{r['zone'][0]}/{r['zone'][1]}] | {r['km']} | {r['paid']} | {ap} | {r['ep']} "
+                     f"| {r['counter']} | {r['thirst']} |")
+    ap_steps = sum(r["paid"] == "AP" for r in rows)
+    lines.append("")
+    summary = [f"{len(rows)} moves: {ap_steps} paid with AP, {len(rows) - ap_steps} with EP"]
+    first_empty = next((i for i, r in enumerate(rows, 1) if r["empty"]), None)
+    if first_empty:
+        short = -min(r["ap"] for r in rows)
+        summary.append(f"AP runs out before step {first_empty}: {short} more AP needed "
+                       "(consume food/water/drugs at exactly 0 AP to waste nothing)")
+    for limit, label in ((THIRSTY_AT, "Thirsty"), (DEHYDRATED_AT, "Dehydrated — dies at midnight"),
+                         (DEATH_AT, "death")):
+        hit = next((i for i, r in enumerate(rows, 1) if r["counter"] >= limit), None)
+        if hit:
+            summary.append(f"counter reaches {limit} at step {hit} → {label} unless water resets it before")
+    lines.append(" · ".join(summary) + ".")
+    return lines
