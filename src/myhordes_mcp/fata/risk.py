@@ -169,3 +169,76 @@ def _parse_coords(zone: dict) -> tuple[int, int] | None:
     if not m:
         return None
     return int(m.group(1)), int(m.group(2))
+
+
+# ---------------------------------------------------------------------------
+# Trapped citizens (zombies outnumber the citizens' control points)
+# ---------------------------------------------------------------------------
+
+CP_PER_CITIZEN = 2  # base; Fata cannot see Prepared or item bonuses (max 8/citizen)
+OBSERVATION_PLATFORM = "Observation platform"
+
+
+def platform_level(data: dict) -> int | None:
+    """Observation Platform level, 0 if built without upgrades, None if not built."""
+    for b in data.get("buildings", []):
+        if b["name"].lower() == OBSERVATION_PLATFORM.lower() and b["built"]:
+            return b.get("level") or 0
+    return None
+
+
+def teleport_range(level: int | None) -> int:
+    """Chebyshev distance from which the platform teleports citizens home
+    (Season 19: level 3 → 1 km, level 4 → 2 km; game-mechanics.md)."""
+    if level is None:
+        return 0
+    return 2 if level >= 4 else 1 if level >= 3 else 0
+
+
+def trapped_citizens(data: dict) -> list[dict]:
+    """Outside citizens on zones where reported zombies exceed the minimum CP
+    of the citizens standing there (2 each). A lower bound on CP, so a hit
+    means 'possibly trapped', not certain."""
+    zones = {z["coords"]: z for z in data.get("zones", [])}
+    outside = [c for c in data.get("citizens", []) if not c["inside_town"]]
+    per_zone: dict[str, list] = {}
+    for c in outside:
+        per_zone.setdefault(c["coords"], []).append(c)
+    reach = teleport_range(platform_level(data))
+    gate_open = data.get("gate") == "open"
+    hits = []
+    for coords, people in per_zone.items():
+        zone = zones.get(coords)
+        if not zone or zone.get("zombies", -1) < 0:
+            continue
+        cp = CP_PER_CITIZEN * len(people)
+        if zone["zombies"] <= cp:
+            continue
+        xy = _parse_coords(zone)
+        dist = max(abs(xy[0]), abs(xy[1])) if xy else None
+        hits.append({
+            "coords": coords,
+            "citizens": [c["name"] for c in people],
+            "zombies": zone["zombies"],
+            "cp_min": cp,
+            "ruin": (zone.get("ruin") or {}).get("name"),
+            "updated_on": zone.get("updated_on"),
+            "updated_by": zone.get("updated_by"),
+            "teleport": bool(reach and dist is not None and dist <= reach and gate_open),
+        })
+    return sorted(hits, key=lambda h: h["zombies"] - h["cp_min"], reverse=True)
+
+
+def format_trapped(hits: list[dict], fmt_time) -> list[str]:
+    """Warning lines for possibly trapped citizens. fmt_time(epoch) -> str."""
+    if not hits:
+        return []
+    lines = [f"## ⚠ Possibly trapped ({len(hits)} zone{'s' if len(hits) > 1 else ''}) — zombies > 2 CP per citizen; bonuses not visible"]
+    for h in hits:
+        when = f"zone updated {fmt_time(h['updated_on'])}" if h["updated_on"] else "zone update time unknown"
+        if h["updated_by"]:
+            when += f" by {h['updated_by']}"
+        extra = f", {h['ruin']}" if h["ruin"] else ""
+        tp = " — platform teleport home available" if h["teleport"] else ""
+        lines.append(f"  {', '.join(h['citizens'])} {h['coords']}{extra}: {h['zombies']} zombies vs ≥{h['cp_min']} CP ({when}){tp}")
+    return lines

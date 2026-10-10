@@ -1,6 +1,7 @@
 """Town-level formatters: overview, citizens, defense."""
 
-from .risk import _staleness_tag
+from ..utils.clock import fmt_epoch
+from .risk import _staleness_tag, format_trapped, trapped_citizens
 
 
 def _format_estimate(est: dict) -> str:
@@ -90,6 +91,9 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
             )
             lines.append(f"  In town: {roster}")
         lines.append("")
+        trapped = format_trapped(trapped_citizens(data), fmt_epoch)
+        if trapped:
+            lines.extend(trapped + [""])
         if deaths:
             d = deaths[0]
             lines.append(
@@ -104,6 +108,11 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
         shaman = " [Shaman]" if c["is_shaman"] else ""
         stale = _staleness_tag(c.get("last_update_day"), current_day) if show_citizen_stale else ""
         lines.append(f"  {c['name']} ({c['job']}{shaman}) — {loc}{stale}")
+
+    trapped = format_trapped(trapped_citizens(data), fmt_epoch)
+    if trapped:
+        lines.append("")
+        lines.extend(trapped)
 
     if deaths:
         lines.append("")

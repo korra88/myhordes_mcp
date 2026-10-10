@@ -27,6 +27,7 @@ allowed_tools = [
   "mcp__myhordes__get_buildings",
   "mcp__myhordes__get_build_options",
   "mcp__myhordes__get_construction_history",
+  "mcp__myhordes__get_town_changes",
   "mcp__myhordes__get_scout_map",
   "mcp__myhordes__find_expedition_path",
   "mcp__myhordes__get_zone_details",

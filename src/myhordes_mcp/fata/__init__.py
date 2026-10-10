@@ -4,6 +4,7 @@ Every request goes through client.fetch_town_data(); the other modules only
 parse or format its result.
 """
 
+from .changes import get_town_changes
 from .bank import format_bank, format_bank_summary
 from .buildings import format_buildings
 from .client import fetch_town_data
@@ -24,6 +25,7 @@ __all__ = [
     "format_zone_path",
     "format_zones",
     "find_safe_path",
+    "get_town_changes",
     "format_build_options",
     "format_construction_history",
 ]

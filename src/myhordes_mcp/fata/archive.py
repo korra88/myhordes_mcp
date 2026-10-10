@@ -157,3 +157,64 @@ def list_cached_days(town_id: int) -> list[int]:
         if m:
             days.append(int(m.group(1)))
     return sorted(days)
+
+
+# ---------------------------------------------------------------------------
+# Intraday snapshots — compact state saved on every live fetch that changed
+# something, so changes over the day can be computed in code.
+#
+#   cache/snapshots/day-02/1791644026.json
+#   cache/_changes_marker.json      {"day": 2, "taken_at": 1791644026}
+# ---------------------------------------------------------------------------
+
+def _snapshot_dir(town_id: int, day: int) -> Path | None:
+    town_dir = _find_town_dir(town_id)
+    if town_dir is None:
+        return None
+    return town_dir / "cache" / "snapshots" / f"day-{day:02d}"
+
+
+def save_snapshot(town_id: int, day: int, snap: dict) -> bool:
+    """Store a snapshot unless its content equals the latest one. Returns True if saved."""
+    sdir = _snapshot_dir(town_id, day)
+    if sdir is None:
+        return False
+    sdir.mkdir(parents=True, exist_ok=True)
+    latest = load_snapshots(town_id, day)[-1:] or [None]
+    if latest[0] is not None and latest[0].get("hash") == snap.get("hash"):
+        return False
+    (sdir / f"{snap['taken_at']}.json").write_text(json.dumps(snap, ensure_ascii=False), encoding="utf-8")
+    return True
+
+
+def load_snapshots(town_id: int, day: int) -> list[dict]:
+    """All snapshots of a day, oldest first."""
+    sdir = _snapshot_dir(town_id, day)
+    if sdir is None or not sdir.is_dir():
+        return []
+    snaps = []
+    for f in sorted(sdir.glob("*.json"), key=lambda p: int(p.stem) if p.stem.isdigit() else 0):
+        try:
+            snaps.append(json.loads(f.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, OSError):
+            continue
+    return snaps
+
+
+def get_changes_marker(town_id: int) -> dict | None:
+    town_dir = _find_town_dir(town_id)
+    f = town_dir / "cache" / "_changes_marker.json" if town_dir else None
+    if f is None or not f.exists():
+        return None
+    try:
+        return json.loads(f.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def set_changes_marker(town_id: int, day: int, taken_at: int) -> None:
+    town_dir = _find_town_dir(town_id)
+    if town_dir is None:
+        return
+    f = _ensure_cache_dir(town_dir) / "_changes_marker.json"
+    f.write_text(json.dumps({"day": day, "taken_at": taken_at}))

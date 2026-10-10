@@ -123,6 +123,7 @@ def _parse_citizens(js_data: dict, sys_data: dict) -> list[dict]:
             "inside_town": inside,
             "is_shaman": str(cid) == str(shaman_id),
             "last_update_day": c.get("lastUpdateDay"),
+            "last_update_time": c.get("lastUpdateTime"),
         })
     citizens.sort(key=lambda c: c["name"].lower())
     return citizens
@@ -130,7 +131,11 @@ def _parse_citizens(js_data: dict, sys_data: dict) -> list[dict]:
 
 def _parse_deaths(js_data: dict, current_day: int | None) -> list[dict]:
     """Parse cadaver list. Each entry in cadavers[] is a dict of deaths for one day.
-    Index 0 = day 0, index 1 = day 1, etc."""
+
+    Index i holds the deaths of game day i+1 (the attack at the end of that day
+    for night deaths): PlayerA and PlayerB, who died in the night 5→6 of
+    Multicoloured Theatre, sit at index 4. "day" below is that game day.
+    """
     cadavers = js_data.get("cadavers", [])
     deaths = []
     for day_idx, day_group in enumerate(cadavers):
@@ -141,7 +146,7 @@ def _parse_deaths(js_data: dict, current_day: int | None) -> list[dict]:
                 "name": c.get("name", "Unknown"),
                 "cause": DEATH_TYPES.get(c.get("dtype"), f"Unknown ({c.get('dtype')})"),
                 "last_coords": f"[{c.get('rx', '?')}|{c.get('ry', '?')}]",
-                "day": day_idx,
+                "day": day_idx + 1,
             })
     # Sort by day descending (most recent first)
     deaths.sort(key=lambda d: d["day"], reverse=True)
@@ -433,6 +438,7 @@ def _parse_map(js_data: dict) -> list[dict]:
                 "ruin": ruin,
                 "updated_by": zone.get("updatedBy"),
                 "updated_day": zone.get("updatedOnDay"),
+                "updated_on": zone.get("updatedOn"),
             }
             zones.append(entry)
     return zones

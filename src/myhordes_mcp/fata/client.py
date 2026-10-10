@@ -43,6 +43,7 @@ from ..utils.cache import TTLCache
 from ..utils.config import env_int
 from . import archive
 from .parse import _build_result, _extract_js_data
+from .snapshot import snapshot
 
 FATA_BASE_URL = os.getenv("FATA_BASE_URL", "https://fatamorgana.md26.eu").rstrip("/")
 FATA_SPY_URL = FATA_BASE_URL + "/spy/town/{town_id}"
@@ -124,5 +125,7 @@ async def _fetch(url: str, town_id: int, day: int | None) -> dict:
             season=sys_data.get("season"),
             is_current_day=(day is None),
         )
+        if day is None:
+            archive.save_snapshot(town_id, result_day, snapshot(result))
 
     return result

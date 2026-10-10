@@ -276,11 +276,10 @@ def construction_history(data: dict, gh: dict | None = None) -> list[dict]:
         for day, level in (b.get("upgrade_days") or {}).items():
             upgrades.setdefault(int(day), []).append((b["name"], level - 1, level))
 
-    # Fata's cadavers index i holds deaths of the attack at the end of day i+1
-    # (verified: deaths of night 5→6 sit at index 4).
+    # A death's "day" is the game day it happened on (attack at that day's end).
     night_deaths: dict[int, int] = {}
     for d in data["deaths"]:
-        night_deaths[d["day"] + 1] = night_deaths.get(d["day"] + 1, 0) + 1
+        night_deaths[d["day"]] = night_deaths.get(d["day"], 0) + 1
 
     # Alive at the start of each day, walking back from today's count. A finished
     # town has no citizens and no cadavers left in Fata: alive is unknown then.

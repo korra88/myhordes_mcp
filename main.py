@@ -209,6 +209,30 @@ async def get_construction_history(town_id: int = 0) -> str:
 
 
 @mcp.tool()
+async def get_town_changes(town_id: int = 0, since: str = "") -> str:
+    """
+    What changed in town since an earlier moment today: citizen movements with
+    AP cost, bank deposits/withdrawals (critical items first), new constructions,
+    defense/alive/gate deltas, AP each citizen spent moving today, and warnings
+    (possibly trapped citizens, gate open late, citizens on depleted zones).
+    Computed in code from snapshots stored on every live data fetch.
+    Use for "what happened", "who moved", town snapshots and inspect-town.
+    AP figures are lower bounds: moves between two snapshots count as a straight line.
+
+    Args:
+        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        since: "" (default) = since the previous get_town_changes call today, and
+               moves that marker forward; "day" = since the first snapshot today;
+               "HH:MM" = since that game time (French time). Only the default
+               moves the marker.
+    """
+    tid = resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    return await fata.get_town_changes(tid, since=since)
+
+
+@mcp.tool()
 async def get_scout_map(
     day: int = 0,
     town_id: int = 0,

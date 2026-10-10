@@ -15,6 +15,9 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 FATAMORGANA_TOWN_ID = os.getenv("FATAMORGANA_TOWN_ID")
 
+# Your in-game name: some reports single you out (e.g. "you are on a depleted zone").
+PLAYER_NAME = os.getenv("PLAYER_NAME")
+
 # Town logs and the Fata page archive. Override to keep them outside the repo
 # (e.g. a private checkout on another machine).
 TOWNS_DIR = Path(os.getenv("MYHORDES_TOWNS_DIR") or PROJECT_ROOT / "towns")
