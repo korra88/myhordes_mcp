@@ -88,7 +88,9 @@ Replace `/absolute/path/to/myhordes_mcp` with the actual path to this repo, and 
 
 Discord is not served by this MCP any more. Mentions in #myhordes-ai are answered by the
 listener in [`../discord_mcp`](https://github.com/korra88/discord_mcp), configured by
-`discord-listener.toml` and `discord-listener.mcp.json`. Start it with `make discord-listen`
+`discord-listener.toml` and `discord-listener.mcp.json` (both gitignored: copy them from
+`discord-listener.example.toml` and `discord-listener.mcp.example.json`, then set
+`allow_users` and the absolute paths). Start it with `make discord-listen`
 (`make discord-listen-once` for one poll cycle). The bot token lives in `../discord_mcp/.env`.
 
 > **Note:** The `.env` file is loaded by `python-dotenv` inside `main.py`, so you can either put values in `.env` or in the `"env"` block above. The `"env"` block in `.mcp.json` takes precedence.

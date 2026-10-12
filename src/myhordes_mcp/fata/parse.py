@@ -133,8 +133,8 @@ def _parse_deaths(js_data: dict, current_day: int | None) -> list[dict]:
     """Parse cadaver list. Each entry in cadavers[] is a dict of deaths for one day.
 
     Index i holds the deaths of game day i+1 (the attack at the end of that day
-    for night deaths): PlayerA and PlayerB, who died in the night 5→6 of
-    Multicoloured Theatre, sit at index 4. "day" below is that game day.
+    for night deaths): citizens who died in the night 5→6 sit at index 4.
+    "day" below is that game day.
     """
     cadavers = js_data.get("cadavers", [])
     deaths = []

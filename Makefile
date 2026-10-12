@@ -77,8 +77,13 @@ clean-all: clean-kb ## Remove everything (raw wiki + processed)
 
 DISCORD_MCP ?= ../discord_mcp
 
-discord-listen: ## Answer Discord mentions with Claude Code (../discord_mcp listener, discord-listener.toml). Ctrl-C to stop
+discord-listener.toml discord-listener.mcp.json:
+	@echo "ERROR: $@ not found. Create it from the example and fill it in:"
+	@echo "  cp $(subst .toml,.example.toml,$(subst .mcp.json,.mcp.example.json,$@)) $@"
+	@exit 1
+
+discord-listen: persona.md discord-listener.toml discord-listener.mcp.json ## Answer Discord mentions with Claude Code (../discord_mcp listener, discord-listener.toml). Ctrl-C to stop
 	$(DISCORD_MCP)/.venv/bin/python $(DISCORD_MCP)/listen.py --config discord-listener.toml
 
-discord-listen-once: ## One poll cycle of the Discord listener, then exit
+discord-listen-once: persona.md discord-listener.toml discord-listener.mcp.json ## One poll cycle of the Discord listener, then exit
 	$(DISCORD_MCP)/.venv/bin/python $(DISCORD_MCP)/listen.py --config discord-listener.toml --once

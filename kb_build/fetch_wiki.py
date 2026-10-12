@@ -26,8 +26,15 @@ if not cf_clearance or not mhwiki_session:
         "Copy them from your browser DevTools (Cookies for en.mhwiki.org) into .env"
     )
 
+mhwiki_user_name = os.environ.get("MHWIKI_USER_NAME", "")
+mhwiki_user_id = os.environ.get("MHWIKI_USER_ID", "")
+user_cookies = (
+    f"mhwikiUserName={mhwiki_user_name}; mhwikiUserID={mhwiki_user_id}; "
+    if mhwiki_user_name and mhwiki_user_id else ""
+)
+
 COOKIES = (
-    f"mhwikiUserName=USER; mhwikiUserID=ID; "
+    f"{user_cookies}"
     f"mhwikiToken={mhwiki_token}; "
     f"mhwiki_session={mhwiki_session}; "
     f"cf_clearance={cf_clearance}"

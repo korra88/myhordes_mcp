@@ -1,10 +1,11 @@
 # Config for the Discord listener in ../discord_mcp (listen.py). Start it with
-# `make discord-listen`. The bot token is not here: it comes from
+# `make discord-listen`. Copy this file to discord-listener.toml (gitignored)
+# and fill in allow_users. The bot token is not here: it comes from
 # ../discord_mcp/.env (DISCORD_TOKEN, and DISCORD_CHANNELS for the names below).
 # Reference: ../discord_mcp/README.md, section "The listener".
 
 channels = ["myhordes"]                  # #myhordes-ai
-allow_users = ["YOUR_DISCORD_USER_ID"]     # the owner only
+allow_users = ["YOUR_DISCORD_USER_ID"]   # who may talk to the bot
 poll_seconds = 20
 backlog_minutes = 30
 settle_seconds = 8
@@ -17,7 +18,7 @@ max_turns_per_hour = 60
 cwd = "."
 model = "sonnet"
 append_system_prompt_files = ["persona.md", "prompts/discord.md"]
-mcp_config = ["discord-listener.mcp.json"]
+mcp_config = ["discord-listener.mcp.json"]   # copy from discord-listener.mcp.example.json
 # Read-only game and wiki tools, by name. Never mcp__myhordes__*.
 allowed_tools = [
   "mcp__myhordes__get_bank_inventory",
@@ -45,7 +46,7 @@ allowed_tools = [
 # personal/ holds private notes on other players; answers are public.
 deny = ["Read(./personal/**)"]
 # Lifts the baseline deny on writes so the allows above can apply. Acceptable while
-# the owner is the only allowed user; revisit before opening allow_users.
+# a single trusted user is allowed; revisit before opening allow_users.
 unsafe_allow = ["Write", "Edit"]
 timeout_seconds = 600
 max_budget_usd = 100   # the maximum: on the subscription this is an equivalent, not a charge
