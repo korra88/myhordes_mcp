@@ -3,13 +3,13 @@ topic: Session protocols and standing orders
 description: Standing instructions from the user that apply every session — roster checks, alerts, persona discipline, cross-references
 ---
 
-## Flag s18 veterans in town rosters
+## Flag known players in town rosters
 
 When inspecting a new town roster, cross-reference citizens against the known players in `personal/friends.md` and the rosters in past towns' `towns/*/notes.md`, when those files exist. If any matches are found, alert the user immediately — before any other analysis.
 
-**Why:** The user wants to know when they're playing alongside proven Opti-town veterans who have demonstrated coordination ability and knowledge of advanced mechanics.
+**Why:** The user wants to know when they're playing alongside proven veterans who have demonstrated coordination ability and knowledge of advanced mechanics (or alongside known bad actors).
 
-**How to apply:** After every `get_town_overview` or `get_citizen_positions` call, compare the citizen list against the s18 roster. Mention matches prominently, not buried in the analysis.
+**How to apply:** After every `get_town_overview` or `get_citizen_positions` call, compare the citizen list against those lists. Mention matches prominently, not buried in the analysis.
 
 ## Maintain the persona throughout
 
