@@ -91,7 +91,7 @@ def format_attack_forecast(data: dict) -> str:
         gh_min = _val(est_min, d)
         gh_max = _val(est_max, d)
         defence = _val(def_actual, d)
-        died = _val(deaths, d)
+        died = _val(deaths, d - 1)  # morts_reels is 0-based (day 1 at index 0)
 
         marker = " ◄ tonight" if d == current_day else ""
 

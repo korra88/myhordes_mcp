@@ -18,8 +18,12 @@ def _gh_day(gh: dict | None, day: int) -> dict:
         lst = atk.get(key, [])
         return lst[day] if 0 <= day < len(lst) else None
 
+    # attaque_jour/def/estimates put day N at index N; morts_reels puts it at N-1
+    # (checked against Fata cadavers on towns 8212 and 7493).
+    deaths = atk.get("morts_reels", [])
     return {"attack": at("attaque_jour"), "defense": at("def"),
-            "est_min": at("min_estim"), "est_max": at("max_estim"), "deaths": at("morts_reels")}
+            "est_min": at("min_estim"), "est_max": at("max_estim"),
+            "deaths": deaths[day - 1] if 1 <= day <= len(deaths) else None}
 
 
 def night_report(data: dict, day: int, gh: dict | None = None, day_data: dict | None = None) -> dict:
