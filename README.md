@@ -202,7 +202,8 @@ make kb
 | `docs/auth-and-rate-limits.md` | Two-key auth model, rate limit buckets, attack lockout |
 | `docs/game-rules-for-external-apps.md` | Official rules translated from German — authoritative compliance reference |
 | `docs/implementation-notes.md` | Design decisions with rationale — read before changing architecture |
-| `towns/_template/` | Templates for new town folders |
+| `templates/town/` | Templates for new town folders |
+| `towns/` | Town logs (gitignored). Keep your own private data repo here, e.g. `git clone <your-town-data-repo> towns`, or point `MYHORDES_TOWNS_DIR` elsewhere. Skills write `towns/s{season}-{slug}/`. |
 | `knowledge/buildings/` | Building guides by game phase: `basic.md`, `intermediate.md`, `defense-focus.md`, `advanced.md`, `wonders.md` |
 
 ### Game source

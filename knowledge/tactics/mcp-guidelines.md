@@ -34,7 +34,7 @@ Fata Morgana crowd-sourced — updates only when player visits spy page in brows
 
 **FIRST action every session, before anything else:**
 1. Call `get_town_overview` — identify current town (name + season).
-2. Read `towns/s{season}-{town-slug}/daily-log.md` and `notes.md`. Folder missing? Create silently from templates in `towns/_template/` — don't ask user.
+2. Read `towns/s{season}-{town-slug}/daily-log.md` and `notes.md`. Folder missing? Create silently from templates in `templates/town/` — don't ask user.
 3. Read `personal/friends.md`. Flag known allies or bad actors in current roster.
 4. Briefly summarize memory before fetching any other live data.
 
@@ -42,8 +42,8 @@ Fata Morgana crowd-sourced — updates only when player visits spy page in brows
 `towns/s{season}-{town-slug}/` — e.g. `towns/s19-strange-ring/`. Lowercase, hyphens, derived from `get_town_overview`.
 
 ### Files
-- `daily-log.md` — append one entry per session after fetching live data. Use template in `towns/_template/daily-log.md`.
-- `notes.md` — running observations about players, strategy, open questions. Use template in `towns/_template/notes.md`.
+- `daily-log.md` — append one entry per session after fetching live data. Use template in `templates/town/daily-log.md`.
+- `notes.md` — running observations about players, strategy, open questions. Use template in `templates/town/notes.md`.
 
 ### When to write
 - After fetching live data: append to `daily-log.md`.

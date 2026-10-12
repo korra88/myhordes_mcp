@@ -16,9 +16,10 @@ Call `get_town_changes()` with no arguments. It compares against the previous
 check today and moves that marker forward. Its header gives town name, day N and
 which snapshot it compared against.
 
-Resolve the folder: list `towns/` subdirs (exclude `_template`), case-insensitive
-slug match on `s{season}-{slug}` (season from `get_town_overview` only if the
-folder is ambiguous). No match → create it from `towns/_template/`.
+Resolve the folder: list `towns/` subdirs (exclude names starting with `_`),
+case-insensitive slug match on `s{season}-{slug}` (season from `get_town_overview`
+only if the folder is ambiguous). No match → create it from `templates/town/`
+(create `towns/` too if missing).
 
 ## Step 2 — Day transition
 
