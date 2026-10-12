@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from myhordes_mcp import fata, gesthordes  # noqa: E402
 from myhordes_mcp.knowledgebase import curated, wiki  # noqa: E402
-from myhordes_mcp.utils.config import FATAMORGANA_TOWN_ID, resolve_town_id  # noqa: E402
+from myhordes_mcp.utils.config import CURRENT_TOWN_FILE, FATAMORGANA_TOWN_ID, resolve_town_id  # noqa: E402
 
 # IMPORTANT: MyHordes rules prohibit automated/scheduled API polling.
 # All API calls must be triggered by explicit user queries via MCP tools.
@@ -17,8 +17,8 @@ from myhordes_mcp.utils.config import FATAMORGANA_TOWN_ID, resolve_town_id  # no
 
 mcp = FastMCP("MyHordes Advisor")
 
-if not FATAMORGANA_TOWN_ID:
-    print("Warning: FATAMORGANA_TOWN_ID not found in environment variables.", file=sys.stderr, flush=True)
+if not FATAMORGANA_TOWN_ID and not CURRENT_TOWN_FILE.exists():
+    print("Warning: no default town (towns/_current_town or FATAMORGANA_TOWN_ID).", file=sys.stderr, flush=True)
 
 
 # ---------------------------------------------------------------------------

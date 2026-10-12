@@ -31,14 +31,27 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
+# Default town, switchable without restarting the server: one town ID, read on every call.
+CURRENT_TOWN_FILE = TOWNS_DIR / "_current_town"
+
+
 def resolve_town_id(town_id: int = 0) -> int | str:
     """Return a valid town ID (int) or an error message (str).
 
-    If town_id is provided and non-zero, use it directly.
-    Otherwise fall back to the FATAMORGANA_TOWN_ID env var.
+    Order: explicit non-zero town_id, then towns/_current_town, then the
+    FATAMORGANA_TOWN_ID env var.
     """
     if town_id:
         return int(town_id)
+    try:
+        current = CURRENT_TOWN_FILE.read_text().strip()
+    except OSError:
+        current = ""
+    if current:
+        if current.isdigit():
+            return int(current)
+        return f"Error: {CURRENT_TOWN_FILE.name} must contain only a town ID, found {current!r}."
     if FATAMORGANA_TOWN_ID:
         return int(FATAMORGANA_TOWN_ID)
-    return "Error: No town ID provided and FATAMORGANA_TOWN_ID not configured in .env."
+    return ("Error: No town ID provided, no towns/_current_town file, "
+            "and FATAMORGANA_TOWN_ID not configured in .env.")
