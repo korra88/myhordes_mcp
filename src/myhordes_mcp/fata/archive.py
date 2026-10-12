@@ -4,13 +4,15 @@ Stores fetched HTML pages and extracted JSON data per town per day,
 so historical data is preserved even if Fata Morgana stops serving it.
 
 Layout:
-    {TOWNS_DIR}/{town_slug}/cache/      (TOWNS_DIR: MYHORDES_TOWNS_DIR, default towns/)
+    towns/{town_slug}/cache/
+        _meta.json      # town_id → this folder (skills resolve the folder from it)
         day-01.html     # full raw HTML (archival)
         day-01.json     # extracted JS dict (fast access)
 """
 
 import json
 import re
+import unicodedata
 from pathlib import Path
 
 from ..utils.config import TOWNS_DIR
@@ -48,7 +50,9 @@ def _ensure_cache_dir(town_dir: Path) -> Path:
 
 def _create_town_dir(town_id: int, town_name: str, season: int | None) -> Path:
     """Create a new town directory based on metadata from the fetched data."""
-    slug = re.sub(r"[^a-z0-9]+", "-", town_name.lower()).strip("-")
+    # "Anónimos" → "anonimos": strip accents so the slug matches the town name as read
+    ascii_name = unicodedata.normalize("NFKD", town_name).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
     season_prefix = f"s{season}" if season else "s0"
     dir_name = f"{season_prefix}-{slug}" if slug else f"{season_prefix}-town-{town_id}"
     town_dir = TOWNS_DIR / dir_name

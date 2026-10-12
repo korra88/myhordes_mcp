@@ -4,7 +4,9 @@ Finalize previous day's log using current morning MCP snapshot (post-attack stat
 
 - Read `.env`, note `FATAMORGANA_TOWN_ID`.
 - Call `get_town_overview` → town name + current game day N.
-- List `towns/` subdirs (exclude `_template`). Case-insensitive slug match on `s{season}-{slug}`.
+- Folder: the `towns/*/` whose `cache/_meta.json` has `"town_id"` equal to
+  `FATAMORGANA_TOWN_ID`, e.g. `grep -lE '"town_id": 8212(,|$)' towns/*/cache/_meta.json`.
+  Never derive it from the town name.
 - No match → stop, tell user.
 
 **Normal mode** (no `backfill`):

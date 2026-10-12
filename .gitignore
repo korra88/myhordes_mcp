@@ -23,8 +23,7 @@ wiki/
 MHWiki-*.xml
 
 # Local-only folders
-agent-notes/
-# Town logs: separate private repo cloned here (see README)
+# Town logs + Fata archive; optionally your own private repo (README, "Town logs")
 towns/
 
 # Active persona (local — copy from persona.example.md)

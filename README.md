@@ -17,7 +17,8 @@ myhordes_mcp/
 │   └── knowledgebase/       # Wiki search (wiki/processed/) + curated knowledge/ search
 ├── persona.example.md       # Example persona — copy to persona.md (gitignored)
 ├── prompts/discord.md       # Discord channel context for the listener
-├── towns/                   # Per-town daily logs and notes
+├── towns/                   # Town logs + Fata archive (gitignored, see "Town logs")
+├── templates/town/          # Starting files for a new town's logs
 ├── personal/                # Player-specific private data (gitignored contents)
 ├── kb_build/                # Knowledge base build pipeline
 │   ├── fetch_wiki.py        # MediaWiki scraper (full re-crawl)
@@ -155,6 +156,64 @@ In a Claude Code conversation, ask something like:
 
 Fata data is cached in memory for `FATA_CACHE_TTL` seconds (default 180); concurrent calls share one request. Every live fetch of the current day also stores a small snapshot under `towns/<town>/cache/snapshots/`, which `get_town_changes` compares.
 
+## Town logs (`towns/`)
+
+All town data lives in `towns/` at the repo root. The path is fixed (the server,
+the skills and the Discord listener's write permissions all use it) and the folder
+is gitignored, so your logs and other players' names never end up in this repo.
+
+```
+towns/
+  s{season}-{town-slug}/      # created by the server on the first live fetch
+    cache/                    # written by the server
+      _meta.json              #   town ID → this folder; skills find the folder through it
+      day-NN.html / .json     #   Fata pages archived per day (history survives if Fata drops it)
+      snapshots/              #   intra-day snapshots for get_town_changes
+    daily-log.md              # written by the skills (inspect-town, close-day),
+    day-NN.md                 #   started from templates/town/
+    notes.md
+```
+
+To keep the data somewhere else (another disk, a synced folder), make `towns` a
+symlink: `ln -s /path/to/your/town-data towns`.
+
+### Tracking your logs in a private git repo
+
+Useful to keep history, back the logs up, or share them between machines (e.g. a
+Raspberry Pi running the Discord listener and your PC).
+
+```bash
+cd towns                                  # exists after the first live fetch; else mkdir towns
+git init -b main
+printf '**/cache/\n' > .gitignore         # see the note on cache/ below
+git add -A && git commit -m "Initial town logs"
+gh repo create <you>/myhordes-town-data --private --source=. --push
+# without gh: create an empty private repo, then
+#   git remote add origin <url> && git push -u origin main
+```
+
+On another machine, clone it into place before the first run:
+
+```bash
+cd myhordes_mcp
+git clone <url-of-your-town-data-repo> towns
+```
+
+Notes:
+
+- **Keep it private.** Logs contain other players' names and your town's plans.
+- **`cache/` stays out of git.** It grows to tens of MB per long town and changes on
+  every fetch. It is also the only copy of old Fata pages, so back it up separately
+  if you care about it (e.g. `rsync -a towns/ backup-host:myhordes-towns/`).
+  Snapshots live there too, so `get_town_changes` only compares fetches made on the
+  same machine.
+- **Committing.** Commit by hand, or with a local cron job such as
+  `cd /path/to/myhordes_mcp/towns && git add -A && git commit -qm "logs $(date +%F)" && git push -q`.
+  It only touches your files, never the game or Fata, so it does not conflict with
+  the no-automated-polling rule.
+- **One writer at a time.** If the listener and you both write the same day file on
+  two machines, pull before writing or expect merge conflicts.
+
 ## Updating the Wiki
 
 The wiki cache lives in `wiki/` (gitignored). Two update paths:
@@ -205,7 +264,7 @@ make kb
 | `docs/game-rules-for-external-apps.md` | Official rules translated from German — authoritative compliance reference |
 | `docs/implementation-notes.md` | Design decisions with rationale — read before changing architecture |
 | `templates/town/` | Templates for new town folders |
-| `towns/` | Town logs (gitignored). Keep your own private data repo here, e.g. `git clone <your-town-data-repo> towns`, or point `MYHORDES_TOWNS_DIR` elsewhere. Skills write `towns/s{season}-{slug}/`. |
+| `towns/` | Town logs and Fata archive (gitignored, fixed path). See [Town logs](#town-logs-towns). |
 | `knowledge/buildings/` | Building guides by game phase: `basic.md`, `intermediate.md`, `defense-focus.md`, `advanced.md`, `wonders.md` |
 
 ### Game source

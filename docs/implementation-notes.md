@@ -16,7 +16,7 @@ Design decisions made during development, with rationale. Revisit these if requi
 - No new code required — Claude Code already has Read/Write tools
 - Memory files are human-readable and directly editable by the user
 - The read-only constraint applies to game actions only; local filesystem writes are fine
-- Files live alongside `knowledge/` in the repo, same mental model
+- Files live in the repo checkout (`towns/`, gitignored), next to `knowledge/`
 
 **Revisit if:**
 - A non-Claude Code client needs access to town memory (→ upgrade to Option B)
@@ -24,11 +24,18 @@ Design decisions made during development, with rationale. Revisit these if requi
 
 **Structure:**
 ```
-towns/
-  s{season}-{town-slug}/
-    daily-log.md    # day-by-day snapshots written by the agent
-    notes.md        # strategic observations, player behavior, open questions
+towns/                  # fixed path, gitignored; optionally its own private repo
+  s{season}-{town-slug}/  # created by the server on the first live fetch
+    cache/              # server-written: _meta.json (town ID → folder), day pages, snapshots
+    daily-log.md        # one summary row per day, written by the skills
+    day-NN.md           # per-day report
+    notes.md            # strategic observations, player behavior, open questions
 ```
+
+Skills locate the folder through `cache/_meta.json` (town ID), never by deriving
+the slug from the town name, so code and skills always agree on the folder. The
+path is not configurable: the Discord listener's write permissions and the skills
+hardcode `towns/`. Use a symlink to store it elsewhere.
 
 ---
 

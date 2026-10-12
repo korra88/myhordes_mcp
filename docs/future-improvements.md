@@ -16,7 +16,9 @@ Ideas that aren't actionable yet but worth revisiting.
 - Submodule vs. nested repo vs. just a separate remote on a subfolder?
 - What in `agent-notes/` should be shareable vs. private?
 
-**Status:** Idea only. No urgency.
+**Status:** Partly done. `towns/` is gitignored and can be its own private repo
+(README, "Town logs"). `agent-notes/` no longer exists; `personal/` is still a
+separate gitignored folder.
 
 ## Gest'Hordes historical snapshots via authenticated session cookie
 

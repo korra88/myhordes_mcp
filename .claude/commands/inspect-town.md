@@ -16,10 +16,12 @@ Call `get_town_changes()` with no arguments. It compares against the previous
 check today and moves that marker forward. Its header gives town name, day N and
 which snapshot it compared against.
 
-Resolve the folder: list `towns/` subdirs (exclude names starting with `_`),
-case-insensitive slug match on `s{season}-{slug}` (season from `get_town_overview`
-only if the folder is ambiguous). No match → create it from `templates/town/`
-(create `towns/` too if missing).
+Resolve the folder (`{folder}` below): the server already created it while fetching.
+It is the `towns/*/` whose `cache/_meta.json` has `"town_id"` equal to
+`FATAMORGANA_TOWN_ID` from `.env`, e.g. `grep -lE '"town_id": 8212(,|$)' towns/*/cache/_meta.json`.
+Never derive the folder name from the town name yourself. No match (archive
+failed) → create `towns/s{season}-{slug}/` (lowercase, accents stripped, hyphens).
+If `daily-log.md` or `notes.md` is missing in the folder, copy it from `templates/town/`.
 
 ## Step 2 — Day transition
 

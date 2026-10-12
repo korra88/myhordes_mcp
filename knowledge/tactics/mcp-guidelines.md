@@ -34,12 +34,12 @@ Fata Morgana crowd-sourced — updates only when player visits spy page in brows
 
 **FIRST action every session, before anything else:**
 1. Call `get_town_overview` — identify current town (name + season).
-2. Read `towns/s{season}-{town-slug}/daily-log.md` and `notes.md`. Folder missing? Create silently from templates in `templates/town/` — don't ask user.
+2. Read `daily-log.md` and `notes.md` in the town folder (see Folder naming). Files missing? Create them silently from `templates/town/` — don't ask user.
 3. Read `personal/friends.md`. Flag known allies or bad actors in current roster.
 4. Briefly summarize memory before fetching any other live data.
 
 ### Folder naming
-`towns/s{season}-{town-slug}/` — e.g. `towns/s19-strange-ring/`. Lowercase, hyphens, derived from `get_town_overview`.
+`towns/s{season}-{town-slug}/` — e.g. `towns/s19-strange-ring/`. The server creates it on the first live fetch (lowercase, accents stripped, hyphens). Find it by town ID, not by name: it is the folder whose `cache/_meta.json` has `"town_id"` equal to `FATAMORGANA_TOWN_ID`.
 
 ### Files
 - `daily-log.md` — append one entry per session after fetching live data. Use template in `templates/town/daily-log.md`.
