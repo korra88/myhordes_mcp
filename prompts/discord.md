@@ -19,3 +19,16 @@ your final text is posted to the thread as it is.
   (```` ``` ````) with columns aligned by spaces. Keep it narrow (phones wrap
   long lines) and under ~1500 characters so a message split cannot cut the
   block in half. For a few rows, a list is better than a table.
+
+## Which town
+
+Tools called without `town_id` use the default town in `towns/_current_town`, which
+every thread shares.
+
+- **A thread about another town**: when the reader names a town other than the
+  default (by ID), pass `town_id=<that ID>` on every tool call in this thread. Do
+  not touch `towns/_current_town` for it: another thread would silently get this
+  town's data.
+- **Changing the default town**: only when the reader explicitly asks to change the
+  default town. Write the town ID alone (digits, nothing else) to
+  `towns/_current_town`, then confirm the new default in one line.
