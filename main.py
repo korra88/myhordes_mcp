@@ -38,7 +38,7 @@ async def get_bank_inventory(day: int = 0, town_id: int = 0, detail: str = "summ
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
         detail: 'summary' (default, almost always correct) or 'full'
                 (complete item list — only on explicit user request).
     """
@@ -65,7 +65,7 @@ async def get_town_overview(day: int = 0, town_id: int = 0, detail: str = "compa
     Args:
         day: Specific day number to inspect (e.g. 5 for day 5). Use 0 or omit for
              the current/latest day. Useful for comparing town progress over time.
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
         detail: 'compact' (default, almost always correct) — condensed citizen
                 roster, deaths count and bank size only.
                 'full' — every citizen on its own line plus the complete bank
@@ -92,7 +92,7 @@ async def get_citizen_positions(day: int = 0, town_id: int = 0) -> str:
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -113,7 +113,7 @@ async def get_defense_status(day: int = 0, town_id: int = 0) -> str:
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -140,7 +140,7 @@ async def get_buildings(
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
         mode: Output mode — one of:
             "summary"   (default) Buildings constructed today only, plus running defense total.
                         Use when asked what was built today or current defense from buildings.
@@ -177,7 +177,7 @@ async def get_build_options(town_id: int = 0, include_resources: bool = False) -
     You decide the order and explain trade-offs; do not recompute these numbers.
 
     Args:
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
         include_resources: Also list every resource each building needs. Default
             False — shortages are already shown; enable only when the user asks
             for full resource lists.
@@ -199,7 +199,7 @@ async def get_construction_history(town_id: int = 0) -> str:
     One call is enough; do not also call get_buildings or get_attack_forecast for this.
 
     Args:
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -220,7 +220,7 @@ async def get_town_changes(town_id: int = 0, since: str = "") -> str:
     AP figures are lower bounds: moves between two snapshots count as a straight line.
 
     Args:
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
         since: "" (default) = since the previous get_town_changes call today, and
                moves that marker forward; "day" = since the first snapshot today;
                "HH:MM" = since that game time (French time). Only the default
@@ -243,7 +243,7 @@ async def get_night_report(day: int = 0, town_id: int = 0) -> str:
     Args:
         day: The game day whose night to report (its attack happened at that day's
              end). 0 or omit = yesterday.
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -271,7 +271,7 @@ async def get_expedition_roster(listed: str = "", town_id: int = 0) -> str:
     Args:
         listed: Names on the user's expedition list, comma- or newline-separated.
                 "@Name:12345" handles are accepted. Empty = no reconciliation.
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -292,7 +292,7 @@ async def map_bank_to_dump_sheet(sheet_items: str, town_id: int = 0) -> str:
     Args:
         sheet_items: Column B of the sheet's item rows, one name per line, in row
                      order (keep blank rows as empty lines so positions line up).
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -314,7 +314,7 @@ async def get_scout_map(
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -374,7 +374,7 @@ async def find_expedition_path(
         start_ep: EP at departure (Scout 2, shoes +1, bike +2; default 0).
         thirst_counter: Zones already walked since the last water ration.
         day: Specific day number to inspect. Use 0 or omit for the current day.
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -420,7 +420,7 @@ async def get_zone_details(
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
-        town_id: Fata Morgana town/game ID. Omit to use the default from .env.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
         x1: X coordinate of the first corner of the area to inspect (town-relative).
         y1: Y coordinate of the first corner of the area to inspect (town-relative).
         x2: X coordinate of the second corner. Required if x1/y1 are set.
@@ -453,7 +453,7 @@ async def get_attack_distribution(town_id: int = 0) -> str:
     a given day level, or whether tonight's estimate is unusually high or normal.
 
     Args:
-        town_id: Gest'Hordes map ID. Omit to use the default from .env.
+        town_id: Gest'Hordes map ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -473,7 +473,7 @@ async def get_attack_forecast(town_id: int = 0) -> str:
     scales over the game, or wants to compare defence vs. projected zombie counts.
 
     Args:
-        town_id: Gest'Hordes map ID. Omit to use the default from .env.
+        town_id: Gest'Hordes map ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
