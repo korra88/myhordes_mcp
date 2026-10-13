@@ -40,7 +40,7 @@ import os
 import httpx
 
 from ..utils.cache import TTLCache
-from ..utils.config import env_int
+from ..utils.config import USER_AGENT, env_int
 from . import archive
 from .parse import _build_result, _extract_js_data
 from .snapshot import snapshot
@@ -88,7 +88,7 @@ async def _fetch(url: str, town_id: int, day: int | None) -> dict:
             return _build_result(town_id, cached_js)
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, headers={"user-agent": USER_AGENT}) as client:
             resp = await client.get(url)
             resp.raise_for_status()
     except httpx.HTTPStatusError as e:

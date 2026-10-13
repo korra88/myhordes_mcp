@@ -4,6 +4,7 @@
 """
 
 import os
+import secrets
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -21,6 +22,37 @@ PLAYER_NAME = os.getenv("PLAYER_NAME")
 # Town logs and the Fata page archive. Fixed path: skills and the Discord listener's
 # write permissions use `towns/` too. To keep the data elsewhere, make it a symlink.
 TOWNS_DIR = PROJECT_ROOT / "towns"
+
+
+def _install_id() -> str:
+    """Random per-installation ID, created on first run and kept in .install_id.
+
+    Lets site owners tell installs apart in their logs. Random on purpose: nothing
+    about the machine or the user is derived from it. Delete the file to reset.
+    """
+    path = PROJECT_ROOT / ".install_id"
+    try:
+        existing = path.read_text().strip()
+        if existing:
+            return existing
+    except OSError:
+        pass
+    new_id = secrets.token_hex(4)
+    try:
+        path.write_text(new_id + "\n")
+    except OSError:
+        pass  # read-only checkout: the ID just changes on every restart
+    return new_id
+
+
+# Sent on every request to Fata Morgana and Gest'Hordes, so their admins can see
+# who is behind the traffic. MCP_CONTACT (e.g. your MyHordes name) is optional.
+USER_AGENT = (
+    "myhordes-mcp/1.0 (+https://github.com/korra88/myhordes_mcp; "
+    f"install={_install_id()}"
+    + (f"; contact={os.getenv('MCP_CONTACT')}" if os.getenv("MCP_CONTACT") else "")
+    + ")"
+)
 
 
 def env_int(name: str, default: int) -> int:

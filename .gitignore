@@ -13,6 +13,7 @@ venv/
 # Environment & local config
 .env
 .mcp.json
+.install_id
 
 # Debug artifacts
 fata-spy-rendered.html

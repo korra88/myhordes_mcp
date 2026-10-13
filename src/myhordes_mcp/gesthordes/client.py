@@ -16,7 +16,7 @@ default 120 s — stats change infrequently during the day).
 import httpx
 
 from ..utils.cache import TTLCache
-from ..utils.config import env_int
+from ..utils.config import USER_AGENT, env_int
 
 GESTHORDES_STATS_URL = "https://gesthordes.fr/rest/v1/stats/{map_id}"
 
@@ -42,7 +42,7 @@ async def _fetch(map_id: int) -> dict:
                 headers={
                     "accept": "application/json",
                     "gh-mapid": str(map_id),
-                    "user-agent": "MyHordes-MCP-Advisor/1.0",
+                    "user-agent": USER_AGENT,
                 },
             )
             resp.raise_for_status()
