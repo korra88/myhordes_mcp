@@ -34,7 +34,7 @@ myhordes_mcp/
 │   ├── external-api-reference.md
 │   ├── auth-and-rate-limits.md
 │   └── game-rules-for-external-apps.md
-└── myhordes-docker/         # Game source (git submodule, ignored)
+└── myhordes-docker/         # Optional local clone of the game source (gitignored)
 ```
 
 ## Setup
@@ -87,8 +87,8 @@ To connect this MCP server to Claude Code so you can use the tools in conversati
 
 Replace `/absolute/path/to/myhordes_mcp` with the actual path to this repo, and `YOUR_TOWN_ID` with your town ID.
 
-Discord is not served by this MCP any more. Mentions in #myhordes-ai are answered by the
-listener in [`../discord_mcp`](https://github.com/korra88/discord_mcp), configured by
+Discord is not served by this MCP any more. Mentions in #myhordes-ai are answered by a
+separate listener (`../discord_mcp`, not published yet), configured by
 `discord-listener.toml` and `discord-listener.mcp.json` (both gitignored: copy them from
 `discord-listener.example.toml` and `discord-listener.mcp.example.json`, then set
 `allow_users` and the absolute paths). Start it with `make discord-listen`
@@ -269,7 +269,9 @@ make kb
 
 ### Game source
 
-PHP/Symfony source at `myhordes-docker/myhordes/` (git submodule). See `docs/source-map.md` for full navigation. Key paths:
+PHP/Symfony source, used only as a reference for the docs and parsers. Not part of this repo: clone
+[myhordes-docker](https://gitlab.com/eternaltwin/myhordes/myhordes-docker) into `myhordes-docker/`
+(gitignored), with the game in `myhordes-docker/myhordes/`. See `docs/source-map.md` for full navigation. Key paths:
 - API controllers: `src/Controller/API/JSONv1Controller.php` (primary), `XMLv2Controller.php`
 - Entities: `src/Entity/` — `Town.php`, `Citizen.php`, `Inventory.php`, `Item.php`, `Building.php`, `Zone.php`
 - Services: `src/Service/` — `TownHandler.php`, `CitizenHandler.php`, `InventoryHandler.php`
@@ -281,3 +283,20 @@ PHP/Symfony source at `myhordes-docker/myhordes/` (git submodule). See `docs/sou
 - `mcp` (Anthropic MCP SDK / FastMCP)
 - `httpx` (async HTTP client)
 - `python-dotenv` (environment management)
+
+## Credits
+
+This project only reads data that players already share on these sites. Thanks to:
+
+- [MyHordes](https://myhordes.eu) and the [Eternaltwin](https://eternaltwin.org) team, for keeping the game alive
+- [Fata Morgana](https://fatamorgana.md26.eu), the town spy and map tool that provides most of the live data
+- [Gest'Hordes](https://gesthordes.fr), for attack and defence statistics
+- [MHWiki](https://en.mhwiki.org), source of the offline wiki search
+
+Requests to Fata Morgana and Gest'Hordes carry the User-Agent
+`myhordes-mcp/1.0 (+https://github.com/korra88/myhordes_mcp; install=<random id>)`, so their
+admins can see where the traffic comes from. Set `MCP_CONTACT` in `.env` to add a way to reach you.
+
+## License
+
+[MIT](LICENSE)
