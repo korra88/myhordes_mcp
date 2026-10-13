@@ -96,7 +96,7 @@ separate listener (`../discord_mcp`, not published yet), configured by
 
 To keep it running on a server, `make discord-service-install` installs it as a systemd
 user service (`templates/systemd/discord-listener.service`, restarts on failure, logs in
-`journalctl --user -u discord-listener -f`); `make discord-service-disable` stops it and
+`journalctl --user-unit discord-listener -f`); `make discord-service-disable` stops it and
 `make discord-service-uninstall` removes it. For it to start at boot without a login, run
 `sudo loginctl enable-linger $USER` once. Run one listener per bot: two would both answer.
 

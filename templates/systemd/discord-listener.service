@@ -1,6 +1,6 @@
 # Discord listener as a systemd user service.
 # Installed by `make discord-service-install`, which fills in the @...@ paths.
-# Logs: journalctl --user -u discord-listener -f
+# Logs: journalctl --user-unit discord-listener -f
 
 [Unit]
 Description=MyHordes Discord listener (Claude Code per mention)
