@@ -1,0 +1,12 @@
+# Nightly commit of towns/. 04:00: after the ~23:59 attack, far from play time.
+# Persistent: a run missed while the machine was off happens at next boot.
+
+[Unit]
+Description=Nightly commit of the MyHordes town logs
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+# One run of `make towns-commit`, started by towns-commit.timer.
+# Installed by `make towns-commit-install`, which fills in the @...@ paths.
+# Logs: journalctl --user-unit towns-commit
+
+[Unit]
+Description=Commit and push the MyHordes town logs (towns/)
+
+[Service]
+Type=oneshot
+WorkingDirectory=@MCP_DIR@
+ExecStart=/usr/bin/make -s towns-commit

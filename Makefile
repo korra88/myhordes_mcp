@@ -29,7 +29,8 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 # ─── Main targets ─────────────────────────────────────────────
 
 .PHONY: kb fetch process clean-kb clean-all help advisor persona discord-listen discord-listen-once \
-	discord-service-install discord-service-disable discord-service-uninstall
+	discord-service-install discord-service-disable discord-service-uninstall \
+	towns-commit towns-commit-install towns-commit-disable towns-commit-uninstall
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -91,22 +92,55 @@ discord-listen-once: persona.md discord-listener.toml discord-listener.mcp.json 
 
 # ─── Discord listener as a systemd user service ───────────────
 
-SERVICE      := discord-listener
-SERVICE_FILE := $(HOME)/.config/systemd/user/$(SERVICE).service
+SERVICE  := discord-listener
+UNIT_DIR := $(HOME)/.config/systemd/user
+
+# Render templates/systemd/$(1) with this checkout's paths into the user unit dir.
+define render-unit
+	@mkdir -p $(UNIT_DIR)
+	sed -e 's|@MCP_DIR@|$(CURDIR)|g' -e 's|@DISCORD_MCP@|$(abspath $(DISCORD_MCP))|g' \
+		templates/systemd/$(1) > $(UNIT_DIR)/$(1)
+endef
+
+define check-linger
+	@loginctl show-user $(USER) -p Linger 2>/dev/null | grep -q yes || \
+		echo "NOTE: linger is off, so user units stop at logout and do not start at boot. Fix: sudo loginctl enable-linger $(USER)"
+endef
 
 discord-service-install: persona.md discord-listener.toml discord-listener.mcp.json ## Install and start the listener as a systemd user service (restarts on failure)
-	@mkdir -p $(dir $(SERVICE_FILE))
-	sed -e 's|@MCP_DIR@|$(CURDIR)|g' -e 's|@DISCORD_MCP@|$(abspath $(DISCORD_MCP))|g' \
-		templates/systemd/$(SERVICE).service > $(SERVICE_FILE)
+	$(call render-unit,$(SERVICE).service)
 	systemctl --user daemon-reload
 	systemctl --user enable --now $(SERVICE)
-	@loginctl show-user $(USER) -p Linger 2>/dev/null | grep -q yes || \
-		echo "NOTE: linger is off, so the service stops at logout and does not start at boot. Fix: sudo loginctl enable-linger $(USER)"
+	$(check-linger)
 
 discord-service-disable: ## Stop the listener service and keep it from starting at boot (unit file kept)
 	systemctl --user disable --now $(SERVICE)
 
 discord-service-uninstall: ## Stop the listener service and remove its unit file
 	-systemctl --user disable --now $(SERVICE)
-	rm -f $(SERVICE_FILE)
+	rm -f $(UNIT_DIR)/$(SERVICE).service
+	systemctl --user daemon-reload
+
+# ─── Town logs: nightly commit of towns/ (separate git repo) ──
+
+towns-commit: ## Commit and push towns/ (pull --rebase first: other machines push too)
+	@cd towns && git add -A && \
+	if git diff --cached --quiet; then echo "towns: nothing to commit"; \
+	else git commit -q -m "logs: snapshot $$(date '+%F %H:%M')" && echo "towns: committed $$(git log -1 --format='%h %s')"; fi && \
+	{ git pull --rebase -q || { git rebase --abort; echo "towns: rebase conflict, resolve by hand"; exit 1; }; } && \
+	git push -q && echo "towns: pushed, HEAD $$(git log -1 --format=%h)"
+
+towns-commit-install: ## Install the systemd user timer that runs towns-commit every night at 04:00
+	$(call render-unit,towns-commit.service)
+	$(call render-unit,towns-commit.timer)
+	systemctl --user daemon-reload
+	systemctl --user enable --now towns-commit.timer
+	$(check-linger)
+
+towns-commit-disable: ## Stop the nightly towns-commit timer (unit files kept)
+	systemctl --user disable --now towns-commit.timer
+
+towns-commit-uninstall: ## Stop the nightly towns-commit timer and remove its unit files
+	-systemctl --user disable --now towns-commit.timer
+	rm -f $(UNIT_DIR)/towns-commit.service $(UNIT_DIR)/towns-commit.timer
 	systemctl --user daemon-reload

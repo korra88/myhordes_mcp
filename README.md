@@ -213,8 +213,10 @@ Notes:
   if you care about it (e.g. `rsync -a towns/ backup-host:myhordes-towns/`).
   Snapshots live there too, so `get_town_changes` only compares fetches made on the
   same machine.
-- **Committing.** Commit by hand, or with a local cron job such as
-  `cd /path/to/myhordes_mcp/towns && git add -A && git commit -qm "logs $(date +%F)" && git push -q`.
+- **Committing.** `make towns-commit` commits whatever changed, pulls with rebase
+  (another machine may have pushed) and pushes. `make towns-commit-install` runs it
+  every night at 04:00 through a systemd user timer (`towns-commit-disable` /
+  `towns-commit-uninstall` undo it; logs in `journalctl --user-unit towns-commit`).
   It only touches your files, never the game or Fata, so it does not conflict with
   the no-automated-polling rule.
 - **One writer at a time.** If the listener and you both write the same day file on
