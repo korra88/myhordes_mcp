@@ -39,7 +39,7 @@ Fata Morgana crowd-sourced — updates only when player visits spy page in brows
 4. Briefly summarize memory before fetching any other live data.
 
 ### Folder naming
-`towns/s{season}-{town-slug}/` — e.g. `towns/s19-strange-ring/`. The server creates it on the first live fetch (lowercase, accents stripped, hyphens). Find it by town ID, not by name: it is the folder whose `cache/_meta.json` has `"town_id"` equal to `FATAMORGANA_TOWN_ID`.
+`towns/s{season}-{town-slug}/` — e.g. `towns/s19-strange-ring/`. The server creates it on the first live fetch (lowercase, accents stripped, hyphens). Find it by town ID, not by name: it is the folder whose `cache/_meta.json` has `"town_id"` equal to the default town ID (`towns/_current_town`, else `FATAMORGANA_TOWN_ID` in `.env`; tools called without `town_id` use the same one).
 
 ### Files
 - `daily-log.md` — append one entry per session after fetching live data. Use template in `templates/town/daily-log.md`.

@@ -19,6 +19,8 @@ myhordes_mcp/
 ├── prompts/discord.md       # Discord channel context for the listener
 ├── towns/                   # Town logs + Fata archive (gitignored, see "Town logs")
 ├── templates/town/          # Starting files for a new town's logs
+├── templates/systemd/       # User units: Discord listener service, nightly towns commit
+├── scripts/set_town.py      # Show/set the default town (make town)
 ├── personal/                # Player-specific private data (gitignored contents)
 ├── kb_build/                # Knowledge base build pipeline
 │   ├── fetch_wiki.py        # MediaWiki scraper (full re-crawl)
@@ -49,6 +51,8 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env and set at minimum:
 #   FATAMORGANA_TOWN_ID = your town's Fata Morgana spy ID (e.g. YOUR_TOWN_ID)
+# or set the default town without touching .env (no restart needed when you switch):
+#   make town TOWN=YOUR_TOWN_ID       # writes towns/_current_town, which wins over .env
 #
 # Optional (for future official API support):
 #   MYHORDES_USER_KEY = your External ID (found in account settings)
@@ -170,6 +174,7 @@ is gitignored, so your logs and other players' names never end up in this repo.
 
 ```
 towns/
+  _current_town               # default town ID (make town TOWN=...), re-read on every call
   s{season}-{town-slug}/      # created by the server on the first live fetch
     cache/                    # written by the server
       _meta.json              #   town ID → this folder; skills find the folder through it
@@ -179,6 +184,11 @@ towns/
     day-NN.md                 #   started from templates/town/
     notes.md
 ```
+
+Tools called without `town_id` use the default town: `towns/_current_town`, else
+`FATAMORGANA_TOWN_ID` from `.env`. `make town` shows it, `make town TOWN=8212` switches
+it; the server picks the change up on its next call. If `towns/` is a git repo (below),
+the file is tracked, so the switch reaches your other machines with the next commit.
 
 To keep the data somewhere else (another disk, a synced folder), make `towns` a
 symlink: `ln -s /path/to/your/town-data towns`.

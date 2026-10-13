@@ -28,7 +28,7 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 
 # ─── Main targets ─────────────────────────────────────────────
 
-.PHONY: kb fetch process clean-kb clean-all help advisor persona discord-listen discord-listen-once \
+.PHONY: kb fetch process clean-kb clean-all help advisor persona town discord-listen discord-listen-once \
 	discord-service-install discord-service-disable discord-service-uninstall \
 	towns-commit towns-commit-install towns-commit-disable towns-commit-uninstall
 
@@ -49,6 +49,9 @@ advisor: persona.md ## Start Claude Code as the town advisor (persona + tactics 
 		$(foreach f,$(PERSONAL_FILES),--append-system-prompt-file $(f)) \
 		--append-system-prompt-file persona.md \
 		"Persona and knowledge loaded. Introduce yourself briefly and await orders."
+
+town: ## Show the default town, or set it: make town TOWN=<Fata town ID> (no restart needed)
+	@$(PYTHON) scripts/set_town.py $(TOWN)
 
 kb: process ## Build the full knowledge base (fetch if needed, then process)
 

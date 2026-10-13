@@ -2,10 +2,11 @@ Finalize previous day's log using current morning MCP snapshot (post-attack stat
 
 ## Step 1 — Resolve town, current day, target days
 
-- Read `.env`, note `FATAMORGANA_TOWN_ID`.
+- Town ID: the content of `towns/_current_town`; if that file is missing,
+  `FATAMORGANA_TOWN_ID` in `.env`.
 - Call `get_town_overview` → town name + current game day N.
 - Folder: the `towns/*/` whose `cache/_meta.json` has `"town_id"` equal to
-  `FATAMORGANA_TOWN_ID`, e.g. `grep -lE '"town_id": 8212(,|$)' towns/*/cache/_meta.json`.
+  the town ID, e.g. `grep -lE '"town_id": 8212(,|$)' towns/*/cache/_meta.json`.
   Never derive it from the town name.
 - No match → stop, tell user.
 

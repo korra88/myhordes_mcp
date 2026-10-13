@@ -17,8 +17,9 @@ check today and moves that marker forward. Its header gives town name, day N and
 which snapshot it compared against.
 
 Resolve the folder (`{folder}` below): the server already created it while fetching.
-It is the `towns/*/` whose `cache/_meta.json` has `"town_id"` equal to
-`FATAMORGANA_TOWN_ID` from `.env`, e.g. `grep -lE '"town_id": 8212(,|$)' towns/*/cache/_meta.json`.
+It is the `towns/*/` whose `cache/_meta.json` has `"town_id"` equal to the town ID
+(content of `towns/_current_town`; if missing, `FATAMORGANA_TOWN_ID` in `.env`),
+e.g. `grep -lE '"town_id": 8212(,|$)' towns/*/cache/_meta.json`.
 Never derive the folder name from the town name yourself. No match (archive
 failed) → create `towns/s{season}-{slug}/` (lowercase, accents stripped, hyphens).
 If `daily-log.md` or `notes.md` is missing in the folder, copy it from `templates/town/`.
