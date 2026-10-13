@@ -12,12 +12,18 @@ Finalize previous day's log using current morning MCP snapshot (post-attack stat
 
 **Normal mode** (no `backfill`):
 - Target: day N-1 only.
-- Previous day file: `towns/{folder}/day-{NN-1}.md`. Missing → stop, tell user.
+- Previous day file: `towns/{folder}/day-{NN-1}.md`.
 
 **Backfill mode** (`$ARGUMENTS` contains `backfill`):
-- Scan all `towns/{folder}/day-{NN}.md` files from day-01 up to day-(N-1).
-- Collect those missing `### Night outcome` section.
+- Check days 1 to N-1: each `towns/{folder}/day-{NN}.md` that lacks a
+  `### Night outcome` section, or does not exist, is a target.
 - Process each in order (oldest first). Continue to next even if one is sparse.
+
+**Missing day file** (no inspect-town ran that day): do not stop — the night report
+comes from the tools, not from the file. Create it with a `# Day D — {date}` header
+(day D's date = today minus N-D days), the line
+`*No intra-day snapshots were taken on day D; this file holds the night outcome only.*`,
+and a row for day D in `daily-log.md` if there is none. Then close it as usual.
 
 ## Step 2 — Night report (per target day)
 
