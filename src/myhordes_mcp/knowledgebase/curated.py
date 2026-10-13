@@ -24,6 +24,16 @@ def search(query: str, section: str = "") -> str:
     if not terms:
         return "Query too short — give at least one word of 3+ characters."
 
+    # A query naming a file ("basic", "defense-focus") returns that whole file. The
+    # phase guides say "basic" only in their title, so section matching below sent
+    # back the title alone and dropped the tables the build-plan skill asks for.
+    # Files over the 6000-char cap still go through section matching.
+    for md in sorted(kb_dir.rglob("*.md")):
+        if re.split(r"[^\w]+", md.stem.lower()) == terms:
+            body = md.read_text(encoding="utf-8").strip()
+            if len(body) <= 6000:
+                return f"## {md.relative_to(root)}  (whole file)\n\n{body}"
+
     scored = []
     for md in sorted(kb_dir.rglob("*.md")):
         text = md.read_text(encoding="utf-8")
