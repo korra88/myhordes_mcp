@@ -1,0 +1,25 @@
+# Discord listener as a systemd user service.
+# Installed by `make discord-service-install`, which fills in the @...@ paths.
+# Logs: journalctl --user -u discord-listener -f
+
+[Unit]
+Description=MyHordes Discord listener (Claude Code per mention)
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=@MCP_DIR@
+ExecStart=@DISCORD_MCP@/.venv/bin/python @DISCORD_MCP@/listen.py --config discord-listener.toml
+# `claude` is looked up on PATH; the user manager's PATH lacks ~/.local/bin.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=10
+# SIGTERM to the listener only: it finishes the current turn (timeout 300 s)
+# and kills its own claude process group on a second signal.
+KillMode=mixed
+TimeoutStopSec=330
+
+[Install]
+WantedBy=default.target

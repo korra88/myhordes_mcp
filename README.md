@@ -94,6 +94,12 @@ separate listener (`../discord_mcp`, not published yet), configured by
 `allow_users` and the absolute paths). Start it with `make discord-listen`
 (`make discord-listen-once` for one poll cycle). The bot token lives in `../discord_mcp/.env`.
 
+To keep it running on a server, `make discord-service-install` installs it as a systemd
+user service (`templates/systemd/discord-listener.service`, restarts on failure, logs in
+`journalctl --user -u discord-listener -f`); `make discord-service-disable` stops it and
+`make discord-service-uninstall` removes it. For it to start at boot without a login, run
+`sudo loginctl enable-linger $USER` once. Run one listener per bot: two would both answer.
+
 > **Note:** The `.env` file is loaded by `python-dotenv` inside `main.py`, so you can either put values in `.env` or in the `"env"` block above. The `"env"` block in `.mcp.json` takes precedence.
 
 ### 2. Set up the persona and start the advisor

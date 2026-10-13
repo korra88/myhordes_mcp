@@ -28,11 +28,12 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 
 # ─── Main targets ─────────────────────────────────────────────
 
-.PHONY: kb fetch process clean-kb clean-all help advisor persona discord-listen discord-listen-once
+.PHONY: kb fetch process clean-kb clean-all help advisor persona discord-listen discord-listen-once \
+	discord-service-install discord-service-disable discord-service-uninstall
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-26s\033[0m %s\n", $$1, $$2}'
 
 persona.md:
 	@echo "ERROR: persona.md not found. Create it from the example:"
@@ -87,3 +88,25 @@ discord-listen: persona.md discord-listener.toml discord-listener.mcp.json ## An
 
 discord-listen-once: persona.md discord-listener.toml discord-listener.mcp.json ## One poll cycle of the Discord listener, then exit
 	$(DISCORD_MCP)/.venv/bin/python $(DISCORD_MCP)/listen.py --config discord-listener.toml --once
+
+# ─── Discord listener as a systemd user service ───────────────
+
+SERVICE      := discord-listener
+SERVICE_FILE := $(HOME)/.config/systemd/user/$(SERVICE).service
+
+discord-service-install: persona.md discord-listener.toml discord-listener.mcp.json ## Install and start the listener as a systemd user service (restarts on failure)
+	@mkdir -p $(dir $(SERVICE_FILE))
+	sed -e 's|@MCP_DIR@|$(CURDIR)|g' -e 's|@DISCORD_MCP@|$(abspath $(DISCORD_MCP))|g' \
+		templates/systemd/$(SERVICE).service > $(SERVICE_FILE)
+	systemctl --user daemon-reload
+	systemctl --user enable --now $(SERVICE)
+	@loginctl show-user $(USER) -p Linger 2>/dev/null | grep -q yes || \
+		echo "NOTE: linger is off, so the service stops at logout and does not start at boot. Fix: sudo loginctl enable-linger $(USER)"
+
+discord-service-disable: ## Stop the listener service and keep it from starting at boot (unit file kept)
+	systemctl --user disable --now $(SERVICE)
+
+discord-service-uninstall: ## Stop the listener service and remove its unit file
+	-systemctl --user disable --now $(SERVICE)
+	rm -f $(SERVICE_FILE)
+	systemctl --user daemon-reload
