@@ -478,16 +478,19 @@ async def plan_expedition_supplies(
     alcohol (warned about). Output: items to bring with slot count, warnings and the key
     steps (where to eat/drink, when thirst changes, arrival); step_table=True for every move.
 
-    Unknown start values default to 6 AP, no scout/shoes/bike, nothing drunk or eaten yet:
-    when the player didn't say, state these assumptions in your answer (one line) so they
-    can correct them, or ask first if the job/equipment clearly matters.
+    Defaults: 6 AP, no scout, no shoes, no bike, no Scout's Lair, nothing drunk or eaten
+    yet, carrying water and one 7 AP food. Every extra must be declared by the player.
+    When the player didn't say, state these assumptions in your answer (one line) so they
+    can correct them. If the plan needs drugs or alcohol it reports them as "extra needed"
+    (one 6 AP extra = steroids or alcohol, either; two extras or a Twinoid are named).
 
     Args:
         waypoints: Zones to visit in order, town-relative, e.g. "-7,5" or "-7,5; -3,8".
         round_trip: Come back to `start` (default True).
         start: Starting zone, default "0,0" (town).
         start_ap: AP at departure (default 6; 7 after a lucky dice/cards roll, 5 if wounded).
-        start_ep: EP at departure. -1 = full: scout 2 + shoes 1 + bike 2.
+        start_ep: EP at departure. -1 = full: scout 2 + shoes 1 + bike 2. With the Scout's
+                  Lair bonus pass the real EP (e.g. scout 6).
         scout / shoes / bike: Scout job, Worn-out Sports Shoes, Mountain Bike equipped.
         thirst_counter: Zones already walked since the last drink (0-10).
         thirst: Current status: "none", "thirsty" or "dehydrated".
@@ -497,8 +500,8 @@ async def plan_expedition_supplies(
         wounded: Max AP 5 instead of 6.
         available: What the player has or can take, e.g. "water=2, food7=1, twinoid=1"
                    (names: water, food6, food7, alcohol, steroid, twinoid, coffee). Empty =
-                   let the planner choose from up to 3 water, 1 food of each kind, 1 alcohol,
-                   1 steroid, 1 twinoid; it reports the minimum to carry.
+                   up to 3 water and one 7 AP food, plus extras (one drug, one alcohol)
+                   only when needed; it reports the minimum to carry.
         free_slots: Free rucksack slots for consumables; 0 = no limit (the plan reports how
                     many it needs).
         step_table: Add the full move-by-move table (long: only when asked for it).
@@ -548,7 +551,7 @@ async def plan_expedition_supplies(
     path = " → ".join(f"[{x}|{y}]" for x, y in points)
     notes = [note, f"Route safety computed for {group_cp} CP." + (" " + "; ".join(breakdown) if breakdown else "")]
     if not available.strip():
-        notes.append("Items chosen from the default set (nothing specified as available).")
+        notes.append("Assumed: water and one 7 AP food; drugs/alcohol only as extras if needed.")
     if result["cost"][0] or result["cost"][1]:
         # Not feasible: what would make it work (default items, no slot limit)?
         more = {k: max(items.get(k, 0), n) for k, n in supplies.DEFAULT_AVAILABLE.items()}
@@ -560,7 +563,7 @@ async def plan_expedition_supplies(
             notes.append("Not feasible even with the default set of items: shorten the route.")
     return supplies.format_plan(route, st, result, title=f"Supplies plan {path}", notes=notes,
                                 slots=free_slots, end_ap=end_ap, step_table=step_table,
-                                teleport="teleport" in note)
+                                teleport="teleport" in note, generic_extras=not available.strip())
 
 
 @mcp.tool()

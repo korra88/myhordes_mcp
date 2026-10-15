@@ -51,8 +51,10 @@ ITEMS = {
 }
 ORDER = tuple(ITEMS)
 
-# What the planner may pick when the player doesn't say what they have.
-DEFAULT_AVAILABLE = {"water": 3, "food7": 1, "food6": 1, "alcohol": 1, "steroid": 1, "twinoid": 1}
+# When the player doesn't say what they have: water and one 7 AP food are assumed; drugs and
+# alcohol are "extras", used only if needed and then reported as an extra to find.
+DEFAULT_AVAILABLE = {"water": 3, "food7": 1, "alcohol": 1, "steroid": 1, "twinoid": 1}
+EXTRAS = ("steroid", "alcohol", "twinoid")
 
 ALIASES = {
     "water": "water", "ration": "water", "waters": "water",
@@ -288,14 +290,30 @@ def end_requirements(data: dict, route: list[tuple[int, int]], end: tuple[int, i
     return route, 0, ""
 
 
-def key_steps(steps: list[dict], route: list[tuple[int, int]], teleport: bool) -> list[str]:
+def labels(used: dict[str, int], generic: bool) -> dict[str, str]:
+    """Item names for the output. With generic extras, a single 6 AP extra is reported as
+    'steroid or alcohol' (either works); two extras or a Twinoid are named."""
+    out = {k: it.label for k, it in ITEMS.items()}
+    if generic:
+        six = [k for k in ("steroid", "alcohol") if used.get(k)]
+        if len(six) == 1:
+            out[six[0]] = "6 AP extra (Anabolic Steroids or alcohol)"
+        else:
+            out["steroid"], out["alcohol"] = "Anabolic Steroids (extra)", "alcohol (extra)"
+        out["twinoid"] = "Twinoid 500mg (8 AP extra)"
+    return out
+
+
+def key_steps(steps: list[dict], route: list[tuple[int, int]], ending: str,
+              names: dict[str, str] | None = None) -> list[str]:
     """Only what the player has to act on or watch: items used, thirst changes, arrival."""
+    names = names or {k: it.label for k, it in ITEMS.items()}
     out, prev_th = [], None
     for s in steps:
         z = f"[{s['zone'][0]}/{s['zone'][1]}]"
         if s["kind"] == "use":
             when = f"{s['ap_before']} AP, exception" if s["ap_before"] else "0 AP"
-            out.append(f"- after move {s['move']}, at {z} ({when}) → **{ITEMS[s['item']].label}**: "
+            out.append(f"- after move {s['move']}, at {z} ({when}) → **{names[s['item']]}**: "
                        f"{s['ap']} AP, {s['ep']} EP, {THIRST[s['thirst']]}")
             prev_th = s["thirst"]
         elif s["kind"] == "move":
@@ -307,16 +325,17 @@ def key_steps(steps: list[dict], route: list[tuple[int, int]], teleport: bool) -
     moves = [s for s in steps if s["kind"] == "move"]
     if moves:
         z = moves[-1]["zone"]
-        how = "teleport home" if teleport else "arrival"
-        out.append(f"- move {moves[-1]['move']} to [{z[0]}/{z[1]}] → {how}: {moves[-1]['ap']} AP, "
+        out.append(f"- move {moves[-1]['move']} to [{z[0]}/{z[1]}] → {ending}: {moves[-1]['ap']} AP, "
                    f"{moves[-1]['ep']} EP, {THIRST[moves[-1]['thirst']]}")
     return out
 
 
 def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
                 title: str, notes: list[str], slots: int = 0, end_ap: int = 0,
-                step_table: bool = False, teleport: bool = False) -> str:
+                step_table: bool = False, teleport: bool = False, generic_extras: bool = False) -> str:
+    """generic_extras: the player didn't list their items, so drugs/alcohol are extras to find."""
     cost, steps, used = result["cost"], result["steps"], result["used"]
+    names = labels(used, generic_extras)
     dead, short, end_dehyd, n_dehyd, end_thirsty, n_items, n_alc, n_drugs, waste, _ = cost
     moves = len(route) - 1
     final = result["final"]
@@ -328,13 +347,19 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
     lines += [f"{n}" for n in notes if n]
     lines.append("")
 
+    extras = {k: n for k, n in used.items() if generic_extras and k in EXTRAS}
+    base = {k: n for k, n in used.items() if k not in extras}
     if used and (short or dead):
-        carry = ", ".join(f"{n} × {ITEMS[k].label}" for k, n in used.items())
+        carry = ", ".join(f"{n} × {names[k]}" for k, n in used.items())
         lines.append(f"**Uses (partial plan):** {carry}")
     elif used:
-        carry = ", ".join(f"{n} × {ITEMS[k].label}" for k, n in used.items())
-        lines.append(f"**Bring:** {carry} → **{sum(used.values())} slot(s)**"
-                     + (f" of {slots} free" if slots else ""))
+        carry = ", ".join(f"{n} × {names[k]}" for k, n in base.items()) or "nothing else"
+        lines.append(f"**Bring:** {carry} → **{sum(base.values())} slot(s)**"
+                     + (f" of {slots} free" if slots and not extras else ""))
+        if extras:
+            more = ", ".join(f"{n} × {names[k]}" for k, n in extras.items())
+            lines.append(f"**Extra needed:** {more} → **{sum(used.values())} slot(s) in total**"
+                         + (f" of {slots} free" if slots else ""))
         if used.get("water", 0) >= 2:
             lines.append("  (a Water Cooler Bottle holds up to 3 rations in one slot)")
     elif not (short or dead):
@@ -365,10 +390,14 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
         if s["kind"] == "use" and s["item"] == "water" and s["ap_before"] > 0 and s["waste"]:
             warn.append(f"Drinks at {s['ap_before']} AP before move {s['move'] + 1} (exception: "
                         "waiting for 0 AP would mean more thirst).")
-    if n_drugs:
-        warn.append("Uses a drug: a second drug today makes you an addict (permanent; must take a drug every day).")
-    if n_alc:
-        warn.append("Uses alcohol: Drunk today (-20% finding items when digging), hungover tomorrow (no alcohol).")
+    if generic_extras and len([k for k in ("steroid", "alcohol") if used.get(k)]) == 1 and not used.get("twinoid"):
+        warn.append("The 6 AP extra: Anabolic Steroids (a drug: never a second drug the same day) "
+                    "or alcohol (Drunk today, hungover tomorrow).")
+    else:
+        if n_drugs:
+            warn.append("Uses a drug: a second drug today makes you an addict (permanent; must take a drug every day).")
+        if n_alc:
+            warn.append("Uses alcohol: Drunk today (-20% finding items when digging), hungover tomorrow (no alcohol).")
     drank_today = start.drank or any(s["kind"] == "use" and s["item"] == "water" for s in steps)
     if not drank_today and not dead:
         warn.append("No water today so far: without a ration before the attack, thirst goes up tonight.")
@@ -381,7 +410,9 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
 
     if not step_table:
         lines += ["", "**Key steps** (full table: step_table=True)"]
-        lines += key_steps(steps, route, teleport)
+        ending = ("stuck, out of points" if short else "dead" if dead
+                  else "teleport home" if teleport else "arrival")
+        lines += key_steps(steps, route, ending, names)
         return "\n".join(lines)
 
     lines += ["", "| # | Zone | km | Action | AP | EP | Counter | Thirst |", "|---|---|---|---|---|---|---|---|"]
@@ -391,7 +422,7 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
             lines.append(f"| {s['move']} | {z} | {km(*s['zone'])} | move ({s['paid']}) | {s['ap']} | {s['ep']} "
                          f"| {s['counter']} | {THIRST[s['thirst']]} |")
         elif s["kind"] == "use":
-            lines.append(f"| | {z} | | **{ITEMS[s['item']].label}**"
+            lines.append(f"| | {z} | | **{names[s['item']]}**"
                          + (f" (at {s['ap_before']} AP)" if s["ap_before"] else "")
                          + f" | {s['ap']} | {s['ep']} | {s['counter']} | {THIRST[s['thirst']]} |")
         else:
