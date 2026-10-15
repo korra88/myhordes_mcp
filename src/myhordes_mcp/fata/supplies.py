@@ -288,8 +288,34 @@ def end_requirements(data: dict, route: list[tuple[int, int]], end: tuple[int, i
     return route, 0, ""
 
 
+def key_steps(steps: list[dict], route: list[tuple[int, int]], teleport: bool) -> list[str]:
+    """Only what the player has to act on or watch: items used, thirst changes, arrival."""
+    out, prev_th = [], None
+    for s in steps:
+        z = f"[{s['zone'][0]}/{s['zone'][1]}]"
+        if s["kind"] == "use":
+            when = f"{s['ap_before']} AP, exception" if s["ap_before"] else "0 AP"
+            out.append(f"- after move {s['move']}, at {z} ({when}) → **{ITEMS[s['item']].label}**: "
+                       f"{s['ap']} AP, {s['ep']} EP, {THIRST[s['thirst']]}")
+            prev_th = s["thirst"]
+        elif s["kind"] == "move":
+            if prev_th is not None and s["thirst"] > prev_th:
+                out.append(f"- move {s['move']} to {z} → becomes **{THIRST[s['thirst']]}**")
+            prev_th = s["thirst"]
+        else:
+            out.append(f"- move {s['move'] if 'move' in s else '?'} {z} → **dies of dehydration**")
+    moves = [s for s in steps if s["kind"] == "move"]
+    if moves:
+        z = moves[-1]["zone"]
+        how = "teleport home" if teleport else "arrival"
+        out.append(f"- move {moves[-1]['move']} to [{z[0]}/{z[1]}] → {how}: {moves[-1]['ap']} AP, "
+                   f"{moves[-1]['ep']} EP, {THIRST[moves[-1]['thirst']]}")
+    return out
+
+
 def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
-                title: str, notes: list[str], slots: int = 0, end_ap: int = 0) -> str:
+                title: str, notes: list[str], slots: int = 0, end_ap: int = 0,
+                step_table: bool = False, teleport: bool = False) -> str:
     cost, steps, used = result["cost"], result["steps"], result["used"]
     dead, short, end_dehyd, n_dehyd, end_thirsty, n_items, n_alc, n_drugs, waste, _ = cost
     moves = len(route) - 1
@@ -352,6 +378,11 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
         lines.append("")
         lines.append("**Warnings**")
         lines += [f"- {w}" for w in warn]
+
+    if not step_table:
+        lines += ["", "**Key steps** (full table: step_table=True)"]
+        lines += key_steps(steps, route, teleport)
+        return "\n".join(lines)
 
     lines += ["", "| # | Zone | km | Action | AP | EP | Counter | Thirst |", "|---|---|---|---|---|---|---|---|"]
     for s in steps:

@@ -456,6 +456,7 @@ async def plan_expedition_supplies(
     wounded: bool = False,
     available: str = "",
     free_slots: int = 0,
+    step_table: bool = False,
     group_cp: int = 0,
     party: str = "",
     town_id: int = 0,
@@ -474,7 +475,12 @@ async def plan_expedition_supplies(
     Platform teleport when built (level 3-4) and accounts for the Labyrinth's 1 AP.
     The plan minimises, in order: death, running out of AP, ending Dehydrated, ending
     Thirsty, items carried (slots), alcohol, drugs, AP wasted. At most one drug and one
-    alcohol (warned about). Output: items to bring with slot count, warnings, step table.
+    alcohol (warned about). Output: items to bring with slot count, warnings and the key
+    steps (where to eat/drink, when thirst changes, arrival); step_table=True for every move.
+
+    Unknown start values default to 6 AP, no scout/shoes/bike, nothing drunk or eaten yet:
+    when the player didn't say, state these assumptions in your answer (one line) so they
+    can correct them, or ask first if the job/equipment clearly matters.
 
     Args:
         waypoints: Zones to visit in order, town-relative, e.g. "-7,5" or "-7,5; -3,8".
@@ -495,6 +501,7 @@ async def plan_expedition_supplies(
                    1 steroid, 1 twinoid; it reports the minimum to carry.
         free_slots: Free rucksack slots for consumables; 0 = no limit (the plan reports how
                     many it needs).
+        step_table: Add the full move-by-move table (long: only when asked for it).
         group_cp / party: For route safety, as in find_expedition_path.
         town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
@@ -552,7 +559,8 @@ async def plan_expedition_supplies(
         else:
             notes.append("Not feasible even with the default set of items: shorten the route.")
     return supplies.format_plan(route, st, result, title=f"Supplies plan {path}", notes=notes,
-                                slots=free_slots, end_ap=end_ap)
+                                slots=free_slots, end_ap=end_ap, step_table=step_table,
+                                teleport="teleport" in note)
 
 
 @mcp.tool()
