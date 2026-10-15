@@ -67,7 +67,7 @@ Both upgrade via nightly vote, 3 levels. Rush both to max — Defensive Focus es
 
 - **Discord** — real-time directors ↔ citizens.
 - **Gest'Hordes** — positions, bank, Jumps (coordinated entries), Expeditions (per-zone instructions).
-- **Fata Morgana** — spy page: defense, buildings, scout data (MCP source). No auth, less powerful than Gest'Hordes.
+- **Fata Morgana** — town map: defense, buildings, scout data, zone CP (MCP source, via its `/towndata` JSON). No auth, less powerful than Gest'Hordes.
 
 ---
 

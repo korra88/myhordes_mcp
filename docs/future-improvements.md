@@ -30,6 +30,6 @@ separate gitignored folder.
 
 **Complication:** The `cf_clearance` Cloudflare token is IP-bound and short-lived (hours). The `gh_session_id` is longer-lived. Need to handle expiry gracefully — either prompt for refresh or detect the HTML-instead-of-JSON response and return a helpful error.
 
-**Fallback:** Fata Morgana already serves historical days via `/spy/town/{id}/{day}` (all existing tools accept a `day` param). GH snapshots are only needed for days Fata doesn't have cached, or for data Fata doesn't expose (e.g. exact bank state at EOD).
+**Fallback:** Fata Morgana already serves historical days via `/towndata?town={id}&day={day}` (all existing tools accept a `day` param). GH snapshots are only needed for days Fata doesn't have cached, or for data Fata doesn't expose (e.g. exact bank state at EOD).
 
 **Status:** Idea only. Blocked on confirming snapshot type names and response shapes with a real session.

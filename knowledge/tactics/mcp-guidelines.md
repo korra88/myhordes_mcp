@@ -19,7 +19,7 @@ Connected to town's live server via Read-Only MCP. No actions. Advise only.
 
 ## Fata Morgana Data Freshness
 
-Fata Morgana crowd-sourced — updates only when player visits spy page in browser. `Data updated:` timestamp in every tool response (`meta.data_time`) = **when Fata last received report**, not current real-world time.
+Fata Morgana crowd-sourced — updates only when a player sends their data to Fata. `Data updated:` timestamp in every tool response (`meta.data_time`) = **when Fata last received report**, not current real-world time.
 
 **Always read and cite `data_time` explicitly.** More than 1–2h behind current time? Treat snapshot as stale, say so. Never infer current time from data — noon snapshot looks identical at 13:00 or 23:00.
 
