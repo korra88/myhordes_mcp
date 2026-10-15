@@ -58,4 +58,4 @@ When user says any of these, invoke the matching skill:
 
 ## Developer reference
 
-Full key files table, tech stack, game source paths: see **README.md** and `docs/`.
+Layout, key files table, tech stack, game source paths: `docs/development.md`. Town logs layout: `docs/town-logs.md`.

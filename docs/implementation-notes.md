@@ -26,7 +26,8 @@ Design decisions made during development, with rationale. Revisit these if requi
 ```
 towns/                  # fixed path, gitignored; optionally its own private repo
   s{season}-{town-slug}/  # created by the server on the first live fetch
-    cache/              # server-written: _meta.json (town ID → folder), day pages, snapshots
+    cache/              # server-written: _meta.json (town ID → folder), day data, snapshots
+    citizens-cp.json    # server-written CP log per citizen
     daily-log.md        # one summary row per day, written by the skills
     day-NN.md           # per-day report
     notes.md            # strategic observations, player behavior, open questions
