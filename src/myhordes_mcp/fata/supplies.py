@@ -304,11 +304,76 @@ def labels(used: dict[str, int], generic: bool) -> dict[str, str]:
     return out
 
 
+def _ranges(moves: list[int]) -> str:
+    """[16, 17, 18, 24] → '16-18, 24'."""
+    out, start, prev = [], None, None
+    for m in sorted(moves):
+        if start is None:
+            start = prev = m
+        elif m == prev + 1:
+            prev = m
+        else:
+            out.append(f"{start}-{prev}" if prev > start else str(start))
+            start = prev = m
+    if start is not None:
+        out.append(f"{start}-{prev}" if prev > start else str(start))
+    return ", ".join(out)
+
+
+def _zones_label(r: dict) -> str:
+    zs = r.get("zones") or [r["zone"]]
+    if len(zs) == 1:
+        return f"[{zs[0][0]}|{zs[0][1]}]"
+    return f"[{zs[0][0]}|{zs[0][1]}] to [{zs[-1][0]}|{zs[-1][1]}] ({len(zs)} zones)"
+
+
+def _risk_what(r: dict, cp: int) -> str:
+    if r["tag"] == "UNKNOWN":
+        n = len(r.get("zones") or [1])
+        return "never scouted, zombies unknown" if n == 1 else f"{n} zones never scouted, zombies unknown"
+    if r["tag"] == "TRAPPED":
+        return f"{r['zombies']} zombies seen today vs {cp} CP: blocked"
+    old = f", data {r['age']} day(s) old" if r.get("age", -1) > 0 else ""
+    return f"~{r['zombies']} zombies estimated{old} vs {cp} CP: may block"
+
+
+def format_risks(risks: list[dict], cp: int, items: int, slots: int) -> list[str]:
+    """'Route risks' section: each risky zone, the way around it, or the weapons needed."""
+    if not risks:
+        return []
+    free = (f"{max(0, slots - items)}/{slots} slots free after supplies" if slots
+            else f"supplies already take {items} slot(s)")
+    blocking = [r for r in risks if r["tag"] != "UNKNOWN"]
+    lines = ["", f"**Route risks** ({cp} CP)"
+             + (" — cannot pass safely unless you re-route or carry weapons" if blocking else "")]
+    for r in risks:
+        z = _zones_label(r)
+        moves = ("moves " if len(r["moves"]) > 1 else "move ") + _ranges(r["moves"])
+        if r.get("waypoint"):
+            around = "it is a waypoint of the trip"
+        elif r["detour_ap"] is None:
+            around = "no way around within 40 AP"
+        elif r["detour_ap"] <= 0:
+            around = "a way around costs no extra AP but is riskier elsewhere"
+        else:
+            around = f"re-route around it: +{r['detour_ap']} AP"
+        if r["kills"]:
+            weapons = f"carry weapons to kill {r['kills']} zombie(s) ({free})"
+        elif r["tag"] == "UNKNOWN":
+            weapons = f"carry a weapon or two just in case ({free})"
+        else:
+            weapons = ""
+        lines.append(f"- ⚠ {z}, {moves}: {_risk_what(r, cp)} → {around}" + (f"; or {weapons}" if weapons else ""))
+    return lines
+
+
 def key_steps(steps: list[dict], route: list[tuple[int, int]], ending: str,
-              names: dict[str, str] | None = None) -> list[str]:
-    """Only what the player has to act on or watch: items used, thirst changes, arrival."""
+              names: dict[str, str] | None = None, risky: dict | None = None) -> list[str]:
+    """Only what the player has to act on or watch: items used, thirst changes, risky
+    zones, arrival."""
     names = names or {k: it.label for k, it in ITEMS.items()}
-    out, prev_th = [], None
+    risky = risky or {}
+    out, prev_th, prev_risk = [], None, None
     for s in steps:
         z = f"[{s['zone'][0]}/{s['zone'][1]}]"
         if s["kind"] == "use":
@@ -317,6 +382,10 @@ def key_steps(steps: list[dict], route: list[tuple[int, int]], ending: str,
                        f"{s['ap']} AP, {s['ep']} EP, {THIRST[s['thirst']]}")
             prev_th = s["thirst"]
         elif s["kind"] == "move":
+            gid, what = risky.get(s["zone"], (None, None))
+            if gid is not None and gid != prev_risk:
+                out.append(f"- move {s['move']} to {z} → ⚠ {what}")
+            prev_risk = gid
             if prev_th is not None and s["thirst"] > prev_th:
                 out.append(f"- move {s['move']} to {z} → becomes **{THIRST[s['thirst']]}**")
             prev_th = s["thirst"]
@@ -332,7 +401,8 @@ def key_steps(steps: list[dict], route: list[tuple[int, int]], ending: str,
 
 def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
                 title: str, notes: list[str], slots: int = 0, end_ap: int = 0,
-                step_table: bool = False, teleport: bool = False, generic_extras: bool = False) -> str:
+                step_table: bool = False, teleport: bool = False, generic_extras: bool = False,
+                risks: list[dict] | None = None, cp: int = 2) -> str:
     """generic_extras: the player didn't list their items, so drugs/alcohol are extras to find."""
     cost, steps, used = result["cost"], result["steps"], result["used"]
     names = labels(used, generic_extras)
@@ -407,19 +477,23 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
         lines.append("")
         lines.append("**Warnings**")
         lines += [f"- {w}" for w in warn]
+    risks = risks or []
+    lines += format_risks(risks, cp, n_items, slots)
+    risky = {z: (i, _risk_what(r, cp)) for i, r in enumerate(risks) for z in (r.get("zones") or [r["zone"]])}
 
     if not step_table:
         lines += ["", "**Key steps** (full table: step_table=True)"]
         ending = ("stuck, out of points" if short else "dead" if dead
                   else "teleport home" if teleport else "arrival")
-        lines += key_steps(steps, route, ending, names)
+        lines += key_steps(steps, route, ending, names, risky)
         return "\n".join(lines)
 
     lines += ["", "| # | Zone | km | Action | AP | EP | Counter | Thirst |", "|---|---|---|---|---|---|---|---|"]
     for s in steps:
         z = f"[{s['zone'][0]}/{s['zone'][1]}]"
         if s["kind"] == "move":
-            lines.append(f"| {s['move']} | {z} | {km(*s['zone'])} | move ({s['paid']}) | {s['ap']} | {s['ep']} "
+            flag = " ⚠" if s["zone"] in risky else ""
+            lines.append(f"| {s['move']} | {z} | {km(*s['zone'])} | move ({s['paid']}){flag} | {s['ap']} | {s['ep']} "
                          f"| {s['counter']} | {THIRST[s['thirst']]} |")
         elif s["kind"] == "use":
             lines.append(f"| | {z} | | **{names[s['item']]}**"

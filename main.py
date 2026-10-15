@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from myhordes_mcp import fata, gesthordes  # noqa: E402
 from myhordes_mcp.fata import supplies  # noqa: E402
-from myhordes_mcp.fata.pathing import safest_route  # noqa: E402
+from myhordes_mcp.fata.pathing import route_risks, safest_route  # noqa: E402
 from myhordes_mcp.knowledgebase import curated, wiki  # noqa: E402
 from myhordes_mcp.utils.config import CURRENT_TOWN_FILE, FATAMORGANA_TOWN_ID, resolve_town_id  # noqa: E402
 
@@ -475,8 +475,11 @@ async def plan_expedition_supplies(
     Platform teleport when built (level 3-4) and accounts for the Labyrinth's 1 AP.
     The plan minimises, in order: death, running out of AP, ending Dehydrated, ending
     Thirsty, items carried (slots), alcohol, drugs, AP wasted. At most one drug and one
-    alcohol (warned about). Output: items to bring with slot count, warnings and the key
-    steps (where to eat/drink, when thirst changes, arrival); step_table=True for every move.
+    alcohol (warned about). Output: items to bring with slot count, warnings, route risks
+    (zones where the group may get blocked: zombies above its CP, or never scouted — each
+    with the extra AP to go around it or the zombies to kill), and the key steps (where to
+    eat/drink, thirst changes, risky zones, arrival); step_table=True for every move.
+    Report the risks as given: do not invent a different route.
 
     Defaults: 6 AP, no scout, no shoes, no bike, no Scout's Lair, nothing drunk or eaten
     yet, carrying water and one 7 AP food. Every extra must be declared by the player.
@@ -542,6 +545,7 @@ async def plan_expedition_supplies(
     if route is None:
         return "Error: no route found between the given zones (40 AP cap per leg)."
     route, end_ap, note = supplies.end_requirements(data, route, points[-1])
+    risks = route_risks(data, route, points, group_cp)
     st = supplies.Start(
         ap=start_ap, ep=None if start_ep < 0 else start_ep, counter=thirst_counter, thirst=level,
         drank=already_drank, ate=already_ate, drugged=drug_taken_today,
@@ -563,7 +567,8 @@ async def plan_expedition_supplies(
             notes.append("Not feasible even with the default set of items: shorten the route.")
     return supplies.format_plan(route, st, result, title=f"Supplies plan {path}", notes=notes,
                                 slots=free_slots, end_ap=end_ap, step_table=step_table,
-                                teleport="teleport" in note, generic_extras=not available.strip())
+                                teleport="teleport" in note, generic_extras=not available.strip(),
+                                risks=risks, cp=group_cp)
 
 
 @mcp.tool()

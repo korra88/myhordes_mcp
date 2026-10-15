@@ -199,9 +199,11 @@ def _zone_grid(data: dict, group_cp: int):
     return zone_map, cell_class, spread_map, cd
 
 
-def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int = 2) -> list[tuple[int, int]] | None:
+def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int = 2,
+                 banned: frozenset = frozenset()) -> list[tuple[int, int]] | None:
     """Safest path through `points` in order (Dijkstra on zombie risk, AP as tiebreak),
-    as the list of zones walked, start included. None if a leg has no path."""
+    as the list of zones walked, start included. `banned` zones are never entered.
+    None if a leg has no path."""
     zone_map, _, spread_map, cd = _zone_grid(data, group_cp)
     route = [points[0]]
     for (x1, y1), (x2, y2) in zip(points, points[1:]):
@@ -221,6 +223,8 @@ def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int = 2) -
                 n = (x + dx, y + dy)
                 if n not in zone_map and not (bx[0] <= n[0] <= bx[1] and by[0] <= n[1] <= by[1]):
                     continue
+                if n in banned:
+                    continue
                 step = _cell_risk(zone_map.get(n), cd, coords=n, spread_map=spread_map,
                                   group_cp=group_cp, mode="safest")
                 cand = (risk + step, ap + 1)
@@ -236,6 +240,60 @@ def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int = 2) -
             cur = prev[cur]
         route.extend(reversed(leg))
     return route
+
+
+RISKY_TAGS = ("TRAPPED", "TRAP_RISK", "UNKNOWN")
+
+
+def route_risks(data: dict, route: list[tuple[int, int]], points: list[tuple[int, int]],
+                group_cp: int = 2) -> list[dict]:
+    """Stretches of `route` where the group may get blocked: zombies above its CP (seen
+    today = TRAPPED, estimated from old data or spread = TRAP_RISK), or no data at all
+    (UNKNOWN; consecutive unknown zones form one stretch).
+
+    Each: zones, the moves that enter them, the zombie estimate, the kills needed to get
+    control back (zombies - CP), and the extra AP of the safest route that avoids the
+    stretch (None = no way around within the 40 AP cap per leg, or a waypoint)."""
+    _, cell_class, _, _ = _zone_grid(data, group_cp)
+    base = safest_route(data, points, group_cp)
+
+    groups: list[dict] = []
+    prev_move = None
+    for move, cell in enumerate(route[1:], start=1):
+        cc = cell_class.get(cell, {"tag": "UNKNOWN", "zombies": None, "age": -1})
+        if cell == (0, 0) or cc["tag"] not in RISKY_TAGS:
+            prev_move = None
+            continue
+        g = groups[-1] if groups else None
+        if (g and cc["tag"] == "UNKNOWN" and g["tag"] == "UNKNOWN" and prev_move == move - 1):
+            if cell not in g["zones"]:
+                g["zones"].append(cell)
+            g["moves"].append(move)
+        else:
+            z = cc.get("zombies")
+            groups.append({"zones": [cell], "moves": [move], "tag": cc["tag"], "zombies": z,
+                           "age": cc.get("age", -1),
+                           "kills": max(0, z - group_cp) if z is not None else None})
+        prev_move = move
+
+    # The way back often crosses the same zones: one entry per set of zones.
+    merged: list[dict] = []
+    for g in groups:
+        same = next((m for m in merged if set(m["zones"]) == set(g["zones"])), None)
+        if same:
+            same["moves"] += g["moves"]
+        else:
+            merged.append(g)
+
+    for g in merged:
+        g["zone"] = g["zones"][0]
+        g["detour_ap"] = None
+        g["waypoint"] = bool(set(g["zones"]) & set(points))
+        if base is not None and not g["waypoint"]:
+            alt = safest_route(data, points, group_cp, banned=frozenset(g["zones"]))
+            if alt is not None:
+                g["detour_ap"] = len(alt) - len(base)
+    return merged
 
 
 def find_safe_path(
