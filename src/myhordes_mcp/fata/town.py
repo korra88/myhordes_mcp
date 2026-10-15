@@ -1,6 +1,7 @@
 """Town-level formatters: overview, citizens, defense."""
 
 from ..utils.clock import fmt_epoch
+from .cp import cp_label
 from .risk import _staleness_tag, format_trapped, trapped_citizens
 
 
@@ -129,8 +130,9 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
     return "\n".join(lines)
 
 
-def format_citizens(data: dict) -> str:
-    """Format citizen positions and deaths."""
+def format_citizens(data: dict, cp_log: dict | None = None) -> str:
+    """Format citizen positions and deaths. cp_log (cp.load_cp_log) adds each
+    citizen's last known CP."""
     if data.get("error"):
         return f"Error: {data['error']}"
 
@@ -155,7 +157,8 @@ def format_citizens(data: dict) -> str:
         for c in outside:
             shaman = " [Shaman]" if c["is_shaman"] else ""
             stale = _staleness_tag(c.get("last_update_day"), current_day) if show_citizen_stale else ""
-            lines.append(f"  {c['name']} ({c['job']}{shaman}) at {c['coords']}{stale}")
+            cp = cp_label(cp_log, c["id"]) if cp_log else ""
+            lines.append(f"  {c['name']} ({c['job']}{shaman}) at {c['coords']}{stale}{cp}")
     else:
         lines.append("Everyone is inside the town.")
 
@@ -164,7 +167,8 @@ def format_citizens(data: dict) -> str:
         lines.append("### Inside the town:")
         for c in inside:
             shaman = " [Shaman]" if c["is_shaman"] else ""
-            lines.append(f"  {c['name']} ({c['job']}{shaman})")
+            cp = cp_label(cp_log, c["id"]) if cp_log else ""
+            lines.append(f"  {c['name']} ({c['job']}{shaman}){cp}")
 
     if deaths:
         lines.append("")
@@ -238,6 +242,11 @@ def format_defense(data: dict, gh_defense: dict | None = None) -> str:
         if remainder != 0:
             lines.append(f"  Other (unaccounted): {remainder}")
         lines.append("  (Gest'Hordes breakdown)")
+    elif "watchmen" in defense:
+        lines.append(f"  Watchmen: {defense['watchmen']}")
+        lines.append(f"  Temporary bonuses: {defense.get('temporary', 0)}")
+        if other - defense["watchmen"] - defense.get("temporary", 0):
+            lines.append(f"  Other (unaccounted): {other - defense['watchmen'] - defense.get('temporary', 0)}")
     else:
         lines.append(f"  Other sources: {other}")
 
@@ -247,13 +256,19 @@ def format_defense(data: dict, gh_defense: dict | None = None) -> str:
         f"Tomorrow's attack: {tomorrow} zombies",
     ]
 
-    # Add estimation history
+    # Estimation history, with the actual attack where Fata has it (newspaper)
     history = est.get("history", {})
-    if history:
+    attacks = data.get("attacks") or {}
+    days = sorted({int(d) for d in history} | set(attacks))
+    if days:
         lines.append("")
         lines.append("### Attack history:")
-        for day_str in sorted(history.keys(), key=int):
-            e = history[day_str]
-            lines.append(f"  Day {day_str}: {_format_estimate(e)}")
+        for day in days:
+            e = history.get(str(day))
+            line = f"  Day {day}: est. {_format_estimate(e)}" if e else f"  Day {day}: est. unknown"
+            a = attacks.get(day)
+            if a:
+                line += f" → attack {a['zombies']} vs defense {a['defense']}"
+            lines.append(line)
 
     return "\n".join(lines)

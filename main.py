@@ -88,7 +88,9 @@ async def get_citizen_positions(day: int = 0, town_id: int = 0) -> str:
     """
     Fetches citizen positions from Fata Morgana — who is inside the town,
     who is outside (and where), and the list of dead citizens with cause of death.
+    Each citizen shows their last known CP (Control Points) when one was read.
     Use this when the user asks who is outside, who is camping, or about deaths.
+    For a CP table of the whole town use get_citizen_cp instead.
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
@@ -98,7 +100,37 @@ async def get_citizen_positions(day: int = 0, town_id: int = 0) -> str:
     if isinstance(tid, str):
         return tid
     data = await fata.fetch_town_data(tid, day=day or None)
-    return fata.format_citizens(data)
+    return fata.format_citizens(data, fata.load_cp_log(tid))
+
+
+@mcp.tool()
+async def get_citizen_cp(town_id: int = 0) -> str:
+    """
+    Control Points (CP) of every living citizen: last value seen and best value
+    seen, with day and zone. Use this when the user asks how many CP someone
+    has, who can hold a zone, or to compose an expedition party.
+
+    CP comes from the zone CP Fata reports (game data, items and status
+    included), read when a citizen stood alone on a zone. CP drops with status
+    (drugs -1 permanent; drunk -1, thirsty -1, guardian without shield -2
+    temporary), so last < max means a malus. Citizens never seen alone on a
+    zone show '?': count them as 2 CP. Readings accumulate only when tools
+    fetch the town, so the log fills up as the town is checked.
+
+    Args:
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
+    """
+    tid = resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    data = await fata.fetch_town_data(tid)
+    if data.get("error"):
+        return f"Error: {data['error']}"
+    meta = data["meta"]
+    lines = [f"## Citizen CP — {meta.get('town_name')} Day {meta.get('day')}",
+             "Last = most recent reading, Max = best ever seen. ? = never read alone on a zone (assume 2).", ""]
+    lines += fata.format_cp_log(fata.load_cp_log(tid), data["citizens"])
+    return "\n".join(lines)
 
 
 @mcp.tool()
@@ -329,7 +361,8 @@ async def find_expedition_path(
     y1: int,
     x2: int,
     y2: int,
-    group_cp: int = 2,
+    group_cp: int = 0,
+    party: str = "",
     escape_items: int = 0,
     scout_mode: bool = False,
     step_table: bool = False,
@@ -353,10 +386,13 @@ async def find_expedition_path(
         y1: Y coordinate of the starting point.
         x2: X coordinate of the destination.
         y2: Y coordinate of the destination.
-        group_cp: Total Control Points of the expedition party. Default 2
-                  (solo citizen, no bonuses). Each citizen = 2 CP base; add
-                  bonuses for Prepared skill, Car Door, Riot Shield, etc.
-                  Zones with zombies >= group_cp are flagged as trap risk.
+        group_cp: Total Control Points of the expedition party. Leave 0 to
+                  compute it from `party` (or 2 = solo citizen without party).
+                  Set it only when the user states the party's CP.
+                  Zones with zombies > group_cp are flagged as trap risk.
+        party: Comma-separated citizen names of the expedition party, e.g.
+               "Alice, Bob". Their CP comes from the town's CP log (last value
+               seen; 2 for citizens never read). Prefer this over guessing group_cp.
         escape_items: Number of flash-grenade-equivalent escape items carried.
                       Default 0. Each can neutralize one trapped zone on the
                       shortest path.
@@ -380,9 +416,15 @@ async def find_expedition_path(
     if isinstance(tid, str):
         return tid
     data = await fata.fetch_town_data(tid, day=day or None)
+    breakdown = None
+    if not group_cp:
+        group_cp = 2
+        if party and not data.get("error"):
+            group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
     return fata.find_safe_path(
         data, x1, y1, x2, y2,
         group_cp=group_cp,
+        cp_breakdown=breakdown,
         escape_items=escape_items,
         scout_mode=scout_mode,
         step_table=step_table,

@@ -307,6 +307,8 @@ def construction_history(data: dict, gh: dict | None = None) -> list[dict]:
         ap = sum(b["ap_cost"] for b in paid)
         budget = alive[day] * AP_PER_CITIZEN if alive[day] is not None else None
         attack = _at(series.get("attack", []), day)
+        if attack is None:  # Fata's newspaper: the attack that ended this day
+            attack = (data.get("attacks") or {}).get(day, {}).get("zombies")
         est = (_at(series.get("est_min", []), day), _at(series.get("est_max", []), day))
         rows.append({
             "day": day,
@@ -362,7 +364,7 @@ def format_construction_history(data: dict, gh: dict | None = None) -> str:
         lines.append("Free vote upgrades (not counted in AP): " + " · ".join(per_day))
     if rows and rows[-1]["alive"] is None:
         lines.append("Alive/budget unknown: Fata has no citizen or death data left for this town (finished?).")
-    if not gh or "error" in (gh or {}):
+    if (not gh or "error" in (gh or {})) and not data.get("attacks"):
         lines.append("")
         lines.append("Attack column empty: Gest'Hordes data unavailable.")
     return "\n".join(lines)

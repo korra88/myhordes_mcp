@@ -145,7 +145,8 @@ In a Claude Code conversation, ask something like:
 | Tool | Source | Description |
 |------|--------|-------------|
 | `get_town_overview` | Fata Morgana | Town snapshot: gate, defense, water, citizens, attack estimate, possibly-trapped warning. Optional `day`. |
-| `get_citizen_positions` | Fata Morgana | Who's inside/outside, where, plus death log. Optional `day`. |
+| `get_citizen_positions` | Fata Morgana | Who's inside/outside, where, last known CP, plus death log. Optional `day`. |
+| `get_citizen_cp` | Fata Morgana (CP log) | Every citizen's Control Points: last and best value seen, with day and zone. |
 | `get_defense_status` | Fata Morgana + Gest'Hordes | Defense breakdown, attack estimates, survival assessment. Optional `day`. |
 | `get_bank_inventory` | Fata Morgana | Bank summary by strategic group (`detail='full'` for every item). Optional `day`. |
 | `get_buildings` | Fata Morgana | Built today / history / available buildings. |
@@ -157,14 +158,16 @@ In a Claude Code conversation, ask something like:
 | `map_bank_to_dump_sheet` | Fata Morgana | Bank mapped onto Garbage Dump sheet rows (aliases, broken, emptied weapons). |
 | `get_scout_map` | Fata Morgana | Zombie counts per scouted zone, grouped by threat level. |
 | `get_zone_details` | Fata Morgana | Ruins, ground items, and zombie counts per map zone, optionally in a box. |
-| `find_expedition_path` | Fata Morgana | CP-aware safest/shortest path; `step_table=True` adds AP/EP and thirst counter per move. |
+| `find_expedition_path` | Fata Morgana | CP-aware safest/shortest path (`party="A, B"` takes the party's CP from the CP log); `step_table=True` adds AP/EP and thirst counter per move. |
 | `get_attack_forecast` | Gest'Hordes | Theoretical attack curve, actual and estimated attacks, defence per day. |
 | `get_attack_distribution` | Gest'Hordes | Historical attack statistics across towns per day. |
 | `search_wiki` | Wiki | Search items, buildings, ruins, skills, statuses, and strategy guides from en.mhwiki.org. |
 | `list_wiki_categories` | Wiki | List available wiki categories. |
 | `search_knowledge` | Knowledge | Search curated advisor KB — building phase guides, strategy, mechanics. |
 
-Fata data is cached in memory for `FATA_CACHE_TTL` seconds (default 180); concurrent calls share one request. Every live fetch of the current day also stores a small snapshot under `towns/<town>/cache/snapshots/`, which `get_town_changes` compares.
+Fata data comes from the public `/towndata` JSON endpoint and is cached in memory for `FATA_CACHE_TTL` seconds (default 180); concurrent calls share one request. Every live fetch of the current day also stores a small snapshot under `towns/<town>/cache/snapshots/`, which `get_town_changes` compares, and adds the zone CP readings to `towns/<town>/citizens-cp.json`.
+
+**CP log.** Fata reports CP per zone (game data, items and status included), not per citizen. A citizen's CP is recorded when they stand alone on a zone, or derived from a group when the others were read alone the same day. The log keeps the last and the best value, since CP drops with status (drugs, drunk, thirsty, guardian without shield). Limit: Fata does not say who was on the zone at the update, so a citizen who left afterwards can inflate a reading.
 
 ## Town logs (`towns/`)
 
@@ -178,8 +181,11 @@ towns/
   s{season}-{town-slug}/      # created by the server on the first live fetch
     cache/                    # written by the server
       _meta.json              #   town ID → this folder; skills find the folder through it
-      day-NN.html / .json     #   Fata pages archived per day (history survives if Fata drops it)
+      day-NN.towndata.json.gz       #   /towndata of a finished day (final, never refetched)
+      day-NN.towndata.live.json.gz  #   /towndata of the current day (overwritten on each fetch)
+      day-NN.html / .json     #   legacy spy pages archived before 2026-10-15 (still read)
       snapshots/              #   intra-day snapshots for get_town_changes
+    citizens-cp.json          # CP log per citizen (last / max), written by the server
     daily-log.md              # written by the skills (inspect-town, close-day),
     day-NN.md                 #   started from templates/town/
     notes.md
@@ -268,8 +274,8 @@ make kb
 | File | Purpose |
 |---|---|
 | `main.py` | MCP server, tool definitions (thin wrappers) |
-| `src/myhordes_mcp/fata/client.py` | Single entry point for Fata Morgana requests: coalesced + cached (`FATA_CACHE_TTL`, default 180 s), disk archive for past days. Documents the `getdata` JSON endpoint. |
-| `src/myhordes_mcp/fata/` | `parse.py` (spy page → dict), `town.py` / `bank.py` / `buildings.py` / `zones.py` (formatters), `pathing.py` (expedition Dijkstra), `risk.py` (shared zone helpers), `archive.py` (disk archive) |
+| `src/myhordes_mcp/fata/client.py` | Single entry point for Fata Morgana requests (`/towndata`): coalesced + cached (`FATA_CACHE_TTL`, default 180 s), disk archive for past days. |
+| `src/myhordes_mcp/fata/` | `towndata.py` (`/towndata` → dict, field meanings), `parse.py` (legacy spy-page archives → dict), `cp.py` (per-citizen CP log), `town.py` / `bank.py` / `buildings.py` / `zones.py` (formatters), `pathing.py` (expedition Dijkstra), `risk.py` (shared zone helpers), `archive.py` (disk archive) |
 | `src/myhordes_mcp/gesthordes/` | Gest'Hordes stats client + formatters |
 | `src/myhordes_mcp/myhordes/official_api.py` | *(disabled)* Official API client placeholder |
 | `src/myhordes_mcp/knowledgebase/` | `wiki.py` (indexes `wiki/processed/`), `curated.py` (searches `knowledge/`) |

@@ -75,6 +75,17 @@ Ranges from standard 40-citizen town formula. Actual attack each night = random 
 
 **Terrorised citizens exert 0 CP** — all boosters wasted.
 
+**Losing CP bonus** (a citizen's CP is not fixed — it drops with status):
+| Cause | Loss | Duration |
+|---|---|---|
+| Took drugs | −1 CP | Permanent |
+| Drunk | −1 CP | Temporary |
+| Thirsty | −1 CP | Temporary |
+| Guardian takes off the shield | −2 CP | Temporary |
+
+So a citizen's CP seen in one zone is not their maximum. Track both **max CP** (best seen)
+and **last CP seen**; the gap means a temporary malus (or a permanent one if it never comes back).
+
 **Practical advisory:**
 - Solo citizen no boosts (2 CP) blocked by **3+ zombies** (3 CP).
 - Full Prepared stack (5 CP): blocked by **6+ zombies**.

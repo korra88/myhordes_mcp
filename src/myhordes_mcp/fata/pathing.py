@@ -191,6 +191,7 @@ def find_safe_path(
     start_ap: int = 6,
     start_ep: int = 0,
     thirst_counter: int = 0,
+    cp_breakdown: list[str] | None = None,
 ) -> str:
     """Find paths between two map coordinates using CP-aware Dijkstra.
 
@@ -203,6 +204,7 @@ def find_safe_path(
         group_cp: Total Control Points of the party (default 2 = solo citizen).
         escape_items: Flash-grenade-equivalent items carried (each neutralises one trap).
         scout_mode: Scout with Camouflage Vest — traps become passable at detection risk.
+        cp_breakdown: Lines explaining where group_cp came from (party CP log).
     """
     if data.get("error"):
         return f"Error: {data['error']}"
@@ -352,6 +354,8 @@ def find_safe_path(
     if escape_items > 0:
         params.append(f"Flash items: {escape_items}")
     lines.append(" | ".join(params))
+    for b in cp_breakdown or []:
+        lines.append(f"  {b}")
     lines.append("")
 
     # Summary
@@ -438,7 +442,13 @@ def find_safe_path(
         stale = _staleness_tag(z.get("updated_day"), cd) if z else ""
 
         ruin = z.get("ruin") if z else None
-        ruin_str = f" | {ruin['name']}" if ruin else ""
+        ruin_str = ""
+        if ruin:
+            ruin_str = f" | {ruin['name']}" + (" [BLUEPRINT]" if ruin.get("blueprint_available") else "")
+        if z and z.get("dried"):
+            ruin_str += " | depleted"
+        elif z and z.get("scav_level"):
+            ruin_str += f" | {z['scav_level']}"
         items = z.get("items", []) if z else []
         items_str = ""
         if items:

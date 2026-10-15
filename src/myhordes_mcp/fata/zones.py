@@ -6,6 +6,7 @@ from .risk import (
     _parse_coords,
     _staleness_tag,
     _zone_freshness,
+    _zone_status,
     _zone_threat,
 )
 
@@ -140,7 +141,7 @@ def format_zones(data: dict) -> str:
             digs = f", {r['digs_remaining']} digs left" if r.get("digs_remaining") not in (None, "0", 0) else ""
             threat = _zone_threat(z)
             fresh = _zone_freshness(z, current_day)
-            lines.append(f"  {z['coords']}: {r['name']}{bp}{dried}{digs}{threat}{fresh}")
+            lines.append(f"  {z['coords']}: {r['name']}{bp}{dried}{digs}{threat}{_zone_status(z)}{fresh}")
             if z.get("items"):
                 item_list = ", ".join(
                     f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")
@@ -157,7 +158,7 @@ def format_zones(data: dict) -> str:
             dried = " (dried)" if z.get("dried") else ""
             threat = _zone_threat(z)
             fresh = _zone_freshness(z, current_day)
-            lines.append(f"  {z['coords']}{dried}{threat}{fresh}:")
+            lines.append(f"  {z['coords']}{dried}{threat}{_zone_status(z)}{fresh}:")
             item_list = ", ".join(
                 f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")
                 for i in z["items"]
@@ -242,7 +243,7 @@ def format_zone_path(
         else:
             label = "open zone"
 
-        entry = [f"  {z['coords']} ({ap} AP){budget_flag}{dried}: {label}{threat}{fresh}"]
+        entry = [f"  {z['coords']} ({ap} AP){budget_flag}{dried}: {label}{threat}{_zone_status(z)}{fresh}"]
         if z.get("items"):
             item_list = ", ".join(
                 f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")

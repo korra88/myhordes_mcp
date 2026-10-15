@@ -1,15 +1,17 @@
-"""Filesystem archive of Fata Morgana spy pages.
+"""Filesystem archive of Fata Morgana data.
 
-Stores fetched HTML pages and extracted JSON data per town per day,
-so historical data is preserved even if Fata Morgana stops serving it.
+Stores the raw response per town per day, so historical data is preserved even
+if Fata Morgana stops serving it.
 
 Layout:
     towns/{town_slug}/cache/
-        _meta.json      # town_id → this folder (skills resolve the folder from it)
-        day-01.html     # full raw HTML (archival)
-        day-01.json     # extracted JS dict (fast access)
+        _meta.json                     # town_id → this folder (skills resolve the folder from it)
+        day-07.towndata.json.gz        # /towndata for a finished day (final, never refetched)
+        day-07.towndata.live.json.gz   # /towndata while day 7 was the current day (overwritten)
+        day-01.html / day-01.json      # legacy spy page + extracted JS dict (read-only now)
 """
 
+import gzip
 import json
 import re
 import unicodedata
@@ -148,19 +150,87 @@ def load_day_html(town_id: int, day: int) -> str | None:
 
 
 def list_cached_days(town_id: int) -> list[int]:
-    """Return sorted list of day numbers that are cached for this town."""
+    """Return sorted list of day numbers that are cached for this town (any format)."""
     town_dir = _find_town_dir(town_id)
     if town_dir is None:
         return []
     cache_dir = town_dir / "cache"
     if not cache_dir.is_dir():
         return []
-    days = []
-    for f in cache_dir.glob("day-*.json"):
-        m = re.match(r"day-(\d+)\.json", f.name)
+    days = set()
+    for f in cache_dir.glob("day-*"):
+        m = re.match(r"day-(\d+)\.(json|towndata\.json\.gz|towndata\.live\.json\.gz)$", f.name)
         if m:
-            days.append(int(m.group(1)))
+            days.add(int(m.group(1)))
     return sorted(days)
+
+
+# ---------------------------------------------------------------------------
+# /towndata responses (gzipped raw JSON)
+# ---------------------------------------------------------------------------
+
+def _towndata_file(cache_dir: Path, day: int, live: bool) -> Path:
+    return cache_dir / f"day-{day:02d}.towndata{'.live' if live else ''}.json.gz"
+
+
+def town_dir(town_id: int) -> Path | None:
+    """The town's folder under towns/, or None if nothing was fetched for it yet."""
+    return _find_town_dir(town_id)
+
+
+def save_towndata(town_id: int, day: int, raw: dict, *, live: bool) -> Path:
+    """Store a /towndata response. live=True: the town's current day (overwritten on
+    every fetch); live=False: a finished day, final. Returns the town folder."""
+    ti = raw.get("town_info") or {}
+    tdir = _find_town_dir(town_id)
+    if tdir is None:
+        tdir = _create_town_dir(town_id, ti.get("name", "Unknown"), ti.get("season"))
+    cache_dir = _ensure_cache_dir(tdir)
+    if live:
+        _save_meta(cache_dir, town_id, ti.get("name", "Unknown"), ti.get("season"), current_day=day)
+    elif not (cache_dir / "_meta.json").exists():
+        _save_meta(cache_dir, town_id, ti.get("name", "Unknown"), ti.get("season"))
+    path = _towndata_file(cache_dir, day, live)
+    tmp = path.with_suffix(".tmp")
+    with gzip.open(tmp, "wt", encoding="utf-8") as f:
+        json.dump(raw, f, ensure_ascii=False)
+    tmp.replace(path)
+    return tdir
+
+
+def load_towndata(town_id: int, day: int, *, final_only: bool = False) -> dict | None:
+    """A stored /towndata day: the final version, else (unless final_only) the last live one."""
+    tdir = _find_town_dir(town_id)
+    if tdir is None:
+        return None
+    for live in ((False,) if final_only else (False, True)):
+        path = _towndata_file(tdir / "cache", day, live)
+        if path.exists():
+            try:
+                with gzip.open(path, "rt", encoding="utf-8") as f:
+                    return json.load(f)
+            except (OSError, json.JSONDecodeError, EOFError):
+                continue
+    return None
+
+
+def estimation_history(town_id: int, before_day: int) -> dict:
+    """{day_str: {min, max, maxed}} for days before `before_day`, from whatever is
+    archived: legacy spy pages carry the full history, /towndata only its own day."""
+    hist: dict = {}
+    for day in list_cached_days(town_id):
+        if day >= before_day:
+            continue
+        legacy = load_day_json(town_id, day)
+        if legacy and isinstance(legacy.get("estimations"), dict):
+            for d, e in legacy["estimations"].items():
+                if d.isdigit() and int(d) < before_day and isinstance(e, dict):
+                    hist[d] = {"min": e.get("min"), "max": e.get("max"), "maxed": e.get("maxed")}
+        raw = load_towndata(town_id, day)
+        est = ((raw or {}).get("town_info") or {}).get("estimation_today")
+        if isinstance(est, dict) and est.get("min") is not None:
+            hist[str(day)] = {"min": est["min"], "max": est.get("max"), "maxed": int(bool(est.get("maxed")))}
+    return hist
 
 
 # ---------------------------------------------------------------------------

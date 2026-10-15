@@ -163,6 +163,18 @@ def _zone_freshness(zone: dict, current_day: int | None) -> str:
     return tag
 
 
+def _zone_status(zone: dict) -> str:
+    """Scavenging and presence notes from /towndata, e.g. ', abundant, excavated day 7, CP 6 here'."""
+    parts = []
+    if not zone.get("dried") and zone.get("scav_level"):
+        parts.append(zone["scav_level"])
+    if zone.get("excavated"):
+        parts.append(f"excavated day {zone['excavated_day']}" if zone.get("excavated_day") else "excavated")
+    if zone.get("cp"):
+        parts.append(f"CP {zone['cp']} here")
+    return "".join(f", {p}" for p in parts)
+
+
 def _parse_coords(zone: dict) -> tuple[int, int] | None:
     """Extract (rx, ry) integers from a zone's coords string '[rx|ry]'."""
     m = re.match(r"\[(-?\d+)\|(-?\d+)\]", zone.get("coords", ""))
@@ -175,7 +187,7 @@ def _parse_coords(zone: dict) -> tuple[int, int] | None:
 # Trapped citizens (zombies outnumber the citizens' control points)
 # ---------------------------------------------------------------------------
 
-CP_PER_CITIZEN = 2  # base; Fata cannot see Prepared or item bonuses (max 8/citizen)
+CP_PER_CITIZEN = 2  # base, used when the zone has no CP reading (max 8/citizen)
 OBSERVATION_PLATFORM = "Observation platform"
 
 
@@ -195,10 +207,23 @@ def teleport_range(level: int | None) -> int:
     return 2 if level >= 4 else 1 if level >= 3 else 0
 
 
+def zone_cp(zone: dict, people: list[dict]) -> int | None:
+    """The zone's CP reading (/towndata `human`, game-sourced) if it covers the
+    citizens now standing there: none of them moved after the zone update."""
+    cp, t = zone.get("cp"), zone.get("updated_on")
+    if cp is None or not t:
+        return None
+    if any((c.get("last_update_time") or 0) > t for c in people):
+        return None
+    return cp
+
+
 def trapped_citizens(data: dict) -> list[dict]:
-    """Outside citizens on zones where reported zombies exceed the minimum CP
-    of the citizens standing there (2 each). A lower bound on CP, so a hit
-    means 'possibly trapped', not certain."""
+    """Outside citizens on zones where reported zombies exceed the citizens' CP.
+
+    With the zone's CP reading (same zone update as the zombie count) the check
+    is exact. Without it, CP is assumed 2 per citizen: a lower bound, so a hit
+    means 'possibly trapped'."""
     zones = {z["coords"]: z for z in data.get("zones", [])}
     outside = [c for c in data.get("citizens", []) if not c["inside_town"]]
     per_zone: dict[str, list] = {}
@@ -211,7 +236,8 @@ def trapped_citizens(data: dict) -> list[dict]:
         zone = zones.get(coords)
         if not zone or zone.get("zombies", -1) < 0:
             continue
-        cp = CP_PER_CITIZEN * len(people)
+        exact = zone_cp(zone, people)
+        cp = exact if exact is not None else CP_PER_CITIZEN * len(people)
         if zone["zombies"] <= cp:
             continue
         xy = _parse_coords(zone)
@@ -221,6 +247,7 @@ def trapped_citizens(data: dict) -> list[dict]:
             "citizens": [c["name"] for c in people],
             "zombies": zone["zombies"],
             "cp_min": cp,
+            "cp_exact": exact is not None,
             "ruin": (zone.get("ruin") or {}).get("name"),
             "updated_on": zone.get("updated_on"),
             "updated_by": zone.get("updated_by"),
@@ -233,12 +260,14 @@ def format_trapped(hits: list[dict], fmt_time) -> list[str]:
     """Warning lines for possibly trapped citizens. fmt_time(epoch) -> str."""
     if not hits:
         return []
-    lines = [f"## ⚠ Possibly trapped ({len(hits)} zone{'s' if len(hits) > 1 else ''}) — zombies > 2 CP per citizen; bonuses not visible"]
+    lines = [f"## ⚠ Trapped or possibly trapped ({len(hits)} zone{'s' if len(hits) > 1 else ''}) — "
+             "zombies > CP (exact zone CP when Fata has it, else ≥2 per citizen)"]
     for h in hits:
         when = f"zone updated {fmt_time(h['updated_on'])}" if h["updated_on"] else "zone update time unknown"
         if h["updated_by"]:
             when += f" by {h['updated_by']}"
         extra = f", {h['ruin']}" if h["ruin"] else ""
         tp = " — platform teleport home available" if h["teleport"] else ""
-        lines.append(f"  {', '.join(h['citizens'])} {h['coords']}{extra}: {h['zombies']} zombies vs ≥{h['cp_min']} CP ({when}){tp}")
+        cp = f"{h['cp_min']} CP — TRAPPED" if h.get("cp_exact") else f"≥{h['cp_min']} CP"
+        lines.append(f"  {', '.join(h['citizens'])} {h['coords']}{extra}: {h['zombies']} zombies vs {cp} ({when}){tp}")
     return lines

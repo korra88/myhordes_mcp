@@ -51,8 +51,8 @@ hardcode `towns/`. Use a symlink to store it elsewhere.
 
 ## Data Source: Fata Morgana over Official API
 
-**Decision:** All live data currently comes from the Fata Morgana spy page scraper (`src/myhordes_mcp/fata/`), not the official JSON v1 API.
+**Decision:** All live data currently comes from Fata Morgana (`src/myhordes_mcp/fata/`), not the official JSON v1 API. Since 2026-10-15 through the public `/towndata` JSON endpoint of the beta site, which the Fata developer confirmed is fine for this MCP; before that, by scraping the legacy spy page.
 
 **Why:** The official API requires a registered `appkey` which has not yet been obtained. Fata Morgana provides a superset of the data we need (defense, citizens, buildings, scout map, bank) with no auth required beyond a town ID.
 
-**Revisit if:** The official app key is obtained — at that point, prefer the official API for data the official API covers, and keep Fata Morgana only for data it uniquely provides (scout map, spy-page extras).
+**Revisit if:** The official app key is obtained — at that point, prefer the official API for data the official API covers, and keep Fata Morgana only for data it uniquely provides (scout map, zone CP, scavenging state).
