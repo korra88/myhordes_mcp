@@ -164,14 +164,14 @@ def _zone_freshness(zone: dict, current_day: int | None) -> str:
 
 
 def _zone_status(zone: dict) -> str:
-    """Scavenging and presence notes from /towndata, e.g. ', abundant, excavated day 7, CP 6 here'."""
+    """Scavenging and presence notes from /towndata, e.g. ', abundant, excavated day 7, CP 6 at last update'."""
     parts = []
     if not zone.get("dried") and zone.get("scav_level"):
         parts.append(zone["scav_level"])
     if zone.get("excavated"):
         parts.append(f"excavated day {zone['excavated_day']}" if zone.get("excavated_day") else "excavated")
     if zone.get("cp"):
-        parts.append(f"CP {zone['cp']} here")
+        parts.append(f"CP {zone['cp']} at last update")
     return "".join(f", {p}" for p in parts)
 
 
@@ -187,7 +187,8 @@ def _parse_coords(zone: dict) -> tuple[int, int] | None:
 # Trapped citizens (zombies outnumber the citizens' control points)
 # ---------------------------------------------------------------------------
 
-CP_PER_CITIZEN = 2  # base, used when the zone has no CP reading (max 8/citizen)
+CP_PER_CITIZEN = 2  # base, used when the zone has no usable CP reading
+MAX_CP_PER_CITIZEN = 8
 OBSERVATION_PLATFORM = "Observation platform"
 
 
@@ -209,11 +210,17 @@ def teleport_range(level: int | None) -> int:
 
 def zone_cp(zone: dict, people: list[dict]) -> int | None:
     """The zone's CP reading (/towndata `human`, game-sourced) if it covers the
-    citizens now standing there: none of them moved after the zone update."""
+    citizens now standing there, else None.
+
+    Covers them when each one has a known position time and none moved after
+    the zone update. 0 is a real value (terrorised citizens have 0 CP); more
+    than 8 per citizen is not, so someone who left must still be counted."""
     cp, t = zone.get("cp"), zone.get("updated_on")
-    if cp is None or not t:
+    if cp is None or not t or not people:
         return None
-    if any((c.get("last_update_time") or 0) > t for c in people):
+    if any(not c.get("last_update_time") or c["last_update_time"] > t for c in people):
+        return None
+    if cp > MAX_CP_PER_CITIZEN * len(people):
         return None
     return cp
 
@@ -268,6 +275,9 @@ def format_trapped(hits: list[dict], fmt_time) -> list[str]:
             when += f" by {h['updated_by']}"
         extra = f", {h['ruin']}" if h["ruin"] else ""
         tp = " — platform teleport home available" if h["teleport"] else ""
-        cp = f"{h['cp_min']} CP — TRAPPED" if h.get("cp_exact") else f"≥{h['cp_min']} CP"
+        if h.get("cp_exact"):
+            cp = f"{h['cp_min']} CP{' (terrorised?)' if h['cp_min'] == 0 else ''} — TRAPPED"
+        else:
+            cp = f"≥{h['cp_min']} CP"
         lines.append(f"  {', '.join(h['citizens'])} {h['coords']}{extra}: {h['zombies']} zombies vs {cp} ({when}){tp}")
     return lines

@@ -83,10 +83,9 @@ async def _fetch(town_id: int, day: int | None) -> dict:
             resp.raise_for_status()
             raw = resp.json()
     except (httpx.HTTPError, ValueError) as e:
-        if day is not None:
-            cached = _from_archive(town_id, day, final_only=False)
-            if cached is not None:
-                return cached
+        cached = _from_archive(town_id, day, final_only=False) if day is not None else None
+        if cached is not None:
+            return cached
         if isinstance(e, httpx.HTTPStatusError):
             if e.response.status_code == 429:
                 return {"error": "Fata Morgana rate limit reached (60 requests). Try again in a minute."}
@@ -95,18 +94,27 @@ async def _fetch(town_id: int, day: int | None) -> dict:
             return {"error": f"Could not reach Fata Morgana: {e}"}
         return {"error": "Fata Morgana returned data that is not JSON."}
 
-    if not is_towndata(raw):
-        return {"error": f"No Fata Morgana data for town {town_id}"
-                         + (f" on day {day}" if day is not None else "") + "."}
+    # Parse before storing: a response the parser can't read must not become a
+    # final archive file. Fall back to whatever the archive has for that day.
+    try:
+        if not is_towndata(raw):
+            raise ValueError("not a /towndata response")
+        result = _result(town_id, raw)
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
+        cached = _from_archive(town_id, day, final_only=False) if day is not None else None
+        if cached is not None:
+            return cached
+        return {"error": f"No usable Fata Morgana data for town {town_id}"
+                         + (f" on day {day}" if day is not None else "") + f" ({e})."}
 
     result_day = raw["town_info"].get("day")
-    # Final only when the town is known to be past that day; otherwise keep it as live.
-    known_day = archive.get_current_day(town_id)
-    live = day is None or known_day is None or (result_day or 0) >= known_day
     if result_day is not None:
-        archive.save_towndata(town_id, result_day, raw, live=live)
+        # Only a request without a day tells us the town's current day. A past
+        # day is final once the town is known to be past it, else kept as live.
+        known_day = archive.get_current_day(town_id)
+        live = day is None or known_day is None or result_day >= known_day
+        archive.save_towndata(town_id, result_day, raw, live=live, current=day is None)
 
-    result = _result(town_id, raw)
     cp.update_cp_log(town_id, result)
     if day is None and result_day is not None:
         archive.save_snapshot(town_id, result_day, snapshot(result))

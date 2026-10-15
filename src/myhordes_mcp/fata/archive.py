@@ -178,23 +178,28 @@ def town_dir(town_id: int) -> Path | None:
     return _find_town_dir(town_id)
 
 
-def save_towndata(town_id: int, day: int, raw: dict, *, live: bool) -> Path:
-    """Store a /towndata response. live=True: the town's current day (overwritten on
-    every fetch); live=False: a finished day, final. Returns the town folder."""
+def save_towndata(town_id: int, day: int, raw: dict, *, live: bool, current: bool = False) -> Path:
+    """Store a /towndata response. live=True: a day that may still change
+    (overwritten on every fetch); live=False: a finished day, final.
+    current=True: `day` is the town's current day (only a request without a
+    day can tell), recorded in _meta.json. Returns the town folder."""
     ti = raw.get("town_info") or {}
     tdir = _find_town_dir(town_id)
     if tdir is None:
         tdir = _create_town_dir(town_id, ti.get("name", "Unknown"), ti.get("season"))
     cache_dir = _ensure_cache_dir(tdir)
-    if live:
+    if current:
         _save_meta(cache_dir, town_id, ti.get("name", "Unknown"), ti.get("season"), current_day=day)
     elif not (cache_dir / "_meta.json").exists():
         _save_meta(cache_dir, town_id, ti.get("name", "Unknown"), ti.get("season"))
+    _save_estimation(cache_dir, day, ti.get("estimation_today"), final=not live)
     path = _towndata_file(cache_dir, day, live)
     tmp = path.with_suffix(".tmp")
     with gzip.open(tmp, "wt", encoding="utf-8") as f:
         json.dump(raw, f, ensure_ascii=False)
     tmp.replace(path)
+    if not live:
+        _towndata_file(cache_dir, day, live=True).unlink(missing_ok=True)
     return tdir
 
 
@@ -214,22 +219,83 @@ def load_towndata(town_id: int, day: int, *, final_only: bool = False) -> dict |
     return None
 
 
+# Estimations per day, kept small so the history doesn't need the day files:
+#   cache/estimations.json  {"towndata": {day: est}, "final": [days], "legacy": {day: est} | null}
+
+def _est_file(cache_dir: Path) -> Path:
+    return cache_dir / "estimations.json"
+
+
+def _load_estimations(cache_dir: Path) -> dict:
+    try:
+        data = json.loads(_est_file(cache_dir).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    data.setdefault("towndata", {})
+    data.setdefault("final", [])
+    data.setdefault("legacy", None)
+    return data
+
+
+def _write_estimations(cache_dir: Path, data: dict) -> None:
+    _est_file(cache_dir).write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
+
+
+def _est_entry(est) -> dict | None:
+    if not isinstance(est, dict) or est.get("min") is None:
+        return None
+    return {"min": est["min"], "max": est.get("max"), "maxed": int(bool(est.get("maxed")))}
+
+
+def _save_estimation(cache_dir: Path, day: int, est, *, final: bool) -> None:
+    entry = _est_entry(est)
+    data = _load_estimations(cache_dir)
+    if entry is None or (str(day) in data["final"] and not final):
+        return
+    data["towndata"][str(day)] = entry
+    if final and str(day) not in data["final"]:
+        data["final"].append(str(day))
+    _write_estimations(cache_dir, data)
+
+
 def estimation_history(town_id: int, before_day: int) -> dict:
-    """{day_str: {min, max, maxed}} for days before `before_day`, from whatever is
-    archived: legacy spy pages carry the full history, /towndata only its own day."""
-    hist: dict = {}
-    for day in list_cached_days(town_id):
-        if day >= before_day:
+    """{day_str: {min, max, maxed}} for days before `before_day`, from
+    cache/estimations.json. Built once from the archive when missing: legacy
+    spy pages (the latest one has the full history) and older /towndata files."""
+    tdir = _find_town_dir(town_id)
+    if tdir is None or not (tdir / "cache").is_dir():
+        return {}
+    cache_dir = tdir / "cache"
+    data = _load_estimations(cache_dir)
+    changed = False
+
+    if data["legacy"] is None:
+        data["legacy"] = {}
+        legacy_days = sorted((int(m.group(1)) for f in cache_dir.glob("day-*.json")
+                              if (m := re.match(r"day-(\d+)\.json$", f.name))), reverse=True)
+        for day in legacy_days:
+            legacy = load_day_json(town_id, day)
+            if legacy and isinstance(legacy.get("estimations"), dict):
+                for d, e in legacy["estimations"].items():
+                    if d.isdigit() and isinstance(e, dict):
+                        data["legacy"][d] = {"min": e.get("min"), "max": e.get("max"), "maxed": e.get("maxed")}
+                break
+        changed = True
+
+    for f in cache_dir.glob("day-*.towndata*.json.gz"):
+        m = re.match(r"day-(\d+)\.towndata(\.live)?\.json\.gz$", f.name)
+        if not m or str(int(m.group(1))) in data["towndata"]:
             continue
-        legacy = load_day_json(town_id, day)
-        if legacy and isinstance(legacy.get("estimations"), dict):
-            for d, e in legacy["estimations"].items():
-                if d.isdigit() and int(d) < before_day and isinstance(e, dict):
-                    hist[d] = {"min": e.get("min"), "max": e.get("max"), "maxed": e.get("maxed")}
-        raw = load_towndata(town_id, day)
-        est = ((raw or {}).get("town_info") or {}).get("estimation_today")
-        if isinstance(est, dict) and est.get("min") is not None:
-            hist[str(day)] = {"min": est["min"], "max": est.get("max"), "maxed": int(bool(est.get("maxed")))}
+        raw = load_towndata(town_id, int(m.group(1)))
+        entry = _est_entry(((raw or {}).get("town_info") or {}).get("estimation_today"))
+        if entry:
+            data["towndata"][str(int(m.group(1)))] = entry
+            changed = True
+
+    if changed:
+        _write_estimations(cache_dir, data)
+    hist = {d: e for d, e in (data["legacy"] or {}).items() if int(d) < before_day}
+    hist.update({d: e for d, e in data["towndata"].items() if int(d) < before_day})
     return hist
 
 

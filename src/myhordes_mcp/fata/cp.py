@@ -21,6 +21,7 @@ import json
 import time
 
 from . import archive
+from .risk import MAX_CP_PER_CITIZEN, zone_cp
 
 CP_FILE = "citizens-cp.json"
 MAX_READINGS = 30   # per citizen
@@ -46,7 +47,7 @@ def load_cp_log(town_id: int) -> dict:
 
 def zone_readings(data: dict) -> tuple[list[dict], list[dict]]:
     """(solo readings, group readings) from a parsed /towndata result."""
-    zones = {z["coords"]: z for z in data.get("zones", []) if z.get("cp") is not None}
+    zones = {z["coords"]: z for z in data.get("zones", [])}
     per_zone: dict[str, list[dict]] = {}
     for c in data.get("citizens", []):
         if not c["inside_town"]:
@@ -55,13 +56,10 @@ def zone_readings(data: dict) -> tuple[list[dict], list[dict]]:
     solos, groups = [], []
     for coords, people in per_zone.items():
         zone = zones.get(coords)
-        if not zone or not zone.get("updated_on"):
+        cp = zone_cp(zone, people) if zone else None
+        if cp is None:
             continue
-        t = zone["updated_on"]
-        # Everyone now on the zone must have been there at the update.
-        if any((c.get("last_update_time") or 0) > t for c in people):
-            continue
-        base = {"cp": zone["cp"], "day": zone.get("updated_day"), "time": t, "coords": coords}
+        base = {"cp": cp, "day": zone.get("updated_day"), "time": zone["updated_on"], "coords": coords}
         if len(people) == 1:
             solos.append({**base, "id": people[0]["id"], "name": people[0]["name"], "job": people[0]["job"]})
         else:
@@ -119,7 +117,7 @@ def update_cp_log(town_id: int, data: dict) -> None:
         if len(unknown) != 1:
             continue
         cp = g["cp"] - sum(same_day.values())
-        if not 0 <= cp <= 8:
+        if not 0 <= cp <= MAX_CP_PER_CITIZEN:
             continue
         mid = unknown[0]
         e = cits.setdefault(str(mid), {})
@@ -142,15 +140,19 @@ def citizen_cp(log: dict, citizen_id: int) -> dict | None:
     return {"last": e["last"], "max": e["max"]}
 
 
+def _cp(r: dict) -> str:
+    return "0 (terrorised?)" if r["cp"] == 0 else str(r["cp"])
+
+
 def cp_label(log: dict, citizen_id: int) -> str:
     """Compact ' · CP 4 (max 6)' tag, or '' if unknown."""
     cp = citizen_cp(log, citizen_id)
     if cp is None:
         return ""
     last, best = cp["last"], cp["max"]
-    tag = f" · CP {last['cp']} (day {last['day']})"
+    tag = f" · CP {_cp(last)} (day {last['day']})"
     if best["cp"] != last["cp"]:
-        tag = f" · CP {last['cp']} (day {last['day']}, max {best['cp']})"
+        tag = f" · CP {_cp(last)} (day {last['day']}, max {best['cp']})"
     return tag
 
 
@@ -160,6 +162,9 @@ def party_cp(log: dict, citizens: list[dict], names: list[str], base: int = 2) -
     Unknown citizens count `base` (2, no bonus). Returns (total, breakdown lines)."""
     by_name = {c["name"].lower(): c for c in citizens}
     total, lines = 0, []
+    names = [n for n in names if n.strip()]
+    if not names:
+        return base, []
     for raw in names:
         n = raw.strip()
         if not n:
@@ -176,7 +181,7 @@ def party_cp(log: dict, citizens: list[dict], names: list[str], base: int = 2) -
             last, best = cp["last"], cp["max"]
             total += last["cp"]
             extra = f", max {best['cp']} on day {best['day']}" if best["cp"] != last["cp"] else ""
-            lines.append(f"{c['name']}: {last['cp']} CP (last seen day {last['day']} at {last['coords']}{extra})")
+            lines.append(f"{c['name']}: {_cp(last)} CP (last seen day {last['day']} at {last['coords']}{extra})")
     return total, lines
 
 
@@ -190,7 +195,7 @@ def format_cp_log(log: dict, citizens: list[dict]) -> list[str]:
             continue
         last, best = cp["last"], cp["max"]
         src = " (derived)" if last.get("source") == "derived" else ""
-        rows.append((c["name"], c["job"], str(last["cp"]), str(best["cp"]),
+        rows.append((c["name"], c["job"], _cp(last), str(best["cp"]),
                      f"last day {last['day']} at {last['coords']}{src}; max day {best['day']}"))
     lines = ["| Citizen | Job | Last CP | Max CP | Seen |", "|---|---|---|---|---|"]
     for r in sorted(rows, key=lambda r: (r[2] == "?", r[0].lower())):

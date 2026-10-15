@@ -134,7 +134,7 @@ def build_result(town_id: int, raw: dict, estimation_history: dict | None = None
         "bank": _parse_bank(ti.get("bank") or [], items),
         "buildings": _parse_buildings(ti.get("constructions") or {}, raw.get("construction_data") or [], items),
         "scout": _parse_scout(raw.get("town_maps") or [], rel, who),
-        "zones": _parse_zones(raw.get("town_maps") or [], items, raw.get("building_data") or [], rel, who),
+        "zones": _parse_zones(raw.get("town_maps") or [], items, raw.get("building_data") or [], rel, who, day),
     }
 
 
@@ -186,7 +186,8 @@ def _parse_newspaper(news) -> dict:
     out = {}
     for d, v in news.items():
         try:
-            out[int(d) - 1] = {"zombies": v.get("z"), "defense": v.get("def")}
+            if v.get("z") is not None:
+                out[int(d) - 1] = {"zombies": v["z"], "defense": v.get("def")}
         except (ValueError, TypeError, AttributeError):
             continue
     return out
@@ -346,7 +347,8 @@ def _parse_scout(maps: list[dict], rel, who) -> list[dict]:
     return out
 
 
-def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who) -> list[dict]:
+def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who,
+                 current_day: int | None) -> list[dict]:
     """Visited zones (never-visited ones are skipped, like the legacy map).
 
     Zombie fields (same rules as the legacy parser):
@@ -357,7 +359,6 @@ def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who
       danger       0 none, 1 = 1-2, 2 = 3-5, 3 = 6+
     """
     ruins = {r["id"]: r for r in ruin_types}
-    current_day = max((m.get("day") or 0 for m in maps), default=0) or None
     zones = []
     for m in maps:
         if m.get("nyv"):

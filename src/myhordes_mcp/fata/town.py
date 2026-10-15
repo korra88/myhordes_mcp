@@ -268,7 +268,7 @@ def format_defense(data: dict, gh_defense: dict | None = None) -> str:
             line = f"  Day {day}: est. {_format_estimate(e)}" if e else f"  Day {day}: est. unknown"
             a = attacks.get(day)
             if a:
-                line += f" → attack {a['zombies']} vs defense {a['defense']}"
+                line += f" → attack {a['zombies']}" + (f" vs defense {a['defense']}" if a.get("defense") is not None else "")
             lines.append(line)
 
     return "\n".join(lines)
