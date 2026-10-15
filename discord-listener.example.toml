@@ -24,6 +24,7 @@ allowed_tools = [
   "mcp__myhordes__get_bank_inventory",
   "mcp__myhordes__get_town_overview",
   "mcp__myhordes__get_citizen_positions",
+  "mcp__myhordes__get_citizen_cp",
   "mcp__myhordes__get_defense_status",
   "mcp__myhordes__get_buildings",
   "mcp__myhordes__get_build_options",
