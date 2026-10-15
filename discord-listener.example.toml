@@ -34,6 +34,7 @@ allowed_tools = [
   "mcp__myhordes__get_expedition_roster",
   "mcp__myhordes__get_scout_map",
   "mcp__myhordes__find_expedition_path",
+  "mcp__myhordes__plan_expedition_supplies",
   "mcp__myhordes__get_zone_details",
   "mcp__myhordes__get_attack_distribution",
   "mcp__myhordes__get_attack_forecast",

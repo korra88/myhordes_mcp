@@ -200,9 +200,15 @@ def platform_level(data: dict) -> int | None:
     return None
 
 
+def km(x: int, y: int) -> int:
+    """The game's zone distance: Euclidean, rounded half up (Zone::getDistance).
+    Decides EP use (>= 3 km) and the Observation Platform teleport range."""
+    return int((x * x + y * y) ** 0.5 + 0.5)
+
+
 def teleport_range(level: int | None) -> int:
-    """Chebyshev distance from which the platform teleports citizens home
-    (Season 19: level 3 → 1 km, level 4 → 2 km; game-mechanics.md)."""
+    """km (see km()) up to which the platform teleports citizens home
+    (BeyondTeleportRadius: level 3 → 1 km, level 4 → 2 km)."""
     if level is None:
         return 0
     return 2 if level >= 4 else 1 if level >= 3 else 0
@@ -248,7 +254,7 @@ def trapped_citizens(data: dict) -> list[dict]:
         if zone["zombies"] <= cp:
             continue
         xy = _parse_coords(zone)
-        dist = max(abs(xy[0]), abs(xy[1])) if xy else None
+        dist = km(*xy) if xy else None
         hits.append({
             "coords": coords,
             "citizens": [c["name"] for c in people],

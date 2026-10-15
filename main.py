@@ -7,6 +7,8 @@ from mcp.server.fastmcp import FastMCP
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from myhordes_mcp import fata, gesthordes  # noqa: E402
+from myhordes_mcp.fata import supplies  # noqa: E402
+from myhordes_mcp.fata.pathing import safest_route  # noqa: E402
 from myhordes_mcp.knowledgebase import curated, wiki  # noqa: E402
 from myhordes_mcp.utils.config import CURRENT_TOWN_FILE, FATAMORGANA_TOWN_ID, resolve_town_id  # noqa: E402
 
@@ -403,8 +405,8 @@ async def find_expedition_path(
                     table for the first path: AP or EP paid per move (EP is used
                     first when leaving a zone 3+ km from town), AP/EP left, thirst
                     counter and status (Thirsty at 11, Dehydrated at 22, death at
-                    33). No consumables are applied: it shows where AP runs out
-                    and when water is needed; you place food/water/drugs.
+                    33). No consumables are applied: for where to drink, eat
+                    and take drugs, and what to carry, use plan_expedition_supplies.
         round_trip: With step_table, continue the table back along the same path.
         start_ap: AP at departure (default 6).
         start_ep: EP at departure (Scout 2, shoes +1, bike +2; default 0).
@@ -433,6 +435,124 @@ async def find_expedition_path(
         start_ep=start_ep,
         thirst_counter=thirst_counter,
     )
+
+
+@mcp.tool()
+async def plan_expedition_supplies(
+    waypoints: str,
+    round_trip: bool = True,
+    start: str = "0,0",
+    start_ap: int = 6,
+    start_ep: int = -1,
+    scout: bool = False,
+    shoes: bool = False,
+    bike: bool = False,
+    thirst_counter: int = 0,
+    thirst: str = "none",
+    already_drank: bool = False,
+    already_ate: bool = False,
+    drug_taken_today: bool = False,
+    drunk_or_hungover: bool = False,
+    wounded: bool = False,
+    available: str = "",
+    free_slots: int = 0,
+    group_cp: int = 0,
+    party: str = "",
+    town_id: int = 0,
+) -> str:
+    """
+    Plans when to drink, eat and use drugs along an expedition route, and what to carry.
+    Use this whenever a trip needs water/food/drugs: do NOT place consumables yourself —
+    report this tool's plan. It applies the game's rules exactly (verified in the game code):
+    water and food give AP only once a day and only raise AP to the max (never add), so they
+    are used at 0 AP; a second drink while not thirsty is refused by the game; walking 11
+    zones makes you Thirsty, 22 Dehydrated, 33 dead, and only water resets that counter;
+    EP is spent first when leaving a zone 3+ km from town.
+
+    The route is the safest path (as find_expedition_path) from `start` through the
+    waypoints, back to `start` if round_trip. Returning to town uses the Observation
+    Platform teleport when built (level 3-4) and accounts for the Labyrinth's 1 AP.
+    The plan minimises, in order: death, running out of AP, ending Dehydrated, ending
+    Thirsty, items carried (slots), alcohol, drugs, AP wasted. At most one drug and one
+    alcohol (warned about). Output: items to bring with slot count, warnings, step table.
+
+    Args:
+        waypoints: Zones to visit in order, town-relative, e.g. "-7,5" or "-7,5; -3,8".
+        round_trip: Come back to `start` (default True).
+        start: Starting zone, default "0,0" (town).
+        start_ap: AP at departure (default 6; 7 after a lucky dice/cards roll, 5 if wounded).
+        start_ep: EP at departure. -1 = full: scout 2 + shoes 1 + bike 2.
+        scout / shoes / bike: Scout job, Worn-out Sports Shoes, Mountain Bike equipped.
+        thirst_counter: Zones already walked since the last drink (0-10).
+        thirst: Current status: "none", "thirsty" or "dehydrated".
+        already_drank / already_ate: Water / food already used today (no more AP from them).
+        drug_taken_today: A drug was already taken today (no drug in the plan).
+        drunk_or_hungover: No alcohol in the plan.
+        wounded: Max AP 5 instead of 6.
+        available: What the player has or can take, e.g. "water=2, food7=1, twinoid=1"
+                   (names: water, food6, food7, alcohol, steroid, twinoid, coffee). Empty =
+                   let the planner choose from up to 3 water, 1 food of each kind, 1 alcohol,
+                   1 steroid, 1 twinoid; it reports the minimum to carry.
+        free_slots: Free rucksack slots for consumables; 0 = no limit (the plan reports how
+                    many it needs).
+        group_cp / party: For route safety, as in find_expedition_path.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
+    """
+    tid = resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    points = []
+    for raw in [start] + waypoints.replace("|", ",").split(";"):
+        nums = raw.replace("|", ",").replace("[", "").replace("]", "").replace("/", ",").split(",")
+        try:
+            x, y = (int(n) for n in nums)
+        except ValueError:
+            return f"Error: can't read the zone '{raw.strip()}' (use 'x,y', e.g. '-7,5')."
+        points.append((x, y))
+    if len(points) < 2:
+        return "Error: give at least one waypoint."
+    if round_trip:
+        points.append(points[0])
+    level = {"none": 0, "ok": 0, "thirsty": 1, "dehydrated": 2}.get(thirst.strip().lower())
+    if level is None:
+        return "Error: thirst must be 'none', 'thirsty' or 'dehydrated'."
+    items = supplies.parse_available(available)
+    if isinstance(items, str):
+        return f"Error: {items}"
+
+    data = await fata.fetch_town_data(tid)
+    if data.get("error"):
+        return f"Error: {data['error']}"
+    breakdown = None
+    if not group_cp:
+        group_cp = 2
+        if party:
+            group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
+    route = safest_route(data, points, group_cp)
+    if route is None:
+        return "Error: no route found between the given zones (40 AP cap per leg)."
+    route, end_ap, note = supplies.end_requirements(data, route, points[-1])
+    st = supplies.Start(
+        ap=start_ap, ep=None if start_ep < 0 else start_ep, counter=thirst_counter, thirst=level,
+        drank=already_drank, ate=already_ate, drugged=drug_taken_today,
+        no_alcohol=drunk_or_hungover, wounded=wounded, scout=scout, shoes=shoes, bike=bike,
+    )
+    result = supplies.plan(route, st, items, end_ap=end_ap, slots=free_slots)
+    path = " → ".join(f"[{x}|{y}]" for x, y in points)
+    notes = [note, f"Route safety computed for {group_cp} CP." + (" " + "; ".join(breakdown) if breakdown else "")]
+    if not available.strip():
+        notes.append("Items chosen from the default set (nothing specified as available).")
+    if result["cost"][0] or result["cost"][1]:
+        # Not feasible: what would make it work (default items, no slot limit)?
+        more = {k: max(items.get(k, 0), n) for k, n in supplies.DEFAULT_AVAILABLE.items()}
+        alt = supplies.plan(route, st, more, end_ap=end_ap)
+        if not (alt["cost"][0] or alt["cost"][1]):
+            need = ", ".join(f"{n} × {supplies.ITEMS[k].label}" for k, n in alt["used"].items())
+            notes.append(f"Feasible with: {need} ({sum(alt['used'].values())} slots).")
+        else:
+            notes.append("Not feasible even with the default set of items: shorten the route.")
+    return supplies.format_plan(route, st, result, title=f"Supplies plan {path}", notes=notes,
+                                slots=free_slots, end_ap=end_ap)
 
 
 @mcp.tool()

@@ -6,7 +6,7 @@
 - **Exhausted** (0 AP): disables melee weapons, Scout/Scavenger Sense, desert entry.
 
 ## Return to town — Observation Platform teleport
-- At **level 3 or 4** the Observation Platform adds a "return to town" option in zones near town: teleport straight inside, **saving up to 3 AP**. Level 4 extends the range to zones within 2 km. (Season 19: 4 levels, each range unlocked one level earlier than before.)
+- At **level 3 or 4** the Observation Platform adds a "return to town" option in zones near town: teleport straight inside, **saving up to 3 AP**. Level 3 = zones up to 1 km, level 4 = up to 2 km, where km = round(√(x²+y²)): [1|1] and [2|1] count, [2|2] (3 km) does not. (Season 19: 4 levels, each range unlocked one level earlier than before.)
 - Works even **without Control or when Terrorised**, so it is an exit for a citizen trapped near town.
 - **Gate closed → no teleport.** With the Labyrinth built it also skips the gate's AP cost; from the gate zone itself, entering still costs 1 AP (unless Ventilation System).
 - AP-spent estimate for a returning citizen (used by inspect-town): `max(0, Manhattan(last_pos, [0|0]) − discount)`, discount **2 AP at level 3, 3 AP at level 4**. Not built → no discount.

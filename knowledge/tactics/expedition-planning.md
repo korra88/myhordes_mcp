@@ -6,97 +6,89 @@ Hard-won rules for long desert trips. Mechanics interact non-obvious — raw AP+
 
 **Two distance metrics in MyHordes:**
 
-| Metric | Used for | Formula | [0\|0] to [-1\|15] |
-|---|---|---|---|
-| **Manhattan** | Movement cost (AP/EP spent) | \|Δx\| + \|Δy\| | **16 zones** |
-| **Chebyshev** | EP activation, skill ranges, km display | max(\|x\|, \|y\|) | 15 km |
+| Metric | Used for | Formula | [0\|0] to [-1\|15] | [0\|0] to [2\|2] |
+|---|---|---|---|---|
+| **Manhattan** | Movement cost (AP/EP spent) | \|Δx\| + \|Δy\| | **16 zones** | 4 zones |
+| **km** | EP use, Observation Platform teleport, km display | round(√(x²+y²)) | 15 km | **3 km** |
 
 - Movement **rook-style** (orthogonal only — up/down/left/right). No diagonal.
-- "Distance from town" for EP activation, Heroic Return, Rescue uses **Chebyshev**.
+- km is the rounded straight-line distance (game code `Zone::getDistance`), **not Chebyshev**.
+  Heroic Return and Rescue ranges are in km too (not re-checked in code).
 - Mismatch: zone at "15 km" can cost **16 AP**. Always use Manhattan for AP budgets.
 
 ## Exploration Points (EP)
 
-### Daily EP income
-| Source | EP | Refreshes mid-day? |
+Rules checked in the game code (v5.0.6).
+
+### EP sources
+| Source | EP | Notes |
 |---|---|---|
-| Scout (Camouflage Vest) | 2 | No — one-time daily grant |
-| Worn-out Sports Shoes | 1 | **Yes** — regens when using a 4+ AP item |
-| Mountain Bike | 2 | **Yes** — same regen trigger |
-| Shoes + Bike combined | 3 | Yes (each item regens its own contribution) |
+| Scout | 2 | Daily, part of max EP. **Never refilled** by consumables. |
+| Worn-out Sports Shoes | +1 | On equip, once a day. Refilled by consumables. |
+| Mountain Bike | +2 | On equip, once a day (heavy slot). Refilled by consumables. |
+| Scout's Lair (home action, 1 AP) | +4 scout / +2 others | Next morning. |
+| Bloody Hot Coffee | +1 | Up to max EP. Also +4 AP (up to max AP), no daily limit. |
 
-### EP regen triggers
-Consume item **restoring 4+ AP** (food, water, twinoid, alcohol, anabolics) → each equipped mobility item (shoes/bike) regens daily EP. Base Scout 2 EP do NOT regen.
+### EP refill from consumables
+Water, food, alcohol, Steroids and Twinoid refill EP **only up to the shoes/bike part**
+(shoes 1 + bike 2), never the scout's 2. **Without shoes or bike: no EP at all.** Twinoid
+refills one more than that (shoes only: up to 2). There is no "4+ AP item" rule.
 
-Special cases:
-- **Twinoid 500mg:** triggers shoe/bike regen AND gives **+1 EP above maximum** (unique to Twinoid).
-- **Bloody Hot Coffee:** always gives +1 EP regardless of equipment.
-- Regen capped at item daily amount. Can't exceed max EP (except Twinoid bonus).
-
-### EP activation zone
-- EP consumed **before AP** at **Chebyshev ≥3 km** from town.
-- EP **cannot** be used at ≤2 km (always cost AP).
-- EP = movement only. No actions (repairs, debris clearing).
-- Exception: entering Explorable Ruin costs EP (treated as movement).
-
-### Example: Scout with Shoes
-Daily: 2 (scout) + 1 (shoes) = 3 EP, max 3.
-Using food (6 AP, ≥4): +1 EP (shoes regen). Using Twinoid (8 AP): +1 EP (shoes) + 1 EP (bonus) = +2 EP.
-Total EP in a day with food + twinoid + water: 3 + 1 + 2 + 1 = **7 EP**.
+### When EP is spent
+- EP is spent **before AP** when the zone you are **leaving** is **3+ km** from town.
+- km = straight-line distance, **rounded**: round(√(x²+y²)). Not Chebyshev, not Manhattan.
+  [2|2] is 3 km (EP usable), [2|1] is 2 km (AP only), [3|0] is 3 km.
+- Closer than 3 km moves always cost AP. EP is for movement only.
 
 ## Thirst Step Counter
 
-**Separate from overnight thirst chain.** Desert walking triggers thirst:
+**Separate from overnight thirst.** Every move adds 1 (paid with AP or EP). When the
+counter passes 10, thirst goes up one level and the counter restarts at 0:
 
-| Total zones walked | Effect |
+| Moves since the counter was 0 | Effect |
 |---|---|
-| 11 | → **Thirsty** (-5 watch, visible debuff) |
-| 22 (11 more while Thirsty) | → **Dehydrated!** (die at midnight, -3 survival) |
-| 33 (11 more while Dehydrated) | → **Instant death** (no Meaty Bone if outside) |
+| 11 | → **Thirsty** |
+| 22 | → **Dehydrated!** (dies at midnight unless cured) |
+| 33 | → **Death** |
 
-Critical rules:
-- **Counter does NOT reset** by returning to town and going out again.
-- **Drinking water resets counter** AND clears current thirst level (if not Dehydrated).
-- **Hydratone** clears Thirsty status but does NOT give AP and does NOT give Refreshed.
-- Drinking while **Dehydrated** only improves to Thirsty — no AP, no Refreshed. Drink AGAIN for AP.
-- Counter interacts with Refreshed: can be **Refreshed AND Thirsty** (from step counter). Refreshed protects from overnight thirst, not step counter progression.
+- **Only water resets it** (every drink, in every thirst state).
+- **Not** reset by entering town, eating or **Hydratone** (Hydratone cures one thirst level, gives no AP, and is a drug).
 
-## AP Consumables — The Restore-to-Max Rule
+## Drinking and eating — what the game allows
 
-**THIS IS THE #1 EXPEDITION PLANNING TRAP.**
+**THIS IS THE #1 EXPEDITION PLANNING TRAP.** AP items **raise AP to a level, they never add**:
+5 AP + food → 6 (net +1), not 11. Use them at **0 AP**.
 
-Food, water, alcohol **restore AP to maximum** — not additive. 5 AP + food → 6 (net +1), not 11.
+| Item | AP | Limits |
+|---|---|---|
+| Water, not thirsty | → max (6) | Once a day (Refreshed) and only below max AP. **A second drink while not thirsty is refused.** |
+| Water, Thirsty | → max if not drunk yet today, else 0 | Clears Thirsty, resets the counter. Always allowed. |
+| Water, Dehydrated | **0** | Only back to Thirsty (counter reset). A **second ration** clears thirst (and gives AP if not drunk yet today). |
+| 6 AP food | → 6 | Once a day, only below max AP |
+| 7 AP food | → 7 | Same (noodles, steak, tasty vegetable/dish, eggs...) |
+| Anabolic Steroids | → 6 | Drug |
+| Twinoid 500mg | → 8 | Drug |
+| Alcohol | → 6 | Drunk; not when drunk or hungover (hungover the next day) |
+| Bloody Hot Coffee | +4, up to max | +1 EP; no limit |
 
-| Consumable | Sets AP to | EP trigger | Status given |
-|---|---|---|---|
-| Basic food | 6 (max) | Yes (≥4) | Fed |
-| Premium food | 7 (max+1) | Yes | Fed |
-| Water Ration | 6 (max) | Yes (≥4) | Refreshed |
-| Alcohol | 6 (max) | Yes (≥4) | Drunk |
-| Twinoid 500mg | **8 (max+2)** | Yes + bonus EP | Drugged |
-| Anabolic Steroids | 6 (max) | Yes (≥4) | Drugged |
+- Max AP is 6, **5 when wounded** (7 AP food then gives 6).
+- **Drugs:** a second drug the same day makes you an **addict** (permanent; an addict who is not drugged at night dies). One drug a day.
+- **Overnight:** no water at all during the day → thirst goes up one level at night; Dehydrated at night → death.
 
-**Consequence:** Consume AP items at **0 AP**. Any other AP = wasted difference.
+### Planning order
+1. Walk to 0 AP, then use the item. Never two AP items in a row: the second overwrites the first.
+2. Water when Thirsty and at 0 AP gives AP **and** clears thirst in one go: aim to hit 0 AP between move 11 and 21.
+3. Drink at more than 0 AP only to avoid becoming Dehydrated (exception).
+4. Each item is a rucksack slot: carry the minimum. A Water Cooler Bottle holds 3 rations in one slot.
 
-### Optimal consumable ordering
-Sequence consumables so each lands at 0 AP:
+**`plan_expedition_supplies` does all of this**: give it the waypoints, AP/EP, job/equipment
+and what you can carry; it returns the items to bring, the slots, where to use each one,
+and warnings. Report its plan instead of placing consumables by hand.
 
-1. Walk until 0 AP → use **highest-value** consumable (Twinoid: 8 AP + 2 EP)
-2. Walk until 0 AP → use **next** consumable
-3. Walk until 0 AP → use **last** consumable
-
-**Never stack consumables.** Twinoid at 0 AP (→8) then water (→6) WASTES 6 AP — water resets to max=6, overwrites the 8.
-
-### Thirst constraint on ordering
-Trip >11 zones: MUST drink before step counter hits 22 (Dehydrated). May force drink at non-zero AP.
-
-**Minimize waste:** hit 0 AP at step count 11–21. Drink for full AP AND clear Thirst in one action.
-
-**Worked example (Scout + Shoes, [0\|0] to [-1\|15] round trip):**
-- Twinoid at step 9 (outbound, 0 AP) → +8 AP, +2 EP
-- Water at step 19 (return, 0 AP, Thirsty c=19) → +6 AP, +1 EP, clears Thirst
-- Food at step 26 (return, 0 AP) → +6 AP, +1 EP
-- All three at 0 AP = zero waste. Total: 26 AP + 7 EP = 33 movement for 30 zones.
+## Return to town
+- **Observation Platform** level 3 / 4: teleport home from zones up to 1 / 2 km (same rounded
+  km), gate open. Up to 3 moves saved (e.g. from [2|1]); a teleport is not a move (no thirst).
+- **Labyrinth:** entering town from [0|0] costs 1 AP.
 
 ## Rescue & Heroic Return
 
@@ -110,47 +102,22 @@ Trip >11 zones: MUST drink before step counter hits 22 (Dehydrated). May force d
 - Both use **Chebyshev** for range.
 - Rescue = safety net for stranded citizen at trip end.
 
-## Expedition Planning Tables
-
-Always include step-by-step table with thirst status column. Goal: **return without Thirst** — no extra water to clear status at doorstep.
-
-Required columns: **Step · Zone · AP before · Action · AP after · EP · Thirst counter · Thirst status**
-
-Example format:
-
-| Step | Zone | AP | Action | AP after | EP | Counter | Thirst |
-|---|---|---|---|---|---|---|---|
-| 1 | [0\|1] | 6 | move | 5 | 2 | 1 | OK |
-| 2 | [0\|2] | 5 | move | 4 | 2 | 2 | OK |
-| 3 | [0\|3] | 4 | move (EP) | 4 | 1 | 3 | OK |
-| … | … | 0 | consume food | 6 | … | … | OK |
-| 11 | [0\|x] | … | move | … | … | 11 | **Thirsty** |
-| … | … | 0 | consume water | 6 | … | 0 | OK (reset) |
-
-**Thirst status values:** `OK` · `Thirsty` (step ≥11) · `Dehydrated` (step ≥22, dies at midnight) · `Dead` (step ≥33)
-
-**Goal:** water consumed at/before step 11, return leg ends ≤step 10. No second water? Arrive Thirsty, not Dehydrated.
-
 ## Expedition Checklist
 
-Before long trip:
-
-`find_expedition_path(..., step_table=True, round_trip=True, start_ap=, start_ep=, thirst_counter=)` computes steps 1–3 and 5 for a route: AP/EP per move, where AP runs out, and the steps where the counter hits 11/22/33. Place consumables yourself (step 4) using its output.
-
-1. **Calculate Manhattan distance** (|Δx| + |Δy|) both ways. Subtract saved zones if rescue planned.
-2. **Count AP-only zones** (Chebyshev ≤2km from town, both legs).
-3. **Total EP available** (daily + regen triggers from each consumable).
-4. **Plan consumable order** — each at 0 AP, respecting thirst counter (drink between steps 11–21).
-5. **Verify thirst timeline**: which step triggers Thirsty, when must water be consumed.
-6. **Show full step table** with thirst status column — return without Thirst.
-7. **Check route safety**: scouted vs unscouted zones, zombie counts, camouflage reliability.
-8. **Confirm rescue availability** if plan depends on it.
-9. **Loadout check**: items consumed en route free slots for loot coming home.
+1. Route: `find_expedition_path` (safety, CP, traps).
+2. Supplies: `plan_expedition_supplies` with the same waypoints, start AP/EP, scout/shoes/bike,
+   thirst counter, what was already drunk/eaten/taken today, and what is available.
+3. Check route safety: scouted vs unscouted zones, zombie counts, camouflage reliability.
+4. Confirm rescue availability if the plan depends on it.
+5. Loadout: items consumed on the way free their slot for loot coming home.
 
 ## Common Mistakes (from experience)
 
-- **Using Chebyshev for AP budget.** [-1\|15] is "15 km" but costs 16 AP to walk.
-- **Treating food/water as additive.** "6 AP base + 6 food + 6 water = 18" only true if each consumed at 0 AP.
-- **Ignoring step counter.** Overnight thirst (not Refreshed) and step-counter thirst (11 zones) are independent. Can be Refreshed and still become Thirsty from walking.
+- **Using Chebyshev for AP budget.** [-1\|15] is "15 km" but costs 16 AP to walk (Manhattan).
+- **Using Chebyshev for EP.** EP starts at rounded straight-line 3 km: [2|2] already counts.
+- **Treating food/water as additive.** "6 AP base + 6 food + 6 water = 18" only if each is used at 0 AP.
+- **Drinking twice to reset the counter.** Not thirsty and already drunk today → the game refuses.
+- **One ration for Dehydrated.** It only makes you Thirsty; a second one is needed.
+- **Hydratone for the counter.** It cures one thirst level but does not reset the counter, and it is a drug.
+- **Expecting EP back without shoes/bike.** Consumables never refill the scout's EP.
 - **Stacking consumables.** Twinoid (→8) then water (→6) wastes everything above 6.
-- **Forgetting EP zone restrictions.** EP don't work within 2km of town — always cost AP.

@@ -73,7 +73,7 @@ System prompt files loaded by `make advisor`:
 - Observed player behavior → `knowledge/tactics/player-behavior.md`
 - Non-obvious strategy or game quirk → `knowledge/tactics/strategy-quirks.md`
 - Opti-town coordination tactics → `knowledge/tactics/opti-town-meta.md`
-- Expedition planning & movement math → `knowledge/tactics/expedition-planning.md`
+- Expedition planning & movement math → `knowledge/tactics/expedition-planning.md`; what to carry and where to drink/eat → `plan_expedition_supplies` (never place consumables by hand)
 - Season-specific meta & nerfs → `knowledge/tactics/s19-meta.md`
 - Session standing orders → `knowledge/tactics/session-protocols.md`
 - New category → create new `knowledge/tactics/<topic>.md` (picked up automatically)

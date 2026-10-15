@@ -9,6 +9,7 @@ from .risk import (
     _spread_risk_for_clear,
     _staleness_tag,
     _zombie_max_estimate,
+    km,
 )
 
 
@@ -178,6 +179,65 @@ def _cell_risk(
     return base_risk
 
 
+def _zone_grid(data: dict, group_cp: int):
+    """(zone_map, cell_class, spread_map, current_day) shared by the path searches.
+    Scout radar readings fill zones missing from the map data."""
+    current_day = data["meta"].get("day")
+    zone_map: dict[tuple[int, int], dict] = {}
+    for z in data.get("zones", []):
+        coords = _parse_coords(z)
+        if coords:
+            zone_map[coords] = z
+    map_coords = set(zone_map.keys())
+    for z in data.get("scout", []):
+        coords = _parse_coords(z)
+        if coords and coords not in map_coords:
+            zone_map[coords] = {"coords": z["coords"], "zombies": z["zombies"], "danger": 0, "items": [], "ruin": None, "scouted_day": z.get("scouted_day")}
+    cd = current_day if isinstance(current_day, int) else None
+    spread_map = _build_spread_map(zone_map, cd)
+    cell_class = {c: _classify_cell(z, cd, c, spread_map, group_cp) for c, z in zone_map.items()}
+    return zone_map, cell_class, spread_map, cd
+
+
+def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int = 2) -> list[tuple[int, int]] | None:
+    """Safest path through `points` in order (Dijkstra on zombie risk, AP as tiebreak),
+    as the list of zones walked, start included. None if a leg has no path."""
+    zone_map, _, spread_map, cd = _zone_grid(data, group_cp)
+    route = [points[0]]
+    for (x1, y1), (x2, y2) in zip(points, points[1:]):
+        margin = 3
+        bx = (min(x1, x2) - margin, max(x1, x2) + margin)
+        by = (min(y1, y2) - margin, max(y1, y2) + margin)
+        heap = [(0.0, 0, x1, y1)]
+        prev: dict[tuple[int, int], tuple[int, int] | None] = {(x1, y1): None}
+        best: dict[tuple[int, int], tuple[float, int]] = {(x1, y1): (0.0, 0)}
+        while heap:
+            risk, ap, x, y = heapq.heappop(heap)
+            if (x, y) == (x2, y2):
+                break
+            if best.get((x, y), (float("inf"), 0)) < (risk, ap) or ap >= MAX_PATH_AP:
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                n = (x + dx, y + dy)
+                if n not in zone_map and not (bx[0] <= n[0] <= bx[1] and by[0] <= n[1] <= by[1]):
+                    continue
+                step = _cell_risk(zone_map.get(n), cd, coords=n, spread_map=spread_map,
+                                  group_cp=group_cp, mode="safest")
+                cand = (risk + step, ap + 1)
+                if cand < best.get(n, (float("inf"), 0)):
+                    best[n] = cand
+                    prev[n] = (x, y)
+                    heapq.heappush(heap, (cand[0], cand[1], n[0], n[1]))
+        if (x2, y2) not in prev:
+            return None
+        leg, cur = [], (x2, y2)
+        while cur != (x1, y1):
+            leg.append(cur)
+            cur = prev[cur]
+        route.extend(reversed(leg))
+    return route
+
+
 def find_safe_path(
     data: dict,
     x1: int, y1: int,
@@ -214,25 +274,8 @@ def find_safe_path(
     town = meta.get("town_name", "?")
 
     # -- Shared pre-computation (used by both Dijkstra runs) --
-    zone_map: dict[tuple[int, int], dict] = {}
-    for z in data.get("zones", []):
-        coords = _parse_coords(z)
-        if coords:
-            zone_map[coords] = z
-    map_coords = set(zone_map.keys())
-    for z in data.get("scout", []):
-        coords = _parse_coords(z)
-        if coords and coords not in map_coords:
-            zone_map[coords] = {"coords": z["coords"], "zombies": z["zombies"], "danger": 0, "items": [], "ruin": None, "scouted_day": z.get("scouted_day")}
-
-    cd = current_day if isinstance(current_day, int) else None
-    spread_map = _build_spread_map(zone_map, cd)
+    zone_map, cell_class, spread_map, cd = _zone_grid(data, group_cp)
     ap_limit = MAX_PATH_AP
-
-    # Pre-classify all cells (shared cache for both runs + output formatting)
-    cell_class: dict[tuple[int, int], dict] = {}
-    for c, z in zone_map.items():
-        cell_class[c] = _classify_cell(z, cd, c, spread_map, group_cp)
 
     # Bounding box + margin for unknown-cell traversal
     margin = 3
@@ -495,7 +538,7 @@ def find_safe_path(
 # (knowledge/tactics/expedition-planning.md)
 # ---------------------------------------------------------------------------
 
-EP_MIN_KM = 3            # EP pays for moves starting 3+ km (Chebyshev) from town
+EP_MIN_KM = 3            # EP pays for moves leaving a zone 3+ km (risk.km) from town
 THIRSTY_AT, DEHYDRATED_AT, DEATH_AT = 11, 22, 33
 
 
@@ -516,15 +559,14 @@ def step_rows(route: list[tuple[int, int]], start_ap: int = 6, start_ep: int = 0
     ap, ep, counter = start_ap, start_ep, thirst_counter
     rows = []
     for (x0, y0), (x1, y1) in zip(route, route[1:]):
-        km_from = max(abs(x0), abs(y0))
-        use_ep = ep > 0 and km_from >= EP_MIN_KM
+        use_ep = ep > 0 and km(x0, y0) >= EP_MIN_KM
         if use_ep:
             ep -= 1
         else:
             ap -= 1
         counter += 1
         rows.append({
-            "zone": (x1, y1), "km": max(abs(x1), abs(y1)), "paid": "EP" if use_ep else "AP",
+            "zone": (x1, y1), "km": km(x1, y1), "paid": "EP" if use_ep else "AP",
             "ap": ap, "ep": ep, "counter": counter, "thirst": _thirst(counter),
             "empty": not use_ep and ap < 0,
         })

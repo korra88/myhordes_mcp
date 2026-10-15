@@ -48,6 +48,7 @@ make advisor     # Claude Code with persona.md + knowledge/tactics/*.md + person
 - *"What's the town status?"* → `get_town_overview`
 - *"Will we survive tonight's attack?"* → `get_defense_status`
 - *"Safest path to [-7|5] for Alice and Bob?"* → `find_expedition_path`
+- *"What do I need to bring to reach [-1|15] and back?"* → `plan_expedition_supplies`
 - *"What should we build today?"* → `/build-plan`
 
 `claude mcp list` should show `myhordes` as connected. Settings are in `.env` (see
@@ -71,6 +72,7 @@ make advisor     # Claude Code with persona.md + knowledge/tactics/*.md + person
 | `map_bank_to_dump_sheet` | Fata Morgana | Bank mapped onto Garbage Dump sheet rows (aliases, broken, emptied weapons). |
 | `get_scout_map` | Fata Morgana | Zombie counts per scouted zone, grouped by threat level. |
 | `get_zone_details` | Fata Morgana | Ruins, ground items, zombies, scavenging state and zone CP per map zone, optionally in a box. |
+| `plan_expedition_supplies` | Fata Morgana + game rules | What to carry and where to drink, eat or take a drug along a route: fewest slots, no wasted AP, home not thirsty; platform teleport and Labyrinth included. |
 | `find_expedition_path` | Fata Morgana | CP-aware safest/shortest path (`party="A, B"` takes the party's CP from the CP log); `step_table=True` adds AP/EP and thirst counter per move. |
 | `get_attack_forecast` | Gest'Hordes | Theoretical attack curve, actual and estimated attacks, defence per day. |
 | `get_attack_distribution` | Gest'Hordes | Historical attack statistics across towns per day. |
