@@ -58,3 +58,26 @@ journalctl --user-unit discord-listener -f   # logs
 
 For it to start at boot without a login, run `sudo loginctl enable-linger $USER` once.
 Run one listener per bot: two would both answer.
+
+## Memory and feedback log
+
+Both live in `towns/_bot/`, inside the listener's write permission (`towns/**`), so
+they need no extra permission and, if `towns/` is a git repo, get history and backup
+with the town logs.
+
+- **Memory** (`memory.md`, always on). Facts readers ask the bot to keep across
+  threads, e.g. which in-game player a Discord user is. The bot reads it at the start
+  of each thread and writes it only on an explicit "remember"/"forget". Rules and
+  line format: `prompts/discord.md`, "Memory". It is read through a tool call, not
+  put in the system prompt, so a change does not break the prompt cache.
+- **Feedback log** (`feedback/`, opt-in). Add `prompts/discord-feedback.md` to
+  `append_system_prompt_files` and restart the listener. The bot then writes one file
+  per complaint, correction, missing tool or tool problem; it never reads them back,
+  so an entry cannot steer it. Review them in the terminal with `/review-bot-feedback`,
+  which proposes prompt and tool changes and moves processed entries to
+  `feedback/reviewed/`.
+
+Memory is the one place where text from a thread comes back in later threads: keep
+`allow_users` to people you trust, and check it now and then (`/review-bot-feedback`
+does). The bot edits `memory.md` itself: if you edit it by hand on another machine,
+commit and push right away so the two copies do not diverge.

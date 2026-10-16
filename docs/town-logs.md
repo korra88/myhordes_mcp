@@ -19,6 +19,10 @@ towns/
     daily-log.md              # written by the skills (inspect-town, close-day),
     day-NN.md                 #   started from templates/town/
     notes.md
+  _bot/                       # Discord bot (docs/discord.md, "Memory and feedback log")
+    memory.md                 #   facts kept across threads, written by the bot
+    feedback/                 #   one file per feedback entry, when the log is on
+      reviewed/               #   moved here by /review-bot-feedback
 ```
 
 Tools called without `town_id` use the default town: `towns/_current_town`, else

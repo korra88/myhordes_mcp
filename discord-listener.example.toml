@@ -17,6 +17,8 @@ max_turns_per_hour = 60
 [claude]
 cwd = "."
 model = "sonnet"
+# Add "prompts/discord-feedback.md" to log feedback in towns/_bot/feedback/ for
+# /review-bot-feedback (docs/discord.md, "Memory and feedback log").
 append_system_prompt_files = ["persona.md", "prompts/discord.md"]
 mcp_config = ["discord-listener.mcp.json"]   # copy from discord-listener.mcp.example.json
 # Read-only game and wiki tools, by name. Never mcp__myhordes__*.

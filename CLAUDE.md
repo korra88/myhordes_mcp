@@ -55,6 +55,7 @@ When user says any of these, invoke the matching skill:
 | `/building-report` | "building report", "construction report", "throughput report", "how much AP we spent", "build history" |
 | `/expedition-report` | "expedition list", "check the expedition list", "who is outside", "who is not on the list", "expedition roster", "count the scrappers" |
 | `/update-garbage-dump-list` | "update the dump list", "update garbage dump", "refresh the dump sheet", "update the bank items in the spreadsheet", "sync bank to the dump calculator" |
+| `/review-bot-feedback` | "review the bot feedback", "check the bot memory", "what did the bot log", "improve the bot from feedback" |
 
 ## Developer reference
 
