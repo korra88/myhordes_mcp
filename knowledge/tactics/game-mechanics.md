@@ -5,6 +5,9 @@
 - **Wounded** cuts max AP 6→5 (all AP sources restore 1 less). Heal with Bandage before midnight or citizen becomes Infected.
 - **Exhausted** (0 AP): disables melee weapons, Scout/Scavenger Sense, desert entry.
 
+## Observation Platform — map visibility
+Every night the zones within the platform's radius get today's zombie state on the map, without anyone visiting: **level 0 → 3 km, level 1 → 6 km, level 2+ → 10 km** (game code `NightlyZoneDiscoveryRadius`). Zones holding a citizen at night count too. Fata's `nvt=false` ("seen today") includes these zones, so it does not mean someone walked there today.
+
 ## Return to town — Observation Platform teleport
 - At **level 3 or 4** the Observation Platform adds a "return to town" option in zones near town: teleport straight inside, **saving up to 3 AP**. Level 3 = zones up to 1 km, level 4 = up to 2 km, where km = round(√(x²+y²)): [1|1] and [2|1] count, [2|2] (3 km) does not. (Season 19: 4 levels, each range unlocked one level earlier than before.)
 - Works even **without Control or when Terrorised**, so it is an exit for a citizen trapped near town.
