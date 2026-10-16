@@ -150,13 +150,33 @@ def format_search(query: str, category: str = "", limit: int = 5) -> str:
     if not results:
         return f"No results found for '{query}'" + (f" in category '{category}'" if category else "") + "."
 
-    parts = [f"Found {len(results)} result(s) for '{query}':\n"]
-    for r in results:
-        parts.append(f"## {r['name']} [{r['category']}]\n")
-        parts.append(r["content"])
-        parts.append("\n---\n")
-
+    # The best hit in full; the others as one line each, so the model can tell
+    # whether one is worth a second call (a full page costs ~1k tokens).
+    best, rest = results[0], results[1:]
+    parts = [f"## {best['name']} [{best['category']}]", "", _page_body(best["content"])]
+    if rest:
+        parts += ["", "---", "Other matches (search_wiki('<name>', limit=1) for the page):"]
+        parts += [f"- {r['name']} [{r['category']}] — {_first_sentence(r['content'])}" for r in rest]
     return "\n".join(parts)
+
+
+def _page_body(content: str) -> str:
+    """The page without its repeated '# Name' title line."""
+    lines = content.strip().splitlines()
+    if lines and lines[0].startswith("# "):
+        lines = lines[1:]
+    return "\n".join(lines).strip()
+
+
+def _first_sentence(content: str, limit: int = 160) -> str:
+    """The page's italic description, else its first line of prose."""
+    for line in content.splitlines():
+        s = line.strip()
+        if not s or s.startswith(("#", "|", "-", "*Category", "**")):
+            continue
+        s = s.strip("*").split(" / ")[0]
+        return s if len(s) <= limit else s[:limit].rsplit(" ", 1)[0] + "…"
+    return "(no description)"
 
 
 def format_categories() -> str:

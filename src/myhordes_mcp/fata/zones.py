@@ -1,6 +1,7 @@
 """Map formatters: scout data, ruins/ground items, zones in a bounding box."""
 
 from ..utils.clock import data_updated
+from .bank import summary_lines
 from .risk import (
     DANGER_LEVELS,
     _build_spread_map,
@@ -9,171 +10,181 @@ from .risk import (
     _zone_freshness,
     _zone_status,
     _zone_threat,
+    fmt_items,
     km,
     respawn_check,
     zone_reach,
 )
 
 
-def format_scout(data: dict) -> str:
-    """Format zombie counts per zone from scout data or map data.
+def _by_day(zs: list[dict], fmt) -> list[str]:
+    """'  Day 7: [15|-6] 10, [15|-7] 10' — one line per update day, newest first."""
+    days: dict = {}
+    for z in zs:
+        days.setdefault(z.get("updated_day"), []).append(z)
+    return [(f"  Day {d}: " if d is not None else "  No date: ") + ", ".join(fmt(z) for z in days[d])
+            for d in sorted(days, key=lambda d: -(d if d is not None else -1))]
 
-    Prefers the `scout` dict when available, falls back to `zones` (map data).
-    Map data uses zm: -1 = not scouted, 0 = clear, 1+ = zombie count.
-    Each zone has independent freshness (updatedBy / updatedOnDay).
+
+def format_scout(data: dict) -> str:
+    """Zombie picture of the map: today's readings first, then older counts by day.
+
+    Zones seen today through the Observation Platform radius carry today's danger
+    estimate (their zombie count is a placeholder); others keep the count of their
+    last update. Clear zones are counted, not listed: a route or an area is
+    get_zone_details / find_expedition_path.
     """
     if data.get("error"):
         return f"Error: {data['error']}"
 
     meta = data["meta"]
     current_day = meta.get("day")
-
-    # Combine map data (explored zones with danger levels, items, ruins) with
-    # scout estimates (zombie counts for distant zones estimated by Scout profession).
-    # Scout estimates cover zones not in the map data.
-    map_zones = data.get("zones", [])
-    scout_zones = data.get("scout", [])
-
-    if not map_zones and not scout_zones:
+    zones = data.get("zones", [])
+    scout_only = [z for z in data.get("scout", []) if z["coords"] not in {m["coords"] for m in zones}]
+    if not zones and not scout_only:
         return "No scout or map data available."
 
-    # Merge: scout zones that aren't already in map data
-    map_coords = {z["coords"] for z in map_zones}
-    scout_only = [z for z in scout_zones if z["coords"] not in map_coords]
+    def is_today(z):
+        return z.get("danger_today") or (z["zombies"] >= 0 and z.get("updated_day") == current_day)
 
-    # Use map data — zm: -1 = not scouted, 0 = clear, 1+ = zombie count
-    scouted = [z for z in map_zones if z["zombies"] >= 0]
-    unscouted = [z for z in map_zones if z["zombies"] < 0]
-    with_zombies = [z for z in scouted if z["zombies"] > 0]
-    clear = [z for z in scouted if z["zombies"] == 0]
-    total_zombies = sum(z["zombies"] for z in with_zombies)
+    today = [z for z in zones if is_today(z)]
+    today_danger = [z for z in today if (z["zombies"] < 0 or z.get("danger_today")) and z.get("danger")]
+    today_count = [z for z in today if z["zombies"] > 0 and not z.get("danger_today")]
+    today_clear = len(today) - len(today_danger) - len(today_count)
+    older = [z for z in zones if not is_today(z)]
+    older_count = sorted((z for z in older if z["zombies"] > 0), key=lambda z: -z["zombies"])
+    older_clear = sum(1 for z in older if z["zombies"] == 0)
+    older_danger = [z for z in older if z["zombies"] < 0 and z.get("danger")]
+    no_info = sum(1 for z in older if z["zombies"] < 0 and not z.get("danger"))
+    never = max(0, meta["map_zones"] - 1 - len(zones)) if meta.get("map_zones") else None
 
     lines = [
         f"## Scout Map — {meta.get('town_name', '?')} Day {current_day}",
         data_updated(meta),
-        f"{len(map_zones)} zones explored | {len(scouted)} scouted | {len(unscouted)} unscouted | {len(scout_only)} scout estimates | {total_zombies} zombies spotted",
+        f"{len(zones)} zones visited" + (f", {never} never" if never is not None else "")
+        + f" · today: {len(today)} zones seen ({today_clear} clear) · older: {len(older_count)} with zombies, "
+        f"{older_clear} clear, {no_info} no data",
         "",
     ]
     respawn = respawn_check(data)
     if respawn:
         lines += respawn + [""]
 
-    if with_zombies:
-        with_zombies.sort(key=lambda z: z["zombies"], reverse=True)
-        lines.append(f"### Zones with zombies ({len(with_zombies)})")
-        for z in with_zombies:
-            stale = _staleness_tag(z.get("updated_day"), current_day)
-            who = f", by {z['updated_by']}" if z.get("updated_by") else ""
-            lines.append(f"  {z['coords']}: {z['zombies']} zombies (day {z.get('updated_day', '?')}{who}){stale}")
+    if today_danger or today_count:
+        lines.append("### Zombies seen today")
+        for level in (3, 2, 1):
+            zs = [z for z in today_danger if z["danger"] == level]
+            if zs:
+                lines.append(f"  ~{DANGER_LEVELS[level]}: " + ", ".join(z["coords"] for z in zs))
+        if today_count:
+            lines.append("  counted: " + ", ".join(f"{z['coords']} {z['zombies']}" for z in today_count))
         lines.append("")
-
-    if clear:
-        # Group clear zones by freshness
-        fresh = [z for z in clear if z.get("updated_day") == current_day]
-        older = [z for z in clear if z.get("updated_day") != current_day and z.get("updated_day") is not None]
-        lines.append(f"### Clear zones ({len(clear)}: {len(fresh)} today, {len(older)} older)")
-        if fresh:
-            coords_list = ", ".join(z["coords"] for z in sorted(fresh, key=lambda z: z["coords"]))
-            lines.append(f"  Today: {coords_list}")
-        if older:
-            # Show with day info
-            older.sort(key=lambda z: z.get("updated_day", 0), reverse=True)
-            by_day: dict[int, list[str]] = {}
-            for z in older:
-                d = z.get("updated_day", 0)
-                by_day.setdefault(d, []).append(z["coords"])
-            for d in sorted(by_day.keys(), reverse=True):
-                coords_list = ", ".join(by_day[d])
-                lines.append(f"  Day {d}: {coords_list}")
+    if older_count:
+        n = sum(z["zombies"] for z in older_count)
+        lines.append(f"### Older counts — {n} zombies in {len(older_count)} zones (by day of the count; "
+                     "+~1.75/night since)")
+        lines += _by_day(older_count, lambda z: f"{z['coords']} {z['zombies']}")
         lines.append("")
-
-    if unscouted:
-        # Split unscouted into those with danger info vs completely unknown
-        with_danger = [z for z in unscouted if z.get("danger")]
-        no_info = [z for z in unscouted if not z.get("danger")]
-        lines.append(f"### Unscouted zones ({len(unscouted)})")
-        if with_danger:
-            # Group by danger level, show highest first
-            with_danger.sort(key=lambda z: (-z["danger"], z["coords"]))
-            for z in with_danger:
-                dlevel = z["danger"]
-                label = DANGER_LEVELS.get(dlevel, f"danger {dlevel}")
-                lines.append(f"  {z['coords']}: ~{label}")
-        if no_info:
-            coords_list = ", ".join(z["coords"] for z in sorted(no_info, key=lambda z: z["coords"]))
-            lines.append(f"  No data: {coords_list}")
-
+    if older_danger:
+        lines.append(f"### Older danger estimates ({len(older_danger)})")
+        lines += _by_day(older_danger, lambda z: f"{z['coords']} ~{z['danger']}")
+        lines.append("")
     if scout_only:
-        lines.append("")
-        scout_only.sort(key=lambda z: z["zombies"], reverse=True)
         lines.append(f"### Scout estimates ({len(scout_only)} zones beyond explored map)")
-        for z in scout_only:
-            stale = _staleness_tag(z.get("scouted_day"), current_day)
-            lines.append(f"  {z['coords']}: ~{z['zombies']} zombies (by {z['scouted_by']}, day {z['scouted_day']}){stale}")
+        for z in sorted(scout_only, key=lambda z: -z["zombies"]):
+            lines.append(f"  {z['coords']}: ~{z['zombies']} (d{z['scouted_day']})"
+                         + _staleness_tag(z.get("scouted_day"), current_day))
+    return "\n".join(lines).rstrip()
 
-    return "\n".join(lines)
+
+def _ruin_line(z: dict, current_day) -> str:
+    r = z["ruin"]
+    bp = " [BLUEPRINT]" if r.get("blueprint_available") else ""
+    dried = " (dried)" if r.get("dried") else ""
+    digs = f", {r['digs_remaining']} digs left" if r.get("digs_remaining") not in (None, "0", 0) else ""
+    x, y = _parse_coords(z)
+    return (f"  {z['coords']} {abs(x) + abs(y)} AP: {r['name']}{bp}{dried}{digs}"
+            f"{_zone_threat(z)}{_zone_status(z)}{_zone_freshness(z, current_day)}")
 
 
-def format_zones(data: dict) -> str:
-    """Format detailed map zone data — ruins, items, zombies, danger."""
+def format_zones(data: dict, item: str = "") -> str:
+    """Desert overview: what lies on the ground (grouped like the bank), the ruins,
+    who is outside. With `item`: the zones where that item lies."""
     if data.get("error"):
         return f"Error: {data['error']}"
-
     zones = data.get("zones", [])
     meta = data["meta"]
-
     if not zones:
         return "No map data available."
-
-    # Separate ruins from regular zones
-    ruin_zones = [z for z in zones if z.get("ruin")]
-    item_zones = [z for z in zones if z.get("items") and not z.get("ruin")]
-    empty_count = len(zones) - len(ruin_zones) - len(item_zones)
-
-    lines = [
-        f"## Zone Map — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
-        data_updated(meta),
-        f"{len(zones)} zones explored, {len(ruin_zones)} ruins found"
-        + (f" ({empty_count} zones with no ruin or ground items omitted)" if empty_count else ""),
-        "",
-    ]
+    if item:
+        return _format_item_search(data, item)
 
     current_day = meta.get("day")
+    ruins = sorted((z for z in zones if z.get("ruin")), key=lambda z: (abs(_parse_coords(z)[0]) + abs(_parse_coords(z)[1])))
+    item_zones = [z for z in zones if z.get("items")]
+    merged: dict = {}
+    for z in item_zones:
+        for i in z["items"]:
+            key = (i["name"], i["broken"])
+            if key in merged:
+                merged[key]["count"] += i["count"]
+            else:
+                merged[key] = dict(i)
+    ground = sorted(merged.values(), key=lambda i: (i["name"].lower(), i["broken"]))
+    outside = [c for c in data.get("citizens", []) if not c["inside_town"] and _parse_coords(c)]
 
-    if ruin_zones:
-        ruin_zones.sort(key=lambda z: z["ruin"]["name"])
-        lines.append(f"### Ruins ({len(ruin_zones)})")
-        for z in ruin_zones:
-            r = z["ruin"]
-            bp = " [BLUEPRINT]" if r.get("blueprint_available") else ""
-            dried = " (dried)" if r.get("dried") else ""
-            digs = f", {r['digs_remaining']} digs left" if r.get("digs_remaining") not in (None, "0", 0) else ""
-            threat = _zone_threat(z)
-            fresh = _zone_freshness(z, current_day)
-            lines.append(f"  {z['coords']}: {r['name']}{bp}{dried}{digs}{threat}{_zone_status(z)}{fresh}")
-            if z.get("items"):
-                item_list = ", ".join(
-                    f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")
-                    for i in z["items"]
-                )
-                lines.append(f"    Items: {item_list}")
+    lines = [
+        f"## Desert overview — {meta.get('town_name', '?')} Day {current_day}",
+        data_updated(meta),
+        f"{len(zones)} zones visited · {len(item_zones)} with ground items · {len(ruins)} ruins · "
+        f"{len(outside)} citizens outside",
+        "",
+        f"### On the ground ({sum(i['count'] for i in ground)} items, as last seen in each zone)",
+    ]
+    lines += summary_lines(ground, rest_hint="get_zone_details(item='name') shows where any item lies")
+    lines += ["Where an item lies: get_zone_details(item='<name>'); an area: x1/y1/x2/y2.", ""]
+
+    if ruins:
+        lines.append(f"### Ruins ({len(ruins)}, nearest first)")
+        lines += [_ruin_line(z, current_day) for z in ruins]
         lines.append("")
+    if outside:
+        by_zone: dict = {}
+        for c in outside:
+            by_zone.setdefault(c["coords"], []).append(c["name"])
+        lines.append(f"### Citizens outside ({len(outside)}, farthest first)")
+        for coords in sorted(by_zone, key=lambda k: -sum(map(abs, _parse_coords({"coords": k})))):
+            x, y = _parse_coords({"coords": coords})
+            lines.append(f"  {coords} {abs(x) + abs(y)} AP: {', '.join(by_zone[coords])}")
+    return "\n".join(lines).rstrip()
 
-    # Show zones with items (non-ruin)
-    if item_zones:
-        item_zones.sort(key=lambda z: z["coords"])
-        lines.append(f"### Zones with ground items ({len(item_zones)})")
-        for z in item_zones:
-            dried = " (dried)" if z.get("dried") else ""
-            threat = _zone_threat(z)
-            fresh = _zone_freshness(z, current_day)
-            lines.append(f"  {z['coords']}{dried}{threat}{_zone_status(z)}{fresh}:")
-            item_list = ", ".join(
-                f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")
-                for i in z["items"]
-            )
-            lines.append(f"    {item_list}")
 
+ITEM_ZONES_SHOWN = 25
+
+
+def _format_item_search(data: dict, item: str) -> str:
+    meta = data["meta"]
+    q = item.strip().lower()
+    current_day = meta.get("day")
+    hits = []
+    for z in data["zones"]:
+        found = [i for i in z.get("items", []) if q in i["name"].lower()]
+        if found:
+            x, y = _parse_coords(z)
+            hits.append((abs(x) + abs(y), z, found))
+    hits.sort(key=lambda h: (h[0], h[1]["coords"]))
+    total = sum(i["count"] for _, _, f in hits for i in f)
+    lines = [f"## '{item}' on the ground — {meta.get('town_name', '?')} Day {current_day}",
+             data_updated(meta)]
+    if not hits:
+        return "\n".join(lines + [f"No zone holds an item matching '{item}' (as last seen)."])
+    lines.append(f"{total} in {len(hits)} zones, nearest first (as last seen in each zone):")
+    for ap, z, found in hits[:ITEM_ZONES_SHOWN]:
+        lines.append(f"  {z['coords']} {ap} AP: {fmt_items(found)}{_zone_freshness(z, current_day)}")
+    if len(hits) > ITEM_ZONES_SHOWN:
+        far = hits[ITEM_ZONES_SHOWN:]
+        lines.append(f"  +{sum(i['count'] for _, _, f in far for i in f)} more in {len(far)} zones at "
+                     f"{far[0][0]}–{far[-1][0]} AP (a box with x1/y1/x2/y2 lists them)")
     return "\n".join(lines)
 
 
@@ -250,17 +261,14 @@ def format_zone_path(
         if ruin:
             bp = " [BLUEPRINT]" if ruin.get("blueprint_available") else ""
             digs = f", {ruin['digs_remaining']} digs left" if ruin.get("digs_remaining") not in (None, "0", 0) else ""
-            label = f"{ruin['name']}{bp}{digs}"
+            label = f" {ruin['name']}{bp}{digs}"
         else:
-            label = "open zone"
+            label = ""
 
-        entry = [f"  {z['coords']} ({ap} AP, {km(rx, ry)} km){budget_flag}{dried}: {label}{threat}{_zone_status(z)}{fresh}"]
+        entry = [f"  {z['coords']} {ap} AP, {km(rx, ry)} km{budget_flag}{dried}:{label}"
+                 f"{threat}{_zone_status(z)}{fresh}".replace(":,", ":")]
         if z.get("items"):
-            item_list = ", ".join(
-                f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")
-                for i in z["items"]
-            )
-            entry.append(f"    Items: {item_list}")
+            entry.append(f"    {fmt_items(z['items'])}")
         return entry
 
     def _split_empty(entries: list) -> tuple[list, dict]:
@@ -299,10 +307,10 @@ def format_zone_path(
                 desc += ", dried"
             when = ""
             if day is not None and today:
-                when = f" (zone read day {day}; zombies seen today)"
+                when = f" (read d{day}; zombies today)"
             elif day is not None:
                 stale = " STALE" if (isinstance(current_day, int) and current_day - day >= 1) else ""
-                when = f" (day {day}{stale})"
+                when = f" (d{day}{stale})"
             cells = sorted(groups[key], key=lambda t: (t[0], t[1]["coords"]))
             coords = ", ".join(f"{z['coords']} {ap}AP" for ap, z in cells)
             out.append(f"    {desc}{when}: {coords}")

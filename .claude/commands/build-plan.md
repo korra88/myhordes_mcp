@@ -19,6 +19,10 @@ Call `get_build_options()` once. It returns:
 - **Next step**: locked defense/water buildings whose prerequisite is buildable,
   with chain AP and defense.
 
+Each group shows its best 8 (plus Defensive Focus/Adjustment, water filters and the
+Garbage Dump always) and names the rest on one `+N more` line. Call again with
+`include_all=True` only if one of those named-only buildings belongs in the queue.
+
 Do not call `get_buildings`, `get_bank_inventory` or `get_defense_status` for this.
 
 ## Step 2 — Load phase knowledge

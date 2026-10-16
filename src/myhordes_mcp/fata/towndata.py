@@ -390,7 +390,7 @@ def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who
         upd = m.get("zone_update") or {}
 
         zone_items = [
-            {"name": _item_fields(i["id"], items)["name"], "count": i.get("count", 0),
+            {**_item_fields(i["id"], items), "count": i.get("count", 0),
              "broken": 1 if i.get("broken") else 0}
             for i in m.get("items") or []
         ]

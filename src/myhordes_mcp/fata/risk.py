@@ -256,23 +256,22 @@ def _zone_threat(zone: dict, current_day: int | None = None, spread_map: dict | 
 
 
 def _zone_freshness(zone: dict, current_day: int | None) -> str:
-    """Return a compact freshness string for a map zone, e.g. ' (by PlayerName, day 32)'."""
-    updated_by = zone.get("updated_by")
+    """Compact freshness for a zone line: ' (d7)', ' (d4) [STALE]', or for a zone seen
+    today through the platform radius ' (read d7; zombies today)' — zombies are today's,
+    items and depletion from that day. Who updated it is left out (token cost)."""
     updated_day = zone.get("updated_day")
-    if not updated_by and updated_day is None:
+    if updated_day is None:
         return ""
-    parts = []
-    if updated_by:
-        parts.append(f"by {updated_by}")
-    if updated_day is not None:
-        parts.append(f"day {updated_day}")
     if zone.get("danger_today"):
-        # Zombies are today's; items and depletion are from that update.
-        return f" (zone read {', '.join(parts)}; zombies seen today)"
-    tag = f" ({', '.join(parts)})"
-    if current_day is not None and updated_day is not None and current_day - updated_day >= 1:
-        tag += " [STALE]"
-    return tag
+        return f" (read d{updated_day}; zombies today)"
+    stale = current_day is not None and current_day - updated_day >= 1
+    return f" (d{updated_day})" + (" [STALE]" if stale else "")
+
+
+def fmt_items(items: list[dict]) -> str:
+    """'Battery ×2, Open Can, Screwdriver [B]' — ×1 left out."""
+    return ", ".join(i["name"] + (f" ×{i['count']}" if i["count"] != 1 else "")
+                     + (" [B]" if i.get("broken") else "") for i in items)
 
 
 def _zone_status(zone: dict) -> str:
@@ -489,8 +488,6 @@ def format_trapped(hits: list[dict], fmt_time) -> list[str]:
              "zombies > CP (exact zone CP when Fata has it, else ≥2 per citizen)"]
     for h in hits:
         when = f"zone updated {fmt_time(h['updated_on'])}" if h["updated_on"] else "zone update time unknown"
-        if h["updated_by"]:
-            when += f" by {h['updated_by']}"
         extra = f", {h['ruin']}" if h["ruin"] else ""
         tp = " — platform teleport home available" if h["teleport"] else ""
         if h.get("cp_exact"):

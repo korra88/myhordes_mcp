@@ -246,18 +246,27 @@ def format_bank_summary(data: dict) -> str:
     if not bank:
         return "The bank is empty."
 
-    total_items = sum(i["count"] for i in bank)
-    total_types = len(bank)
-
     lines = [
         f"## Bank Summary — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
         data_updated(meta),
-        f"{total_types} item types, {total_items} total items",
+        f"{len(bank)} item types, {sum(i['count'] for i in bank)} total items",
         "",
     ]
+    lines += summary_lines(bank, data.get("buildings", []))
+    lines.append("")
+    lines.append("_Use get_bank_inventory(detail='full') for the complete item list._")
+    return "\n".join(lines)
+
+
+def summary_lines(bank: list[dict], buildings: list[dict] | None = None, *,
+                  rest_hint: str = "use detail='full' to see all") -> list[str]:
+    """Strategic groupings of a list of items ({name, count, broken, category}):
+    the bank, or every item lying in the desert. `rest_hint` says how to see the
+    types no group covers."""
+    lines: list[str] = []
 
     # Clean water — check if Water Filter / Water Purifier is built
-    buildings = data.get("buildings", [])
+    buildings = buildings or []
     has_purifier = any(
         b["built"] and b["name"] in ("Water Filter", "Water Purifier")
         for b in buildings
@@ -347,9 +356,6 @@ def format_bank_summary(data: dict) -> str:
                  if i["name"] not in accounted
                  and i["category"] not in ("Weapon", "Furniture", "Box")]
     if remainder:
-        lines.append(f"**Other:** {len(remainder)} types not shown (use detail='full' to see all)")
+        lines.append(f"**Other:** {len(remainder)} types not shown ({rest_hint})")
 
-    lines.append("")
-    lines.append("_Use get_bank_inventory(detail='full') for the complete item list._")
-
-    return "\n".join(lines)
+    return lines

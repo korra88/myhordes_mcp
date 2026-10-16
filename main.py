@@ -132,7 +132,7 @@ async def get_citizen_cp(town_id: int = 0) -> str:
     meta = data["meta"]
     lines = [f"## Citizen CP — {meta.get('town_name')} Day {meta.get('day')}",
              data_updated(meta),
-             "Last = most recent reading, Max = best ever seen. ? = never read alone on a zone (assume 2).", ""]
+             "Last = most recent reading, Max = best ever seen.", ""]
     lines += fata.format_cp_log(fata.load_cp_log(tid), data["citizens"])
     return "\n".join(lines)
 
@@ -199,7 +199,7 @@ async def get_buildings(
 
 
 @mcp.tool()
-async def get_build_options(town_id: int = 0, include_resources: bool = False) -> str:
+async def get_build_options(town_id: int = 0, include_resources: bool = False, include_all: bool = False) -> str:
     """
     Ranked construction options for today, computed from live buildings and bank.
     Use this for "what should we build", build plans and construction queues —
@@ -217,12 +217,15 @@ async def get_build_options(town_id: int = 0, include_resources: bool = False) -
         include_resources: Also list every resource each building needs. Default
             False — shortages are already shown; enable only when the user asks
             for full resource lists.
+        include_all: Show every option of each group. Default False — the best 8
+            per group are shown and the rest named on one line; enable only when
+            the user asks about one of those.
     """
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
     data = await fata.fetch_town_data(tid)
-    return fata.format_build_options(data, include_resources=include_resources)
+    return fata.format_build_options(data, include_resources=include_resources, include_all=include_all)
 
 
 @mcp.tool()
@@ -403,6 +406,7 @@ async def find_expedition_path(
     start_ap: int = 6,
     start_ep: int = 0,
     thirst_counter: int = 0,
+    show_items: bool = False,
     day: int = 0,
     town_id: int = 0,
 ) -> str:
@@ -432,6 +436,8 @@ async def find_expedition_path(
         scout_mode: Set True when a Scout with Camouflage Vest is leading.
                     Trapped zones become passable at a detection risk cost
                     instead of being impassable.
+        show_items: Set True to list the ground items on each step (only when
+                    the user wants to pick things up on the way).
         step_table: Set True when planning an actual trip. Adds a step-by-step
                     table for the first path: AP or EP paid per move (EP is used
                     first when leaving a zone 3+ km from town), AP/EP left, thirst
@@ -461,6 +467,7 @@ async def find_expedition_path(
         escape_items=escape_items,
         scout_mode=scout_mode,
         step_table=step_table,
+        show_items=show_items,
         round_trip=round_trip,
         start_ap=start_ap,
         start_ep=start_ep,
@@ -611,25 +618,26 @@ async def get_zone_details(
     x2: int | None = None,
     y2: int | None = None,
     max_ap: int | None = None,
+    item: str = "",
 ) -> str:
     """
-    Fetches detailed map zone data from Fata Morgana — ruins (with names, dig
-    counts, blueprint status), ground items per zone, and zombie counts.
-    Use this when the user asks about ruins, what items are on the ground outside,
-    or what's available at specific map coordinates.
+    The desert from Fata Morgana: ground items, ruins, zones.
 
-    Without coordinates: returns only zones that have a ruin or ground items
-    (empty zones are omitted, count noted).
-    When x1/y1/x2/y2 are provided, restricts output to the bounding box between
-    those two coordinates, sorted by AP cost (Manhattan distance from town).
-    Zones with nothing to report (no ruin, no items, no threat) are collapsed
-    into one-line coordinate lists — the output stays compact for large areas,
-    so prefer one call with a generous box over many small calls.
-    Use this for expedition planning: "what's between [2|3] and [5|6] within 8 AP?"
-    One zone (x1=x2, y1=y2) also gets a "From town" block: moves, km, whether it is
-    an EP zone, and whether the Observation Platform teleport, Heroic Return
-    (Reclusive level) and Rescue (University level) reach it. Use that for "can I
-    teleport / Heroic Return from [x|y]?" instead of computing km yourself.
+    Three modes:
+    - No arguments: desert overview — every item lying on the ground summed and
+      grouped like the bank (water, food, drugs, defense items, metal, wood,
+      weapons...), the ruins nearest first (blueprint, digs left, depletion), and
+      who is outside where. Use for "what is out there", "where are the ruins".
+    - item="<name>": the zones where items matching that name lie, nearest first
+      (e.g. "wrought iron", "battery"). Use for "where can I find X".
+    - x1/y1/x2/y2: every zone of that box, sorted by AP cost, with ruin, items,
+      zombies and freshness; empty zones collapsed into one-line lists. One zone
+      (x1=x2, y1=y2) also gets a "From town" block: moves, km, whether it is
+      an EP zone, and whether the Observation Platform teleport, Heroic Return
+      (Reclusive level) and Rescue (University level) reach it. Use that for
+      "can I teleport / Heroic Return from [x|y]?" instead of computing km
+      yourself. Prefer one call with a generous box over many small ones.
+    Items are as last seen in each zone; the zone's day says how old.
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
@@ -638,8 +646,9 @@ async def get_zone_details(
         y1: Y coordinate of the first corner of the area to inspect (town-relative).
         x2: X coordinate of the second corner. Required if x1/y1 are set.
         y2: Y coordinate of the second corner. Required if x1/y1 are set.
-        max_ap: Optional AP budget to filter results (e.g. 8). Cells beyond this cost
+        max_ap: Optional AP budget for the box (e.g. 8). Cells beyond this cost
                 are shown separately. Typical range: 4–15.
+        item: Part of an item name to locate on the map (case-insensitive).
     """
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
@@ -649,7 +658,7 @@ async def get_zone_details(
     coords_provided = all(v is not None for v in (x1, y1, x2, y2))
     if coords_provided:
         return fata.format_zone_path(data, x1, y1, x2, y2, max_ap=max_ap)
-    return fata.format_zones(data)
+    return fata.format_zones(data, item=item)
 
 
 # ---------------------------------------------------------------------------
@@ -714,8 +723,9 @@ def search_wiki(query: str, category: str = "", limit: int = 5) -> str:
         category: Optional filter — one of: items, buildings, ruins, skills, status,
                   distinctions, deaths, homes, jobs, guide, general, town, events, tutorials.
                   Leave empty to search all categories.
-        limit: Max results to return (1-10, default 5). Use 1-2 for specific lookups,
-               higher for broad searches.
+        limit: Pages to consider (1-10, default 5). The best match comes in full,
+               the others as one line each (name + first sentence): ask for one of
+               them by name if it looks useful.
     """
     return wiki.format_search(query, category=category, limit=limit)
 

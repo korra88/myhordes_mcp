@@ -186,19 +186,21 @@ def party_cp(log: dict, citizens: list[dict], names: list[str], base: int = 2) -
 
 
 def format_cp_log(log: dict, citizens: list[dict]) -> list[str]:
-    """Table of every living citizen's CP: last, max, and when."""
-    rows = []
-    for c in citizens:
+    """One line per living citizen: 'Elprede (Guardian) 7/7 — d7 [0|1]' (last/max CP,
+    where and when the last reading was; max day only when it differs). A list, not
+    a Markdown table: Discord shows tables raw and `[x|y]` breaks their cells."""
+    rows, unread = [], []
+    for c in sorted(citizens, key=lambda c: c["name"].lower()):
         cp = citizen_cp(log, c["id"])
         if cp is None:
-            rows.append((c["name"], c["job"], "?", "?", "never read alone on a zone"))
+            unread.append(c["name"])
             continue
         last, best = cp["last"], cp["max"]
-        src = " (derived)" if last.get("source") == "derived" else ""
-        rows.append((c["name"], c["job"], _cp(last), str(best["cp"]),
-                     f"last day {last['day']} at {last['coords']}{src}; max day {best['day']}"))
-    lines = ["| Citizen | Job | Last CP | Max CP | Seen |", "|---|---|---|---|---|"]
-    for r in sorted(rows, key=lambda r: (r[2] == "?", r[0].lower())):
-        lines.append("| " + " | ".join(r) + " |")
+        src = ", derived" if last.get("source") == "derived" else ""
+        maxday = f", max d{best['day']}" if best["day"] != last["day"] else ""
+        rows.append(f"  {c['name']} ({c['job']}) {_cp(last)}/{best['cp']} — d{last['day']} {last['coords']}{src}{maxday}")
+    lines = ["Last/Max CP — day and zone of the last reading:"] + rows
+    if unread:
+        lines.append(f"Never read alone on a zone (assume 2): {', '.join(unread)}")
     return lines
 

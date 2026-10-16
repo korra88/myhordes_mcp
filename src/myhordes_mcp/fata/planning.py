@@ -171,7 +171,12 @@ def _option_line(o: dict) -> str:
     return line
 
 
-def format_build_options(data: dict, include_resources: bool = False) -> str:
+TOP_PER_GROUP = 8  # options shown per group unless include_all
+# Always shown: the Situation block points at them (multipliers, water filters).
+ALWAYS_SHOWN = {DEFENSIVE_FOCUS, "Defensive Adjustment", "Garbage Dump"} | WATER_FILTERS  # Dump: S19 meta
+
+
+def format_build_options(data: dict, include_resources: bool = False, include_all: bool = False) -> str:
     """Ranked construction options for the current town, with the numbers a
     build plan needs: defense buffer, water ratio, AP budget, multiplier gap,
     and per-building efficiency ratios and bank availability."""
@@ -223,10 +228,17 @@ def format_build_options(data: dict, include_resources: bool = False) -> str:
             continue
         ready = sum(o["ready"] for o in items)
         lines.append(f"### {title} — {len(items)} buildable, {ready} with resources in bank")
-        for o in sorted(items, key=key):
+        ranked = sorted(items, key=key)
+        shown = ranked if include_all else (ranked[:TOP_PER_GROUP]
+                                            + [o for o in ranked[TOP_PER_GROUP:] if o["name"] in ALWAYS_SHOWN])
+        for o in shown:
             lines.append(_option_line(o))
             if include_resources:
                 lines.append(f"      needs: {_res_text(o)}")
+        if len(ranked) > len(shown):
+            hidden = [o for o in ranked if o not in shown]
+            lines.append(f"  +{len(hidden)} more ({sum(o['ready'] for o in hidden)} ready): "
+                         + ", ".join(o["name"] for o in hidden) + " — include_all=True for their numbers")
         lines.append("")
 
     if p["chains"]:

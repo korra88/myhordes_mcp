@@ -10,6 +10,7 @@ from .risk import (
     _spread_risk_for_clear,
     _staleness_tag,
     _zombie_max_estimate,
+    fmt_items,
     km,
 )
 
@@ -317,6 +318,7 @@ def find_safe_path(
     start_ep: int = 0,
     thirst_counter: int = 0,
     cp_breakdown: list[str] | None = None,
+    show_items: bool = False,
 ) -> str:
     """Find paths between two map coordinates using CP-aware Dijkstra.
 
@@ -508,7 +510,6 @@ def find_safe_path(
         flash_counter: list[int] | None = None,
     ) -> str:
         z = zone_map.get((px, py))
-        ap_here = abs(px) + abs(py)
         coord_str = f"[{px}|{py}]"
         zom_str = _format_zom_str(z, px, py)
 
@@ -538,16 +539,10 @@ def find_safe_path(
                     tag_str = " [TRAP RISK]"
             else:
                 tag_str = " [TRAP RISK]"
-        elif tag == "CLEAR":
-            tag_str = " [CLEAR]"
-        elif tag == "SAFE":
-            tag_str = " [SAFE]"
-        elif tag == "UNKNOWN":
-            tag_str = ""
         else:
-            tag_str = ""
+            tag_str = ""  # CLEAR / SAFE / UNKNOWN: the zombie text already says it
 
-        stale = _staleness_tag(z.get("updated_day"), cd) if z else ""
+        stale = _staleness_tag(z.get("updated_day"), cd) if z and not z.get("danger_today") else ""
 
         ruin = z.get("ruin") if z else None
         ruin_str = ""
@@ -557,15 +552,10 @@ def find_safe_path(
             ruin_str += " | depleted"
         elif z and z.get("scav_level"):
             ruin_str += f" | {z['scav_level']}"
-        items = z.get("items", []) if z else []
-        items_str = ""
-        if items:
-            items_str = " | Items: " + ", ".join(
-                f"{it['name']}x{it['count']}" + (" [B]" if it["broken"] else "")
-                for it in items
-            )
+        items = z.get("items", []) if z and show_items else []
+        items_str = f" | {fmt_items(items)}" if items else ""
 
-        return f"  {i:>2}. {coord_str} ({ap_here} AP from gate) — {zom_str}{tag_str}{ruin_str}{items_str}{stale}"
+        return f"  {i:>2}. {coord_str} — {zom_str}{tag_str}{ruin_str}{items_str}{stale}"
 
     def _render_path(
         label: str,

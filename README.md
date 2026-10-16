@@ -71,8 +71,8 @@ make advisor     # Claude Code with persona.md + knowledge/tactics/*.md + person
 | `get_night_report` | Fata Morgana + Gest'Hordes | One night: survived/failed, defense vs attack, alive before/after, deaths with cause and position. |
 | `get_expedition_roster` | Fata Morgana | Outside citizens by tile with ruin names and class icons, scrappers, reconciliation with an expedition list. |
 | `map_bank_to_dump_sheet` | Fata Morgana | Bank mapped onto Garbage Dump sheet rows (aliases, broken, emptied weapons). |
-| `get_scout_map` | Fata Morgana | Zombie counts per scouted zone, grouped by threat level. |
-| `get_zone_details` | Fata Morgana | Ruins, ground items, zombies, scavenging state and zone CP per map zone, optionally in a box. |
+| `get_scout_map` | Fata Morgana | Zombies seen today (danger) and older counts by day, plus tonight's global respawn check. |
+| `get_zone_details` | Fata Morgana | Desert overview (ground items grouped like the bank, ruins, who is outside); `item=` to locate an item; a box for zone detail; one zone for its reach from town. |
 | `plan_expedition_supplies` | Fata Morgana + game rules | What to carry and where to drink, eat or take a drug along a route: fewest slots, no wasted AP, home not thirsty; platform teleport and Labyrinth included. |
 | `find_expedition_path` | Fata Morgana | CP-aware safest/shortest path (`party="A, B"` takes the party's CP from the CP log); `step_table=True` adds AP/EP and thirst counter per move. |
 | `get_attack_forecast` | Gest'Hordes | Theoretical attack curve, actual and estimated attacks, defence per day. |

@@ -5,6 +5,7 @@ import re
 from ..utils.config import PROJECT_ROOT
 
 KNOWLEDGE_DIR = PROJECT_ROOT / "knowledge"
+SECTIONS = 3  # sections returned in full
 
 
 def search(query: str, section: str = "") -> str:
@@ -52,13 +53,13 @@ def search(query: str, section: str = "") -> str:
 
     scored.sort(key=lambda x: (-x[0], -x[1]))
 
-    # Returning whole files blows the context on knowledge/tactics/ (60 KB+), so
-    # send the matching sections instead, and only fall back to the head of the
-    # file when no heading contains a term.
-    parts = [f"Found {len(scored)} file(s) for '{query}':\n"]
-    for nterms, total, md, text, matched in scored[:4]:
+    # Returning whole files blows the context on knowledge/tactics/ (60 KB+), and
+    # even every matching section of every file ran to 3-4k tokens for a simple
+    # question. Rank the sections themselves and send the best few; list the rest
+    # by title so the model can ask for one.
+    ranked = []
+    for file_rank, (_, _, md, text, _) in enumerate(scored):
         rel = md.relative_to(root)
-        parts.append(f"## {rel}  (matched: {', '.join(matched)})\n")
         blocks, cur = [], []
         for line in text.splitlines():
             if line.startswith("#") and cur:
@@ -68,13 +69,25 @@ def search(query: str, section: str = "") -> str:
                 cur.append(line)
         if cur:
             blocks.append(cur)
-        keep = [b for b in blocks
-                if any(re.search(r"\b" + re.escape(t), "\n".join(b).lower())
-                       for t in terms)]
-        chosen = keep[:6] if keep else blocks[:2]
-        body = "\n\n".join("\n".join(b).strip() for b in chosen)
-        parts.append(body[:6000] + ("\n… (section truncated)" if len(body) > 6000 else ""))
-        parts.append("\n---\n")
-    if len(scored) > 4:
-        parts.append(f"({len(scored) - 4} more file(s) matched; narrow the query.)")
-    return "\n".join(parts)
+        for b in blocks:
+            low = "\n".join(b).lower()
+            hits = {t: len(re.findall(r"\b" + re.escape(t), low)) for t in terms}
+            n = sum(1 for v in hits.values() if v)
+            if n:
+                title = next((l.lstrip("# ").strip() for l in b if l.startswith("#")), "(top of file)")
+                body = "\n".join(b[1:] if b[0].startswith("#") else b).strip()
+                ranked.append((-n, -sum(hits.values()), file_rank, rel, title, body))
+    if not ranked:  # terms only in front matter: the head of the best file
+        _, _, md, text, _ = scored[0]
+        return f"## {md.relative_to(root)}\n\n{text[:3000]}"
+    ranked.sort(key=lambda r: r[:3])
+    best, rest = ranked[:SECTIONS], ranked[SECTIONS:]
+    parts = []
+    for *_, rel, title, body in best:
+        parts += [f"## {rel} › {title}", "", body[:3000] + ("\n… (truncated)" if len(body) > 3000 else ""), ""]
+    if rest:
+        parts.append("Other matching sections (search their title or file name):")
+        parts += [f"- {rel} › {title}" for *_, rel, title, _ in rest[:8]]
+        if len(rest) > 8:
+            parts.append(f"- … {len(rest) - 8} more; narrow the query")
+    return "\n".join(parts).rstrip()
