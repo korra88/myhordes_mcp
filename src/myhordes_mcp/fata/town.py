@@ -2,7 +2,7 @@
 
 from ..utils.clock import data_updated, fmt_epoch
 from .cp import cp_label
-from .risk import _staleness_tag, format_trapped, trapped_citizens
+from .risk import _staleness_tag, format_trapped, gate_line, trapped_citizens
 
 
 def _format_estimate(est: dict) -> str:
@@ -30,7 +30,6 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
     meta = data["meta"]
     defense = data["defense"]
     water = data["water"]
-    gate = data["gate"]
     est = data["estimations"]
     citizens = data["citizens"]
     deaths = data["deaths"]
@@ -55,7 +54,7 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
         + (" | DEVASTATED" if meta.get("devastated") else ""),
         data_updated(meta),
         "",
-        f"## Gate: {gate.upper()}",
+        f"## {gate_line(data)}",
         "",
         "## Defense",
         f"  Total: {defense.get('total', '?')}",
@@ -138,7 +137,6 @@ def format_citizens(data: dict, cp_log: dict | None = None) -> str:
 
     citizens = data["citizens"]
     deaths = data["deaths"]
-    gate = data["gate"]
     meta = data["meta"]
     current_day = meta.get("day")
     show_citizen_stale = meta.get("chaos") or meta.get("devastated")
@@ -147,7 +145,7 @@ def format_citizens(data: dict, cp_log: dict | None = None) -> str:
     outside = [c for c in citizens if not c["inside_town"]]
 
     lines = [
-        f"Gate: {gate.upper()}",
+        gate_line(data),
         f"{len(citizens)} citizens alive — {len(inside)} inside, {len(outside)} outside",
         "",
     ]
@@ -197,7 +195,6 @@ def format_defense(data: dict, gh_defense: dict | None = None) -> str:
 
     defense = data["defense"]
     est = data["estimations"]
-    gate = data["gate"]
 
     total = defense.get("total", 0)
     today_est = est.get("today", {})
@@ -211,15 +208,16 @@ def format_defense(data: dict, gh_defense: dict | None = None) -> str:
     survival = ""
     if low is not None and high is not None:
         if total >= high:
-            survival = " -> SAFE (defense exceeds max estimate)"
+            survival = " — SAFE (defense exceeds max estimate)"
         elif total >= low:
-            survival = f" -> AT RISK (defense covers min, {high - total} short of max)"
+            survival = f" — AT RISK (defense covers min, {high - total} short of max)"
         else:
-            survival = f" -> DANGER ({low - total} defense short of minimum estimate)"
+            survival = f" — DANGER ({low - total} defense short of minimum estimate)"
 
     lines = [
-        f"## Defense Analysis — Gate: {gate.upper()}{survival}",
+        f"## Defense Analysis{survival}",
         data_updated(data["meta"]),
+        gate_line(data),
         "",
         f"Total defense: {total}",
         f"  Wall base: {defense.get('base', '?')}",

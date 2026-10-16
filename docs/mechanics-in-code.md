@@ -32,6 +32,7 @@ How to move one rule:
 | Building efficiency (def/AP, def/resource), what the bank can build | `fata/planning.py` | `get_build_options` |
 | Defensive Focus multiplier (as Fata reports it) | `fata/town.py` | `get_defense_status` |
 | Attack window verdict: SAFE / AT RISK / DANGER with the gap | `fata/town.py:format_defense` | `get_defense_status` |
+| Gate: open by day is normal, ⚠ only from 23:00 on Fata's time (old data says so) | `fata/risk.py:gate_line`, `gate_alert` | overview, defense, citizens, `get_town_changes` |
 
 ## Candidates (prose today)
 

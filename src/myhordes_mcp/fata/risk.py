@@ -1,6 +1,41 @@
 """Shared zone helpers: coordinates, data freshness, zombie spread and threat estimates."""
 
 import re
+from datetime import datetime
+
+from ..utils.clock import age_text, data_datetime, now
+
+# An open gate is normal by day; players close it after 23:00, before the attack
+# at 23:59 (game time). Before this the tools do not warn about it.
+GATE_WARN_FROM = (23, 0)
+
+
+def gate_alert(data: dict, at: datetime | None = None) -> str | None:
+    """The warning for an open gate, or None. Only from 23:00 and only on live data.
+    The gate is known only as of Fata's last update, so a warning after 23:00 on
+    data from before 23:00 says the data is old instead of staying silent."""
+    meta = data["meta"]
+    if data.get("gate") != "open" or meta.get("live") is False:
+        return None
+    clock = at or now()
+    if (clock.hour, clock.minute) < GATE_WARN_FROM:
+        return None
+    seen = data_datetime(meta)
+    if seen and seen.date() == clock.date() and (seen.hour, seen.minute) >= GATE_WARN_FROM:
+        return f"⚠ Gate OPEN at {seen:%H:%M} — close it before the attack (23:59)"
+    when = f"{seen:%H:%M}, {age_text(seen, clock)} ago" if seen else "time unknown"
+    return (f"⚠ Gate open at the last update ({when}) — data is old: check the gate, "
+            "attack at 23:59")
+
+
+def gate_line(data: dict, at: datetime | None = None) -> str:
+    """'Gate: …' for tool headers, with the context that keeps an open gate by day
+    from reading as an alarm."""
+    if data.get("gate") != "open":
+        return "Gate: closed"
+    if data["meta"].get("live") is False:
+        return "Gate: open (snapshot of a past day)"
+    return gate_alert(data, at) or "Gate: open (normal by day; closed after 23:00, before 23:59)"
 
 
 # Zone danger level → human-readable zombie estimate

@@ -24,6 +24,19 @@ MAYBE_STALE_MIN = 60
 STALE_MIN = 180
 
 
+def data_datetime(meta: dict) -> datetime | None:
+    """meta['data_time'] ('YYYY-MM-DD HH:MM:SS', game time) as a datetime, or None."""
+    try:
+        return datetime.strptime(meta.get("data_time") or "", "%Y-%m-%d %H:%M:%S").replace(tzinfo=GAME_TZ)
+    except ValueError:
+        return None
+
+
+def age_text(dt: datetime, at: datetime | None = None) -> str:
+    """'1 h 05 min' since dt."""
+    return _duration(max(0, int(((at or now()) - dt).total_seconds() // 60)))
+
+
 def _duration(minutes: int) -> str:
     if minutes < 60:
         return f"{minutes} min"
@@ -39,9 +52,8 @@ def data_updated(meta: dict, at: datetime | None = None) -> str:
     raw = meta.get("data_time")
     if not raw:
         return "Data updated: unknown (treat as stale)"
-    try:
-        dt = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=GAME_TZ)
-    except ValueError:
+    dt = data_datetime(meta)
+    if dt is None:
         return f"Data updated: {raw}"
     shown = dt.strftime("%Y-%m-%d %H:%M")
     if meta.get("live") is False:

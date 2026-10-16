@@ -8,11 +8,11 @@ citizen spent moving. Replaces the arithmetic inspect-town used to do by hand.
 
 from datetime import datetime
 
-from ..utils.clock import GAME_TZ, data_updated, fmt_epoch, now
+from ..utils.clock import GAME_TZ, data_updated, fmt_epoch
 from ..utils.config import PLAYER_NAME
 from . import archive
 from .client import fetch_town_data
-from .risk import _parse_coords, format_trapped, trapped_citizens
+from .risk import _parse_coords, format_trapped, gate_alert, trapped_citizens
 
 # Items inspect-town tracks for deposits and withdrawals.
 CRITICAL_ITEMS = [
@@ -22,7 +22,6 @@ CRITICAL_ITEMS = [
     "Iron Chest",
 ]
 OTHER_BANK_LINES = 8
-GATE_LATE = (23, 30)  # game time after which an open gate is urgent
 
 
 def _xy(coords: str) -> tuple[int, int]:
@@ -86,7 +85,7 @@ def format_town_changes(data: dict, snaps: list[dict], ref: dict | None, ref_lab
 
     alive = len(cur["citizens"])
     inside = sum(c["inside"] for c in cur["citizens"].values())
-    state = f"State: {alive} alive — {inside} inside, {alive - inside} outside · Defense {cur['defense']} · Gate {cur['gate'].upper()}"
+    state = f"State: {alive} alive — {inside} inside, {alive - inside} outside · Defense {cur['defense']} · Gate {cur['gate']}"
     if ref is not None and ref is not cur:
         d_alive = alive - len(ref["citizens"])
         d_def = (cur["defense"] or 0) - (ref["defense"] or 0)
@@ -157,9 +156,9 @@ def format_town_changes(data: dict, snaps: list[dict], ref: dict | None, ref_lab
         lines.append("")
 
     warnings = format_trapped(trapped_citizens(data), fmt_epoch)
-    clock = now()
-    if cur["gate"] == "open" and (clock.hour, clock.minute) >= GATE_LATE:
-        warnings.append(f"⚠ Gate OPEN at {clock:%H:%M} — attack at midnight")
+    alert = gate_alert(data)
+    if alert:
+        warnings.append(alert)
     zones = {z["coords"]: z for z in data["zones"]}
     dried = sorted(c["name"] for c in data["citizens"]
                    if not c["inside_town"] and zones.get(c["coords"], {}).get("dried"))

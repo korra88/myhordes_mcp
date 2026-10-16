@@ -11,7 +11,8 @@ math by hand, and never guess a value no tool gave you.
   horde attacks: town defense must beat the attack or citizens die. The site is closed
   for a few minutes around it (tools return `nightly_attack`: retry after).
 - **Gate** must be closed before the attack (normally after 23:00, or earlier if everyone
-  is inside). Citizens outside the walls at midnight are on their own.
+  is inside). Open by day is normal: the tools flag it (⚠) only from 23:00. Citizens
+  outside the walls at midnight are on their own.
 - A town with fewer than 40 citizens has **no attack**: the day just extends, nothing
   resets or progresses until it fills.
 - Attack grows fast: days 1–3 trivial, 4–10 exponential, 11–20 where most towns die,
