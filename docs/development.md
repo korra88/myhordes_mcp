@@ -19,6 +19,7 @@ myhordes_mcp/
 │   ├── buildings/           # Building guides by game phase (search_knowledge)
 │   └── tactics/             # Advisor knowledge, appended to the system prompt by make advisor
 ├── persona.example.md       # Example persona — copy to persona.md (gitignored)
+├── prompts/game-primer.md   # One-page game rules for the Discord bot (other clients too)
 ├── prompts/discord.md       # Discord channel context for the listener
 ├── personal/                # Player-specific private notes (gitignored contents)
 ├── towns/                   # Town logs + Fata archive (gitignored, see town-logs.md)
@@ -45,6 +46,7 @@ myhordes_mcp/
 | `src/myhordes_mcp/knowledgebase/` | `wiki.py` (indexes `wiki/processed/`), `curated.py` (searches `knowledge/`) |
 | `src/myhordes_mcp/utils/` | `config.py` (.env, town ID, paths, User-Agent), `cache.py` (single-flight TTL cache), `clock.py` (game time) |
 | `persona.md` | Active persona (gitignored). Copy from `persona.example.md`. Loaded by `make advisor` and the Discord listener. |
+| `prompts/game-primer.md` | Core game rules + knowledge-base index, appended by the listener. Rules the tools compute stay out of it. |
 | `prompts/discord.md` | Discord channel context appended by the listener. |
 
 ## Docs
@@ -59,6 +61,7 @@ myhordes_mcp/
 | [auth-and-rate-limits.md](auth-and-rate-limits.md) | Official API: two-key auth model, rate limit buckets, attack lockout |
 | [source-map.md](source-map.md) | Navigation guide for the game's PHP source |
 | [future-improvements.md](future-improvements.md) | Ideas not actionable yet |
+| [mechanics-in-code.md](mechanics-in-code.md) | Which game rules the tools compute, and which to move from prose to code next |
 
 ## Game source
 

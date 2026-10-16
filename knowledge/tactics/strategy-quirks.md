@@ -32,9 +32,9 @@ Revolution + Altar together: town shuns most citizens twice, then removes shun. 
 Survivalist exhausting camping days can't survive outside overnight without death risk. In Opti towns, player **deliberately fed to Ghoul** to produce Meaty Bone → Bone → Engine → Faucets chain. Faucets allow free water weapon refills. Dump (upgraded) makes water weapons give 6 defense each — temporary defense arsenal from item stockpile. Planned Survivalist death mid-game in organized town = scheduled Ghoul sacrifice.
 
 ### Two defense multipliers are different things
-- **Defensive Adjustment**: multiplies defense from defense items in bank
-- **Defensive Focus**: increases total town defense 10–15% when fully upgraded
-Both unlocked/upgraded by nightly vote. NOT same multiplier. Always check `get_defense_status` to see each independently before advising on defense planning.
+- **Defensive Focus** (Foundations, no blueprint): raises the value of each defensive object in the bank — 1.5 DP, then 2.0 / 2.5 / 3.0 DP per object with upgrades.
+- **Defensive Adjustment** (Building Registry, uncommon blueprint): multiplies total town defense — +10%, then +11% / +12% / +13% (S19 values), temporary defense and watchmen included.
+Both upgraded by nightly vote. NOT same multiplier. Always check `get_defense_status` to see each independently before advising on defense planning.
 
 ### Tamer class dominance in item-heavy towns
 Tamer pets can **send found items directly back to town** from desert, bypassing carry limits. Towns running All or Nothing or heavy animal-defense use deliberate Tamer-majority roster. Tamer Center building generates animals for defense or food. 20+ Tamers in roster = town built around this pipeline.

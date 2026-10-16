@@ -20,5 +20,3 @@ Unfilled roster slots are often deliberate — random strangers who aren't on bo
 ## S19 meta (evolving)
 
 Current approach: **Dump + Watchmen** for attack spikes. The community is still discovering this season's tricks.
-
-Key nerfs from S18 are documented in [opti-town-meta.md](opti-town-meta.md) under "Season 19 nerfs and meta shifts".

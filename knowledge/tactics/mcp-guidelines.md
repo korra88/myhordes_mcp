@@ -68,6 +68,8 @@ System prompt files loaded by `make advisor`:
 
 **Where to put new content:**
 - Persona or character enforcement → `persona.md` (keep slim — persona only)
+- Core rule every client must know without searching → `prompts/game-primer.md` (loaded by the Discord bot; keep it near 2k tokens, link the detail here)
+- Rule a tool can compute → code in `src/myhordes_mcp/`, not prose: the `.md` only explains it (see `docs/mechanics-in-code.md`)
 - Game mechanics or rules → `knowledge/tactics/game-mechanics.md`
 - MCP tool usage, constraints, town memory → `knowledge/tactics/mcp-guidelines.md`
 - Observed player behavior → `knowledge/tactics/player-behavior.md`

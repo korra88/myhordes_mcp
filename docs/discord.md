@@ -2,7 +2,8 @@
 
 The MCP server does not talk to Discord itself. Mentions in a Discord channel are
 answered by a separate listener (`../discord_mcp`, **private, not published**) that runs
-Claude Code with this server's tools, the same `persona.md` and `prompts/discord.md`.
+Claude Code with this server's tools, the same `persona.md`, `prompts/game-primer.md`
+and `prompts/discord.md`.
 The `make discord-*` targets, `templates/systemd/discord-listener.service` and the two
 `discord-listener.*.example.*` files are the glue for that listener; without it, use
 another bot as below.
@@ -14,9 +15,11 @@ server over stdio can use it. What the listener does, and another bot should too
 
 - **Start the server** as in `discord-listener.mcp.example.json`: `.venv/bin/python
   main.py` with the repo as working directory (absolute paths).
-- **System prompt:** `persona.md` (voice), `prompts/discord.md` (channel etiquette:
-  short answers, tables in code blocks, how to name the town) and, optionally,
-  `knowledge/tactics/*.md`, as `make advisor` does.
+- **System prompt:** `persona.md` (voice), `prompts/game-primer.md` (core game rules,
+  ~2k tokens, and which `search_knowledge` query answers what), `prompts/discord.md`
+  (channel etiquette: short answers, tables in code blocks, how to name the town).
+  Loading all of `knowledge/tactics/*.md` instead costs ~16k tokens and carries
+  terminal-only instructions (town logs, `personal/`).
 - **Allow only the read-only tools.** List them by name (see `allowed_tools` in
   `discord-listener.example.toml`); never a wildcard, so a new tool is opt-in.
 - **Town per conversation:** pass `town_id` to every tool when the conversation is
