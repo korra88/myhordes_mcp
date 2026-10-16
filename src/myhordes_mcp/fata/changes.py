@@ -12,7 +12,7 @@ from ..utils.clock import GAME_TZ, data_updated, fmt_epoch
 from ..utils.config import PLAYER_NAME
 from . import archive
 from .client import fetch_town_data
-from .risk import _parse_coords, format_trapped, gate_alert, trapped_citizens
+from .risk import _parse_coords, format_trapped, night_alerts, trapped_citizens
 
 # Items inspect-town tracks for deposits and withdrawals.
 CRITICAL_ITEMS = [
@@ -156,9 +156,7 @@ def format_town_changes(data: dict, snaps: list[dict], ref: dict | None, ref_lab
         lines.append("")
 
     warnings = format_trapped(trapped_citizens(data), fmt_epoch)
-    alert = gate_alert(data)
-    if alert:
-        warnings.append(alert)
+    warnings += night_alerts(data)
     zones = {z["coords"]: z for z in data["zones"]}
     dried = sorted(c["name"] for c in data["citizens"]
                    if not c["inside_town"] and zones.get(c["coords"], {}).get("dried"))

@@ -78,10 +78,10 @@ Unfilled slots in a coalition town are often deliberate.
 - Data comes from **Fata Morgana**, updated only when a player sends it. Every tool shows
   `Data updated:` with its age and, when old, `may be stale` or `STALE`: quote it and
   follow the label. A zone's line says what is from today and what from an older day.
-- **Normal, not alarming:** empty water in the bank (the well is there to be used),
-  citizens outside in daytime, gate open before evening, American players coming back at
-  22:00–23:00. Alarming: gate open near the attack, citizens far out late, defense below
-  the attack, a planned build missing a resource.
+- **Night alarms come from the tools** as `⚠` lines: gate open from 23:00, citizens
+  outside from 22:00, defense below tonight's estimate from 23:00. Before that these are
+  normal: do not raise them yourself. Also normal: empty water in the bank (the well is
+  there to be used). Worth flagging any time: a planned build missing a resource.
 
 ## Knowledge base — what to search
 

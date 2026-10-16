@@ -40,5 +40,6 @@ When writing daily logs, don't raise alarms about things that are standard gamep
 
 **How to apply:**
 - Before listing something as a "concern" in daily logs, ask: would an experienced player actually worry about this?
-- Well water, basic resource depletion, citizens being outside during daytime, unlocked gate before evening — these are normal states, not warnings.
-- Reserve concerns for genuinely unusual or dangerous situations: gate open near attack time, citizens stranded far out, defense shortfall vs estimated attack, critical resource bottlenecks for planned constructions.
+- Well water, basic resource depletion, citizens outside, gate open, defense below the estimate — normal by day, not warnings.
+- The tools raise the night alarms themselves (`⚠` lines, `fata/risk.py:night_alerts`): gate open from 23:00, citizens outside from 22:00, defense short from 23:00. Report those; do not add your own about the same things.
+- Reserve your own concerns for what the tools cannot see: critical resource bottlenecks for planned constructions, a plan that strands a citizen.

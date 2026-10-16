@@ -2,7 +2,15 @@
 
 from ..utils.clock import data_updated, fmt_epoch
 from .cp import cp_label
-from .risk import _staleness_tag, format_trapped, gate_line, trapped_citizens
+from .risk import (
+    _staleness_tag,
+    defense_alert,
+    format_trapped,
+    gate_line,
+    night_alerts,
+    outside_alert,
+    trapped_citizens,
+)
 
 
 TOWN_SIZE = 40  # citizens a standard town needs before its first attack
@@ -72,6 +80,7 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
         + (" | CHAOS MODE" if meta.get("chaos") else "")
         + (" | DEVASTATED" if meta.get("devastated") else ""),
         data_updated(meta),
+        *night_alerts(data, gate=False),
         "",
         f"## {gate_line(data)}",
         "",
@@ -168,6 +177,7 @@ def format_citizens(data: dict, cp_log: dict | None = None) -> str:
         gate_line(data),
         roster_line(data),
         f"{len(citizens)} alive — {len(inside)} inside, {len(outside)} outside",
+        *([a] if (a := outside_alert(data)) else []),
         "",
     ]
 
@@ -234,11 +244,15 @@ def format_defense(data: dict, gh_defense: dict | None = None) -> str:
             survival = f" — AT RISK (defense covers min, {high - total} short of max)"
         else:
             survival = f" — DANGER ({low - total} defense short of minimum estimate)"
+    alert = defense_alert(data)
+    if survival and total < high and not alert and data["meta"].get("live") is not False:
+        survival += " — before 23:00: normal while the town still builds"
 
     lines = [
         f"## Defense Analysis{survival}",
         data_updated(data["meta"]),
         gate_line(data),
+        *([alert] if alert else []),
         "",
         f"Total defense: {total}",
         f"  Wall base: {defense.get('base', '?')}",

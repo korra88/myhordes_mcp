@@ -5,27 +5,42 @@ from datetime import datetime
 
 from ..utils.clock import age_text, data_datetime, now
 
-# An open gate is normal by day; players close it after 23:00, before the attack
-# at 23:59 (game time). Before this the tools do not warn about it.
+# Evening alerts. By day an open gate, citizens far out and defense below the
+# estimate are all normal; they become alarms as the attack (23:59, game time)
+# gets close. Thresholds are the player's (2026-10-16).
 GATE_WARN_FROM = (23, 0)
+OUTSIDE_WARN_FROM = (22, 0)   # time to walk back before the gate closes
+DEFENSE_WARN_FROM = (23, 0)
+ATTACK_AT = "23:59"
+
+
+def _evening(data: dict, warn_from: tuple[int, int], at: datetime | None) -> tuple[str, str] | None:
+    """None before warn_from or on a past day's snapshot. Else (when, note): when the
+    reading is from (`23:05`, or `the last update (22:30, 50 min ago)`), and a note
+    that the data predates the warning window, since the state is only known as of
+    Fata's last update."""
+    meta = data["meta"]
+    if meta.get("live") is False:
+        return None
+    clock = at or now()
+    if (clock.hour, clock.minute) < warn_from:
+        return None
+    seen = data_datetime(meta)
+    if seen and seen.date() == clock.date() and (seen.hour, seen.minute) >= warn_from:
+        return f"at {seen:%H:%M}", ""
+    when = f"{seen:%H:%M}, {age_text(seen, clock)} ago" if seen else "time unknown"
+    return f"at the last update ({when})", "; data is old: check the game"
 
 
 def gate_alert(data: dict, at: datetime | None = None) -> str | None:
-    """The warning for an open gate, or None. Only from 23:00 and only on live data.
-    The gate is known only as of Fata's last update, so a warning after 23:00 on
-    data from before 23:00 says the data is old instead of staying silent."""
-    meta = data["meta"]
-    if data.get("gate") != "open" or meta.get("live") is False:
+    """The warning for an open gate, or None (only from 23:00, only on live data)."""
+    if data.get("gate") != "open":
         return None
-    clock = at or now()
-    if (clock.hour, clock.minute) < GATE_WARN_FROM:
+    ev = _evening(data, GATE_WARN_FROM, at)
+    if ev is None:
         return None
-    seen = data_datetime(meta)
-    if seen and seen.date() == clock.date() and (seen.hour, seen.minute) >= GATE_WARN_FROM:
-        return f"⚠ Gate OPEN at {seen:%H:%M} — close it before the attack (23:59)"
-    when = f"{seen:%H:%M}, {age_text(seen, clock)} ago" if seen else "time unknown"
-    return (f"⚠ Gate open at the last update ({when}) — data is old: check the gate, "
-            "attack at 23:59")
+    when, old = ev
+    return f"⚠ Gate OPEN {when} — close it before the attack ({ATTACK_AT}){old}"
 
 
 def gate_line(data: dict, at: datetime | None = None) -> str:
@@ -36,6 +51,61 @@ def gate_line(data: dict, at: datetime | None = None) -> str:
     if data["meta"].get("live") is False:
         return "Gate: open (snapshot of a past day)"
     return gate_alert(data, at) or "Gate: open (normal by day; closed after 23:00, before 23:59)"
+
+
+def outside_alert(data: dict, at: datetime | None = None, farthest: int = 5) -> str | None:
+    """Citizens still outside from 22:00, farthest first (moves = AP to walk home)."""
+    out = [c for c in data.get("citizens", []) if not c["inside_town"] and _parse_coords(c)]
+    if not out:
+        return None
+    ev = _evening(data, OUTSIDE_WARN_FROM, at)
+    if ev is None:
+        return None
+    when, old = ev
+    rows = sorted(((abs(x) + abs(y), km(x, y), c) for c in out for x, y in [_parse_coords(c)]),
+                  key=lambda r: -r[0])
+    reach = teleport_range(platform_level(data))
+    near = sum(1 for _, k, _ in rows if k <= reach) if reach else 0
+    names = ", ".join(f"{c['name']} {c['coords']} {m} moves" for m, _, c in rows[:farthest])
+    more = f", +{len(rows) - farthest} more" if len(rows) > farthest else ""
+    tele = f"; {near} within the platform teleport ({reach} km)" if near else ""
+    return f"⚠ {len(rows)} citizens outside {when} — farthest: {names}{more}{tele}{old}"
+
+
+def defense_status(data: dict) -> tuple[str, int] | None:
+    """('SAFE' | 'AT RISK' | 'DANGER', gap) against tonight's estimate, or None."""
+    today = (data.get("estimations") or {}).get("today") or {}
+    low, high = today.get("min"), today.get("max")
+    total = (data.get("defense") or {}).get("total")
+    if low is None or high is None or total is None:
+        return None
+    if total >= high:
+        return "SAFE", 0
+    if total >= low:
+        return "AT RISK", high - total
+    return "DANGER", low - total
+
+
+def defense_alert(data: dict, at: datetime | None = None) -> str | None:
+    """Defense below tonight's estimate, from 23:00."""
+    st = defense_status(data)
+    if st is None or st[0] == "SAFE":
+        return None
+    ev = _evening(data, DEFENSE_WARN_FROM, at)
+    if ev is None:
+        return None
+    when, old = ev
+    total = data["defense"]["total"]
+    today = data["estimations"]["today"]
+    if st[0] == "DANGER":
+        return f"⚠ Defense {total} {when}: {st[1]} short of tonight's minimum ({today['min']}){old}"
+    return f"⚠ Defense {total} {when}: covers the minimum, {st[1]} short of the maximum ({today['max']}){old}"
+
+
+def night_alerts(data: dict, at: datetime | None = None, *, gate: bool = True) -> list[str]:
+    """The evening alerts that apply now: gate (optional), citizens outside, defense."""
+    alerts = [gate_alert(data, at) if gate else None, outside_alert(data, at), defense_alert(data, at)]
+    return [a for a in alerts if a]
 
 
 # Zone danger level → human-readable zombie estimate

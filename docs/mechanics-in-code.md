@@ -34,7 +34,7 @@ How to move one rule:
 | Attack window verdict: SAFE / AT RISK / DANGER with the gap | `fata/town.py:format_defense` | `get_defense_status` |
 | Blueprint reading order: random pick among locked buildings with unlocked parent; ruin lists per tier from Fata's catalogue; wasted / hold / odds | `fata/blueprints.py` | `get_blueprint_order` |
 | One zone's reach: moves, km, EP zone, platform teleport (level + gate), Heroic Return R1–R4 9/11/13/15 km, Rescue U1–U3 1/2/3 km | `fata/risk.py:zone_reach` | `get_zone_details` (x1=x2, y1=y2) |
-| Gate: open by day is normal, ⚠ only from 23:00 on Fata's time (old data says so) | `fata/risk.py:gate_line`, `gate_alert` | overview, defense, citizens, `get_town_changes` |
+| Night alarms on Fata's time (old data says so): gate open from 23:00, citizens outside from 22:00 (farthest first), defense below tonight's estimate from 23:00; by day the defense verdict says it is normal | `fata/risk.py:night_alerts` (`gate_alert`, `outside_alert`, `defense_alert`) | overview, defense, citizens, `get_town_changes` |
 
 ## Candidates (prose today)
 
@@ -42,7 +42,6 @@ Ordered by value for the bot. "Prose" is where the rule lives now.
 
 | # | Rule | Prose | Idea | Notes |
 |---|---|---|---|---|
-| 5 | **Night alarms**: gate open near the attack, citizens out late, defense short | `session-protocols.md`, primer | Overview flags them with the time; the "normal states" list leaves the prose | Needs the clock and the gate state from Fata. |
 | 6 | **AP per citizen per day**: 6, 5 wounded; food/water raise to a level | `game-mechanics.md` | Already in supplies; a `citizen` view would need statuses Fata may not expose | Check `towndata.py` for statuses first. |
 | 7 | **Map zombie respawn threshold** (25 × day) | `opti-town-meta.md` | `get_scout_map` prints total map zombies vs threshold | S18 formula, not checked in source: verify before coding. |
 | 8 | **Desert soul points** `days × (days + 1) / 2` | `opti-town-meta.md` | Low value | Verify in source. |
