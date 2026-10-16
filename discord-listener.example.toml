@@ -20,6 +20,8 @@ model = "sonnet"
 # Add "prompts/discord-feedback.md" to log feedback in towns/_bot/feedback/ for
 # /review-bot-feedback (docs/discord.md, "Memory and feedback log").
 append_system_prompt_files = ["persona.md", "prompts/discord.md"]
+# Pasted into the first prompt of each thread (bot memory, prompts/discord.md).
+first_turn_files = ["towns/_bot/memory.md"]
 mcp_config = ["discord-listener.mcp.json"]   # copy from discord-listener.mcp.example.json
 # Read-only game and wiki tools, by name. Never mcp__myhordes__*.
 allowed_tools = [

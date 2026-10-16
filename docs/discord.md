@@ -66,10 +66,11 @@ they need no extra permission and, if `towns/` is a git repo, get history and ba
 with the town logs.
 
 - **Memory** (`memory.md`, always on). Facts readers ask the bot to keep across
-  threads, e.g. which in-game player a Discord user is. The bot reads it at the start
-  of each thread and writes it only on an explicit "remember"/"forget". Rules and
-  line format: `prompts/discord.md`, "Memory". It is read through a tool call, not
-  put in the system prompt, so a change does not break the prompt cache.
+  threads, e.g. which in-game player a Discord user is. The listener pastes it into
+  the first prompt of each thread (`first_turn_files` in the toml), so it costs no
+  tool call and does not touch the cached system prompt. The bot writes it only on
+  an explicit "remember"/"forget". Rules and line format: `prompts/discord.md`,
+  "Memory".
 - **Feedback log** (`feedback/`, opt-in). Add `prompts/discord-feedback.md` to
   `append_system_prompt_files` and restart the listener. The bot then writes one file
   per complaint, correction, missing tool or tool problem; it never reads them back,
