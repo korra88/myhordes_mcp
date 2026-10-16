@@ -372,6 +372,10 @@ async def get_scout_map(
     and who scouted them. Zones are grouped by threat level.
     Use this when the user asks about zombie positions, safe scavenging routes,
     or where the horde is concentrated.
+    On the current day it also checks tonight's global respawn threshold
+    (25 × the new day zombies on the whole map) against what Fata counts —
+    use it for zombie-zoo questions; Fata never sees the whole map, and the
+    output says what is not counted.
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.

@@ -47,7 +47,7 @@ Scheduled event, not failure. Survivalist dying mid-game in Opti town = intentio
 ### 5. Mass exodus endgame
 When town indefensible, citizens exit together:
 - No one dies inside walls — dying in town wastes contribution.
-- Desert soul points: `days × (days + 1) / 2` (triangular). Day 40 = 820 SP, Day 45 = 1035 SP — every extra day worth more.
+- Desert soul points: `days × (days + 1) / 2` (triangular, community formula, not checked in code). Day 40 = 820 SP, Day 45 = 1035 SP — every extra day worth more. Score only: no tool computes it (by choice, 2026-10-16).
 - Final days = soul purification: surviving citizens collect dead souls, purify for bonus town points.
 
 ---
@@ -101,13 +101,15 @@ Town with 25,000 attack estimate + 50 visible map zombies = normal.
 
 ### Global Respawn trap
 
-If total map zombies drops below **25 × day** (S18 formula) → global respawn: zombies scatter randomly until threshold + day-1 amount added.
+Checked in the game code (`MapMaker::aboveMinNumberOfZombies`, rules.yml): each night, after the attack and before zombies spread, if the **whole map** holds fewer than **25 × day** zombies (15 × day in small towns) → global respawn. The day is the **new** one: the night ending day 8 checks 25 × 9 = 225. The respawn regrows the map from its **day-1 layout** until the threshold is reached, then adds the zombies already there on top: clean corridors fill up again.
 
-| Day | Threshold |
+| Night ending day | Threshold |
 |-----|-----------|
-| 10 | 250 |
-| 25 | 625 |
-| 35 | 875 |
+| 9 | 250 |
+| 24 | 625 |
+| 34 | 875 |
+
+`get_scout_map` prints tonight's threshold against the zombies Fata counts (Fata never sees the whole map: never-visited zones and older counts are listed as such).
 
 Zookeepers or citizens accidentally kill too many → threshold breach → all clean corridors ruined.
 

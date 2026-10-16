@@ -10,6 +10,7 @@ from .risk import (
     _zone_status,
     _zone_threat,
     km,
+    respawn_check,
     zone_reach,
 )
 
@@ -53,6 +54,9 @@ def format_scout(data: dict) -> str:
         f"{len(map_zones)} zones explored | {len(scouted)} scouted | {len(unscouted)} unscouted | {len(scout_only)} scout estimates | {total_zombies} zombies spotted",
         "",
     ]
+    respawn = respawn_check(data)
+    if respawn:
+        lines += respawn + [""]
 
     if with_zombies:
         with_zombies.sort(key=lambda z: z["zombies"], reverse=True)

@@ -372,6 +372,60 @@ def zone_reach(data: dict, x: int, y: int) -> list[str]:
     ]
 
 
+# Global respawn (MapMaker::aboveMinNumberOfZombies, rules.yml modifiers): at night, after
+# the attack and before zombies spread, if the whole map holds fewer than
+# massive_respawn_threshold × day × massive_respawn_factor zombies (50 × 0.5 = 25 per day;
+# small towns 30 × 0.5 = 15), the map regrows from its day-1 layout until it reaches that
+# number, and the zombies already there are added on top. The day is the new one:
+# NightlyHandler::advance_day increments it before stage3_zones.
+RESPAWN_PER_DAY = {"small": 15}
+DEFAULT_RESPAWN_PER_DAY = 25
+_DANGER_MIN = {0: 0, 1: 1, 2: 3, 3: 6}  # DANGER_LEVELS lower bounds
+
+
+def respawn_check(data: dict) -> list[str]:
+    """Tonight's global-respawn threshold against the zombies Fata can see. Fata never
+    sees the whole map (unvisited zones, counts from older days), so this states what
+    is counted and what is not, and gives a verdict only on what is seen."""
+    meta = data["meta"]
+    day = meta.get("day")
+    if not isinstance(day, int) or meta.get("live") is False:
+        return []
+    per_day = RESPAWN_PER_DAY.get(meta.get("game_type"), DEFAULT_RESPAWN_PER_DAY)
+    threshold = per_day * (day + 1)
+    zones = data.get("zones", [])
+
+    def today(z):
+        return z.get("danger_today") or (z["zombies"] >= 0 and z.get("updated_day") == day)
+
+    seen = [z for z in zones if today(z)]
+    stale = [z for z in zones if not today(z) and z["zombies"] >= 0]
+    uncounted = [z for z in zones if not today(z) and z["zombies"] < 0]
+    seen_n = sum(_DANGER_MIN.get(z.get("danger", 0), 0) if z["zombies"] < 0 or z.get("danger_today")
+                 else z["zombies"] for z in seen)
+    stale_n = sum(z["zombies"] for z in stale)
+    days = sorted({z["updated_day"] for z in stale if z.get("updated_day") is not None})
+    span = f"days {days[0]}–{days[-1]}" if len(days) > 1 else (f"day {days[0]}" if days else "earlier days")
+    never = max(0, meta["map_zones"] - 1 - len(zones)) if meta.get("map_zones") else None
+    known = seen_n + stale_n
+    missing = (f"{never} zones never visited, " if never is not None else "") + f"{len(uncounted)} without a count"
+    if known >= threshold:
+        verdict = (f"above the threshold on what Fata sees ({known} ≥ {threshold}): no global respawn "
+                   "tonight, unless those older counts were killed since")
+    else:
+        verdict = (f"below the threshold on what Fata sees ({known} < {threshold}), but {missing} are not "
+                   "counted: a respawn is possible, not certain")
+    return [
+        f"### Global respawn check (tonight, end of day {day})",
+        f"  Threshold: {threshold} zombies on the whole map ({per_day} × day {day + 1}). Fewer → the map "
+        "regrows from its day-1 layout, on top of the zombies already there.",
+        f"  Fata counts {known}: {seen_n} in {len(seen)} zones seen today (danger lower bounds), "
+        f"{stale_n} in {len(stale)} zones counted on {span} (may have grown or been killed since). "
+        f"Not counted: {missing}.",
+        f"  → {verdict}",
+    ]
+
+
 def zone_cp(zone: dict, people: list[dict]) -> int | None:
     """The zone's CP reading (/towndata `human`, game-sourced) if it covers the
     citizens now standing there, else None.

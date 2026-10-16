@@ -134,6 +134,7 @@ def build_result(town_id: int, raw: dict, estimation_history: dict | None = None
             "chaos": bool(ti.get("chaos")),
             "devastated": bool(ti.get("devast")),
             "hardcore": bool(ti.get("hard")),
+            "map_zones": len(raw.get("town_maps") or []),  # town zone included
         },
         "defense": _parse_defense(ti.get("defense") or {}),
         "water": {"well": ti.get("well_water"), "bank": _bank_water(ti.get("bank") or [])},
