@@ -31,6 +31,7 @@ How to move one rule:
 | Dried: newest of zone update / scavenger radar / excavation | `fata/towndata.py` | map, `get_town_changes` |
 | Building efficiency (def/AP, def/resource), what the bank can build | `fata/planning.py` | `get_build_options` |
 | Defensive Focus multiplier (as Fata reports it) | `fata/town.py` | `get_defense_status` |
+| Attack window verdict: SAFE / AT RISK / DANGER with the gap | `fata/town.py:format_defense` | `get_defense_status` |
 
 ## Candidates (prose today)
 
@@ -38,7 +39,6 @@ Ordered by value for the bot. "Prose" is where the rule lives now.
 
 | # | Rule | Prose | Idea | Notes |
 |---|---|---|---|---|
-| 2 | **Attack window**: defense below min / inside min–max / above max | `game-mechanics.md` | `get_defense_status` states the verdict and the gap | Check what `gesthordes/format.py` already prints first. |
 | 3 | **Ruin blueprints before normal ones** | `strategy-quirks.md`, `game-mechanics.md` | `get_bank_inventory` flags "read the Bunker/Hospital/Hotel blueprints first" when both kinds are in the bank | `fata/bank.py` groups only `Construction Blueprint (…)` today. The parent-building exception stays prose. |
 | 4 | **Distances for one zone**: moves, km, EP zone, platform teleport, Heroic Return (9/11/13/15 km), Rescue (1/2/3 km) | `expedition-planning.md` | `get_zone_details` prints them | Ranges verified in source: both use `Zone::getDistance` (km). |
 | 5 | **Night alarms**: gate open near the attack, citizens out late, defense short | `session-protocols.md`, primer | Overview flags them with the time; the "normal states" list leaves the prose | Needs the clock and the gate state from Fata. |
