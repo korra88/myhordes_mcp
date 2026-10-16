@@ -32,7 +32,12 @@ Field meanings checked against the game with players in town 8212:
   exc/exc_timestamp  a Scavenger excavated the zone (once per zone; refreshes it)
   scav_zone_level    3 abundant, 2 half empty, 1 almost exhausted, 0 unknown
   scav_radar_reading {zone: 0 replenished | 1 depleted}
-  nyv                never visited;  nvt  visited before, not today
+  nyv                never visited
+  nvt                not seen today. Seen today = zombie state on the map is today's:
+                     a citizen passed, or at night the zone held a citizen or lay in
+                     the Observation Platform radius (level 0/1/2+ → 3/6/10 km,
+                     NightlyHandler + BuildingQueryListener NightlyZoneDiscoveryRadius).
+                     Town 8212 day 8, platform level 4: all 474 zones ≤ 10 km seen.
   dried              zone depleted (sent on every zone since 2026-10-16; archived
                      days before that lack it: the scavenger radar stands in)
   building_dried     the ruin is depleted
@@ -432,7 +437,7 @@ def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who
             "updated_day": upd.get("day"),
             "updated_on": upd.get("time"),
             "cp": int(m.get("human") or 0) if observed else None,
-            "visited_today": not m.get("nvt"),
+            "seen_today": not m.get("nvt"),
             "excavated": bool(m.get("exc")),
             "excavated_day": exc_ts.get("day"),
             "scav_level": SCAV_LEVELS.get(scav) if scav else None,
