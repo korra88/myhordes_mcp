@@ -7,6 +7,7 @@ nightly attack or game downtime.
 
 Shape (town 8212, day 7: 814 KB raw, 128 KB gzipped):
 
+    version       "1.0" (added 2026-10-16; absent in earlier archived days)
     town_info     town, day, name, tx/ty (town position on the map), door,
                   chaos/devast/hard, season, lang, map_type, roles {guide, shaman},
                   defense {total, base, buildings, upgrades, items, itemsMul,
@@ -32,7 +33,11 @@ Field meanings checked against the game with players in town 8212:
   scav_zone_level    3 abundant, 2 half empty, 1 almost exhausted, 0 unknown
   scav_radar_reading {zone: 0 replenished | 1 depleted}
   nyv                never visited;  nvt  visited before, not today
-  dried              zone depleted — not sent yet, read when it appears
+  dried              zone depleted (sent on every zone since 2026-10-16; archived
+                     days before that lack it: the scavenger radar stands in)
+  building_dried     the ruin is depleted
+  km                 rounded Euclidean distance to town, matches risk.km()
+                     (676/676 zones, town 8212, 2026-10-16)
 """
 
 from datetime import datetime
@@ -398,11 +403,15 @@ def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who
         if isinstance(radar, dict) and "zone" in radar:
             radar_state = "depleted" if radar["zone"] else "replenished"
         exc_ts = m.get("exc_timestamp") or {}
-        # Depleted: the zone's own flag once Fata sends it; until then the
-        # scavenger radar, unless the zone was excavated after that reading.
-        dried = bool(m.get("dried", False))
-        if not dried and radar_state == "depleted":
-            dried = not (m.get("exc") and (exc_ts.get("time") or 0) > (radar_upd.get("time") or 0))
+        # Depleted: the zone's own flag. Archived days from before Fata sent it
+        # have no key: there the scavenger radar stands in, unless the zone was
+        # excavated after that reading. Measured on town 8212 (2026-10-16): the
+        # flag marks 155 zones, the radar caught 34 of them.
+        if "dried" in m:
+            dried = bool(m["dried"])
+        else:
+            dried = radar_state == "depleted" and not (
+                m.get("exc") and (exc_ts.get("time") or 0) > (radar_upd.get("time") or 0))
 
         scav = m.get("scav_zone_level") or 0
         zones.append({
