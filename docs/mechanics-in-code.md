@@ -25,7 +25,10 @@ How to move one rule:
 | Manhattan move cost, rounded-Euclidean km | `fata/risk.py:km`, `fata/pathing.py` | route tools |
 | Observation Platform teleport range, Labyrinth entry cost | `fata/risk.py:teleport_range`, `fata/changes.py:platform_discount` | supplies, `get_town_changes` |
 | Zone CP vs zombies, Trapped | `fata/risk.py`, `fata/cp.py` | `find_expedition_path`, `get_citizen_cp`, overview |
-| Zone / citizen data staleness (by day) | `fata/risk.py:_staleness_tag` | map, overview |
+| Zone / citizen data staleness (by day) | `fata/risk.py:_staleness_tag`, `_zone_freshness` | map, overview |
+| Snapshot age + stale label (1 h / 3 h) in every header | `utils/clock.py:data_updated`, `meta.live` set in `fata/client.py` | every Fata tool |
+| Zones seen today (platform radius): today's danger beats an older zombie count | `fata/towndata.py` `danger_today`, `risk.py:_zone_threat`, `pathing.py:_classify_cell` | map, route tools |
+| Dried: newest of zone update / scavenger radar / excavation | `fata/towndata.py` | map, `get_town_changes` |
 | Building efficiency (def/AP, def/resource), what the bank can build | `fata/planning.py` | `get_build_options` |
 | Defensive Focus multiplier (as Fata reports it) | `fata/town.py` | `get_defense_status` |
 
@@ -35,7 +38,6 @@ Ordered by value for the bot. "Prose" is where the rule lives now.
 
 | # | Rule | Prose | Idea | Notes |
 |---|---|---|---|---|
-| 1 | **Snapshot age**: `data_time` < 1 h fresh, 1–3 h maybe stale, > 3 h stale | `mcp-guidelines.md`, primer | Every header prints `Data updated: 14:02 (3 h 10 min ago — stale)` from `utils/clock.py` | Today the model compares two clock times itself and often doesn't. Small change, every tool. |
 | 2 | **Attack window**: defense below min / inside min–max / above max | `game-mechanics.md` | `get_defense_status` states the verdict and the gap | Check what `gesthordes/format.py` already prints first. |
 | 3 | **Ruin blueprints before normal ones** | `strategy-quirks.md`, `game-mechanics.md` | `get_bank_inventory` flags "read the Bunker/Hospital/Hotel blueprints first" when both kinds are in the bank | `fata/bank.py` groups only `Construction Blueprint (…)` today. The parent-building exception stays prose. |
 | 4 | **Distances for one zone**: moves, km, EP zone, platform teleport, Heroic Return (9/11/13/15 km), Rescue (1/2/3 km) | `expedition-planning.md` | `get_zone_details` prints them | Ranges verified in source: both use `Zone::getDistance` (km). |

@@ -72,8 +72,8 @@ Unfilled slots in a coalition town are often deliberate.
 ## Reading the data
 
 - Data comes from **Fata Morgana**, updated only when a player sends it. Every tool shows
-  `Data updated:`. Quote it. Over 1–3 h old: say positions may be stale. Over 3 h: warn
-  before saying who is inside or outside. Never infer the current time from data.
+  `Data updated:` with its age and, when old, `may be stale` or `STALE`: quote it and
+  follow the label. A zone's line says what is from today and what from an older day.
 - **Normal, not alarming:** empty water in the bank (the well is there to be used),
   citizens outside in daytime, gate open before evening, American players coming back at
   22:00–23:00. Alarming: gate open near the attack, citizens far out late, defense below

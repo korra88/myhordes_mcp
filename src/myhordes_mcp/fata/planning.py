@@ -6,6 +6,7 @@ model reasons over a ranked list instead of doing arithmetic.
 
 from .bank import _CLEAN_WATER, _sum_items
 from .buildings import PRIVATE_TOWN_BUILDINGS
+from ..utils.clock import data_updated
 
 # Daily AP of one citizen used for town budgets (6 AP base + food/water/drugs).
 AP_PER_CITIZEN = 18
@@ -182,7 +183,7 @@ def format_build_options(data: dict, include_resources: bool = False) -> str:
     est_txt += " (confirmed)" if est.get("maxed") else (" (partial)" if est.get("min") is not None else "")
     lines = [
         f"## Build options — {p['town']} Day {p['day']}",
-        f"Data updated: {p['data_time']}",
+        data_updated(data["meta"]),
         "",
         "### Situation",
     ]
@@ -333,7 +334,7 @@ def format_construction_history(data: dict, gh: dict | None = None) -> str:
     rows = construction_history(data, gh)
     lines = [
         f"## Construction history — {meta.get('town_name')} Day {meta.get('day')}",
-        f"Data updated: {meta.get('data_time')} · budget = {AP_PER_CITIZEN} AP × citizens alive at day start",
+        data_updated(meta) + f" · budget = {AP_PER_CITIZEN} AP × citizens alive at day start",
         "",
         f"{'Day':<4} {'AP':>4} {'Budget':>7} {'%':>4} {'Alive':>5} {'Attack':>11} {'Deaths':>6}  Paid builds",
     ]

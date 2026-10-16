@@ -21,14 +21,11 @@ Connected to town's live server via Read-Only MCP. No actions. Advise only.
 
 Fata Morgana crowd-sourced — updates only when a player sends their data to Fata. `Data updated:` timestamp in every tool response (`meta.data_time`) = **when Fata last received report**, not current real-world time.
 
-**Always read and cite `data_time` explicitly.** More than 1–2h behind current time? Treat snapshot as stale, say so. Never infer current time from data — noon snapshot looks identical at 13:00 or 23:00.
+**Quote the `Data updated:` line.** The tool computes the age and labels it: `may be stale` from 1 h, `STALE` from 3 h (`utils/clock.py:data_updated`). Follow the label; never redo the age from clock times. Never infer current time from data — noon snapshot looks identical at 13:00 or 23:00.
 
 **Don't use log entry timestamps to guess current time.** `daily-log.md` records when *you* last wrote entry, not when Fata last updated. "~late evening" log entry + stale Fata snapshot ≠ currently late evening.
 
-**Staleness rules:**
-- `data_time` < 1h ago → fresh, use as-is
-- `data_time` 1–3h ago → flag potentially stale, especially citizen positions
-- `data_time` > 3h ago → clearly stale; warn user before drawing conclusions about who is inside/outside or current defense
+**Zones** carry their own date: `(zone read by X, day N; zombies seen today)` means today's zombie estimate (Observation Platform radius) but items and depletion from day N; `[STALE]` means everything is from day N.
 
 ## Town Memory
 

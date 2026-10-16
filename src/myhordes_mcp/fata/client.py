@@ -66,6 +66,14 @@ def _result(town_id: int, raw: dict) -> dict:
 
 
 async def _fetch(town_id: int, day: int | None) -> dict:
+    result = await _load(town_id, day)
+    if not result.get("error"):
+        # Live = the town's current day, still being updated: headers show its age.
+        result["meta"]["live"] = day is None or day == archive.get_current_day(town_id)
+    return result
+
+
+async def _load(town_id: int, day: int | None) -> dict:
     # A past day is final once stored. The town's current day is always fetched
     # fresh: players keep updating Fata throughout the day.
     is_current_day = day is None or day == archive.get_current_day(town_id)

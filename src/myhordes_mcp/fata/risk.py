@@ -123,6 +123,10 @@ def _zone_threat(zone: dict, current_day: int | None = None, spread_map: dict | 
     reached this cell within the elapsed days, shows a spread risk warning.
     Otherwise fall back to the danger level from in-game map exploration.
     """
+    if zone.get("danger_today"):
+        # Today's estimate beats the count from an older update.
+        danger = zone.get("danger", 0)
+        return f", ~{DANGER_LEVELS.get(danger, f'danger {danger}')} today" if danger else ", clear today"
     zm = zone.get("zombies", 0)
     if zm is not None and zm >= 0:
         last_day = zone.get("updated_day")
@@ -157,6 +161,9 @@ def _zone_freshness(zone: dict, current_day: int | None) -> str:
         parts.append(f"by {updated_by}")
     if updated_day is not None:
         parts.append(f"day {updated_day}")
+    if zone.get("danger_today"):
+        # Zombies are today's; items and depletion are from that update.
+        return f" (zone read {', '.join(parts)}; zombies seen today)"
     tag = f" ({', '.join(parts)})"
     if current_day is not None and updated_day is not None and current_day - updated_day >= 1:
         tag += " [STALE]"

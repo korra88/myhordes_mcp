@@ -1,6 +1,6 @@
 """Town-level formatters: overview, citizens, defense."""
 
-from ..utils.clock import fmt_epoch
+from ..utils.clock import data_updated, fmt_epoch
 from .cp import cp_label
 from .risk import _staleness_tag, format_trapped, trapped_citizens
 
@@ -53,7 +53,7 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
         + season_pts_str
         + (" | CHAOS MODE" if meta.get("chaos") else "")
         + (" | DEVASTATED" if meta.get("devastated") else ""),
-        f"Data updated: {meta.get('data_time', 'unknown')}",
+        data_updated(meta),
         "",
         f"## Gate: {gate.upper()}",
         "",
@@ -219,6 +219,7 @@ def format_defense(data: dict, gh_defense: dict | None = None) -> str:
 
     lines = [
         f"## Defense Analysis — Gate: {gate.upper()}{survival}",
+        data_updated(data["meta"]),
         "",
         f"Total defense: {total}",
         f"  Wall base: {defense.get('base', '?')}",

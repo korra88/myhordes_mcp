@@ -1,5 +1,6 @@
 """Map formatters: scout data, ruins/ground items, zones in a bounding box."""
 
+from ..utils.clock import data_updated
 from .risk import (
     DANGER_LEVELS,
     _build_spread_map,
@@ -46,6 +47,7 @@ def format_scout(data: dict) -> str:
 
     lines = [
         f"## Scout Map — {meta.get('town_name', '?')} Day {current_day}",
+        data_updated(meta),
         f"{len(map_zones)} zones explored | {len(scouted)} scouted | {len(unscouted)} unscouted | {len(scout_only)} scout estimates | {total_zombies} zombies spotted",
         "",
     ]
@@ -124,6 +126,7 @@ def format_zones(data: dict) -> str:
 
     lines = [
         f"## Zone Map — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
+        data_updated(meta),
         f"{len(zones)} zones explored, {len(ruin_zones)} ruins found"
         + (f" ({empty_count} zones with no ruin or ground items omitted)" if empty_count else ""),
         "",
@@ -217,7 +220,7 @@ def format_zone_path(
     header_parts = [f"## Zone Path [{x1}|{y1}] → [{x2}|{y2}] — {town} Day {day}"]
     if max_ap is not None:
         header_parts.append(f"AP budget: {max_ap}")
-    lines = [" | ".join(header_parts), ""]
+    lines = [" | ".join(header_parts), data_updated(meta), ""]
 
     if not in_range:
         lines.append("No explored zones in this area.")

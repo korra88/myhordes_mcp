@@ -1,5 +1,7 @@
 """Building formatters: today's builds, history, available constructions."""
 
+from ..utils.clock import data_updated
+
 
 # Fata returns rarityCurrent=0 for private-town buildings — rarity filter won't catch them.
 # Hardcoded exclusion list is the only reliable approach.
@@ -121,7 +123,7 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
     available = [b for b in buildings if not b["built"]]
     total_def = sum(b["defense"] for b in built)
 
-    header = f"## Buildings — {meta.get('town_name', '?')} Day {current_day}"
+    header = f"## Buildings — {meta.get('town_name', '?')} Day {current_day}\n{data_updated(meta)}"
 
     if mode == "summary":
         today = [b for b in built if b.get("built_day") == current_day]

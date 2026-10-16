@@ -2,6 +2,7 @@
 
 import heapq
 
+from ..utils.clock import data_updated
 from .risk import (
     DANGER_LEVELS,
     _build_spread_map,
@@ -78,6 +79,12 @@ def _classify_cell(
     """
     if zone is None:
         return {"tag": "UNKNOWN", "zombies": None, "fresh": False, "age": -1}
+
+    if zone.get("danger_today"):
+        # Today's danger estimate (Observation Platform radius): current, not exact.
+        est = {0: 0, 1: 1, 2: 4, 3: 6}.get(zone.get("danger", 0), 6)
+        tag = "TRAP_RISK" if est > group_cp else ("CLEAR" if est == 0 else "SAFE")
+        return {"tag": tag, "zombies": est, "fresh": True, "age": 0}
 
     zm = zone.get("zombies", -1)
 
@@ -448,7 +455,7 @@ def find_safe_path(
             shortest = None
 
     # -- Format output --
-    lines = [f"## Pathfinding [{x1}|{y1}] → [{x2}|{y2}] — {town} Day {current_day}"]
+    lines = [f"## Pathfinding [{x1}|{y1}] → [{x2}|{y2}] — {town} Day {current_day}", data_updated(meta)]
     params = [f"Group CP: {group_cp}"]
     if scout_mode:
         params.append("Scout: Yes")

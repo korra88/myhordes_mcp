@@ -1,5 +1,7 @@
 """Bank formatters: full item list and strategic summary."""
 
+from ..utils.clock import data_updated
+
 
 def format_bank(data: dict) -> str:
     """Format bank inventory grouped by category."""
@@ -19,6 +21,7 @@ def format_bank(data: dict) -> str:
 
     lines = [
         f"## Bank Inventory — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
+        data_updated(meta),
         f"{len(bank)} item types in the bank",
         "",
     ]
@@ -244,6 +247,7 @@ def format_bank_summary(data: dict) -> str:
 
     lines = [
         f"## Bank Summary — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
+        data_updated(meta),
         f"{total_types} item types, {total_items} total items",
         "",
     ]

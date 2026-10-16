@@ -10,6 +10,7 @@ from myhordes_mcp import fata, gesthordes  # noqa: E402
 from myhordes_mcp.fata import supplies  # noqa: E402
 from myhordes_mcp.fata.pathing import route_risks, safest_route  # noqa: E402
 from myhordes_mcp.knowledgebase import curated, wiki  # noqa: E402
+from myhordes_mcp.utils.clock import data_updated  # noqa: E402
 from myhordes_mcp.utils.config import CURRENT_TOWN_FILE, FATAMORGANA_TOWN_ID, resolve_town_id  # noqa: E402
 
 # IMPORTANT: MyHordes rules prohibit automated/scheduled API polling.
@@ -130,6 +131,7 @@ async def get_citizen_cp(town_id: int = 0) -> str:
         return f"Error: {data['error']}"
     meta = data["meta"]
     lines = [f"## Citizen CP — {meta.get('town_name')} Day {meta.get('day')}",
+             data_updated(meta),
              "Last = most recent reading, Max = best ever seen. ? = never read alone on a zone (assume 2).", ""]
     lines += fata.format_cp_log(fata.load_cp_log(tid), data["citizens"])
     return "\n".join(lines)
@@ -553,7 +555,7 @@ async def plan_expedition_supplies(
     )
     result = supplies.plan(route, st, items, end_ap=end_ap, slots=free_slots)
     path = " → ".join(f"[{x}|{y}]" for x, y in points)
-    notes = [note, f"Route safety computed for {group_cp} CP." + (" " + "; ".join(breakdown) if breakdown else "")]
+    notes = [data_updated(data["meta"]), note, f"Route safety computed for {group_cp} CP." + (" " + "; ".join(breakdown) if breakdown else "")]
     if not available.strip():
         notes.append("Assumed: water and one 7 AP food; drugs/alcohol only as extras if needed.")
     if result["cost"][0] or result["cost"][1]:

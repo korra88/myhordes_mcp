@@ -8,7 +8,7 @@ citizen spent moving. Replaces the arithmetic inspect-town used to do by hand.
 
 from datetime import datetime
 
-from ..utils.clock import GAME_TZ, fmt_epoch, now
+from ..utils.clock import GAME_TZ, data_updated, fmt_epoch, now
 from ..utils.config import PLAYER_NAME
 from . import archive
 from .client import fetch_town_data
@@ -76,7 +76,7 @@ def format_town_changes(data: dict, snaps: list[dict], ref: dict | None, ref_lab
     cur = snaps[-1]
     lines = [
         f"## Town changes — {meta.get('town_name')} Day {meta.get('day')}",
-        f"Data updated: {meta.get('data_time')} · {len(snaps)} snapshot(s) today, "
+        data_updated(meta) + f" · {len(snaps)} snapshot(s) today, "
         f"first {fmt_epoch(snaps[0]['taken_at'])}",
     ]
     if ref is None or ref is cur:
