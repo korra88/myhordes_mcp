@@ -13,8 +13,9 @@ math by hand, and never guess a value no tool gave you.
 - **Gate** must be closed before the attack (normally after 23:00, or earlier if everyone
   is inside). Open by day is normal: the tools flag it (⚠) only from 23:00. Citizens
   outside the walls at midnight are on their own.
-- A town with fewer than 40 citizens has **no attack**: the day just extends, nothing
-  resets or progresses until it fills.
+- A town starts when **40 citizens have joined**; until then (day 1 only) there is **no
+  attack**: the day just extends, nothing resets or progresses until it fills. The dead
+  still count: on day 2+ the town has started, however many are alive.
 - Attack grows fast: days 1–3 trivial, 4–10 exponential, 11–20 where most towns die,
   21+ only fortified towns survive. The real attack is random between a min and a max
   (`get_attack_forecast`, `get_defense_status`): defense inside that window is a gamble.

@@ -85,7 +85,7 @@ def format_town_changes(data: dict, snaps: list[dict], ref: dict | None, ref_lab
 
     alive = len(cur["citizens"])
     inside = sum(c["inside"] for c in cur["citizens"].values())
-    state = f"State: {alive} alive — {inside} inside, {alive - inside} outside · Defense {cur['defense']} · Gate {cur['gate']}"
+    state = f"State: {alive} alive of {alive + (cur.get('deaths') or 0)} citizens — {inside} inside, {alive - inside} outside · Defense {cur['defense']} · Gate {cur['gate']}"
     if ref is not None and ref is not cur:
         d_alive = alive - len(ref["citizens"])
         d_def = (cur["defense"] or 0) - (ref["defense"] or 0)

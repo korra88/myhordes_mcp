@@ -5,6 +5,25 @@ from .cp import cp_label
 from .risk import _staleness_tag, format_trapped, gate_line, trapped_citizens
 
 
+TOWN_SIZE = 40  # citizens a standard town needs before its first attack
+
+
+def roster_line(data: dict) -> str:
+    """'40 citizens (34 alive, 6 dead) — town started: attacks every night'.
+
+    Alive alone misleads: "34" reads as an unfilled town. A town only starts
+    (first attack, day 2) once 40 have joined; the dead still count, and past
+    day 1 it has started for good."""
+    alive, dead = len(data["citizens"]), len(data["deaths"])
+    joined, day = alive + dead, data["meta"].get("day") or 0
+    head = f"{joined} citizens ({alive} alive, {dead} dead)"
+    if day > 1:
+        return f"{head} — town started on day 1: attacks every night"
+    if joined >= TOWN_SIZE:
+        return f"{head} — town full: first attack tonight"
+    return f"{head} — town NOT full ({joined}/{TOWN_SIZE}): no attack until it fills"
+
+
 def _format_estimate(est: dict) -> str:
     """Format a single attack estimate with confirmed/partial indicator."""
     if est.get("min") is None:
@@ -69,7 +88,8 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
         "## Water",
         f"  Well: {water.get('well', '?')} | Bank rations: {water.get('bank', '?')}",
         "",
-        f"## Citizens ({alive} alive — {inside} inside, {outside} outside)",
+        f"## Citizens: {roster_line(data)}",
+        f"  {alive} alive — {inside} inside, {outside} outside",
     ]
     # Citizen positions are auto-synced unless town is in chaos/devastated mode
     show_citizen_stale = meta.get("chaos") or meta.get("devastated")
@@ -146,7 +166,8 @@ def format_citizens(data: dict, cp_log: dict | None = None) -> str:
 
     lines = [
         gate_line(data),
-        f"{len(citizens)} citizens alive — {len(inside)} inside, {len(outside)} outside",
+        roster_line(data),
+        f"{len(citizens)} alive — {len(inside)} inside, {len(outside)} outside",
         "",
     ]
 

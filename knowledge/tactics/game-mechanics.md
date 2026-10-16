@@ -45,7 +45,7 @@ Taking drug gives "Drugged" status, restores AP. Second drug while Drugged → "
 ## Midnight Attack
 Every night at 23:59 CET, zombie horde attacks. Town total defense must exceed zombie attack estimation or citizens slaughtered. Town Gates MUST be closed before attack, usually after 23:00, or if every citizen is in town.
 
-**Unfilled towns:** Town without 40 citizens by midnight — attack skipped entirely. No AP refresh, no status reset, no status progression (thirst, infection, etc.). Day extends 24 hours. Repeats until town fills.
+**Unfilled towns:** Town that has not had 40 citizens join by midnight of day 1 — attack skipped entirely. The dead count: a town on day 2+ has started for good, whatever the number alive. Tools print it ("40 citizens (34 alive, 6 dead) — town started"). No AP refresh, no status reset, no status progression (thirst, infection, etc.). Day extends 24 hours. Repeats until town fills.
 
 ### Attack Scaling Curve (theoretical min/max)
 Game uses fixed formula to compute theoretical zombie attack range per day. Gest'Hordes publishes as `atk_min_theo` and `atk_max_theo`. Use `get_attack_forecast` for full curve. Key observations:
