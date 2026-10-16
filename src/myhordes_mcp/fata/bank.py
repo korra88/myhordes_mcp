@@ -177,8 +177,12 @@ _BP_RARE = {"Construction Blueprint (rare)"}
 _BP_VERY_RARE = {"Construction Blueprint (very rare!)"}
 
 
-# Explorable ruin blueprints — unlock access to special ruins (higher priority)
+# Explorable ruin blueprints (read before normal ones: fata/blueprints.py). Fata's
+# /towndata names them "Bunker Blueprint (…)", the legacy spy page "Bunker Construction …".
 _BP_RUIN = {
+    "Bunker Blueprint (uncommon)", "Bunker Blueprint (rare)", "Bunker Blueprint (very rare!)",
+    "Hospital Blueprint (uncommon)", "Hospital Blueprint (rare)", "Hospital Blueprint (very rare!)",
+    "Hotel Blueprint (uncommon)", "Hotel Blueprint (rare)", "Hotel Blueprint (very rare!)",
     "Bunker Construction Blueprint (uncommon)",
     "Bunker Construction Blueprint (rare)",
     "Bunker Construction Blueprint (very rare!)",
@@ -306,8 +310,9 @@ def format_bank_summary(data: dict) -> str:
     if tbp_ruin or tbp_common or tbp_uncommon or tbp_rare or tbp_vrare:
         ruin_detail = ""
         if tbp_ruin:
-            ruin_names = ", ".join(n.replace(" Construction Blueprint", "") for n, *_ in itemsbp_ruin)
-            ruin_detail = f"; ruin: {tbp_ruin} ({ruin_names})"
+            ruin_names = ", ".join(n.replace(" Construction Blueprint", "").replace(" Blueprint", "")
+                                   for n, *_ in itemsbp_ruin)
+            ruin_detail = f"; ruin: {tbp_ruin} ({ruin_names}) — reading order: get_blueprint_order"
         bp_parts = []
         for tier, count in (("common", tbp_common), ("uncommon", tbp_uncommon), ("rare", tbp_rare), ("very rare", tbp_vrare)):
             bp_parts.append(f"{tier} {count}")

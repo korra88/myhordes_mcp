@@ -131,6 +131,4 @@ Many buildings require blueprint before construction. Four rarities: Common (C),
 - Buried buildings do NOT drop blueprints while buried, but if uncovered after hiding, blueprint obtained.
 
 ### Reading priority — critical
-**Always read Explorable Ruins blueprints before normal blueprints.** Ruin blueprints pull from small preset building pool. If normal blueprint randomly unlocks building from that pool first, ruin blueprint wasted. Hold all normal uncommon/rare/VR blueprints until explorable ruins stop yielding their own.
-
-Exception: if ruin blueprint's remaining pool only contains child buildings whose parent isn't in pool and isn't unlocked yet, read normal blueprints until parent unlocked, then switch back to ruin blueprints.
+Read explorable-ruin blueprints before normal ones of the same rarity; a ruin blueprint with nothing reachable is consumed for nothing. Order, odds and what to hold: `get_blueprint_order` (rules in `strategy-quirks.md`).

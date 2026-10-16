@@ -9,6 +9,7 @@ from .dump import format_dump_mapping
 from .night import format_night_report
 from .roster import format_roster
 from .bank import format_bank, format_bank_summary
+from .blueprints import format_blueprint_order
 from .buildings import format_buildings
 from .client import fetch_town_data
 from .cp import format_cp_log, load_cp_log, party_cp
@@ -24,6 +25,7 @@ __all__ = [
     "party_cp",
     "format_bank",
     "format_bank_summary",
+    "format_blueprint_order",
     "format_buildings",
     "format_citizens",
     "format_defense",

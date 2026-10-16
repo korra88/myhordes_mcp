@@ -133,6 +133,7 @@ def build_result(town_id: int, raw: dict, estimation_history: dict | None = None
             "data_time": _game_time(ti.get("last_game_update")),
             "chaos": bool(ti.get("chaos")),
             "devastated": bool(ti.get("devast")),
+            "hardcore": bool(ti.get("hard")),
         },
         "defense": _parse_defense(ti.get("defense") or {}),
         "water": {"well": ti.get("well_water"), "bank": _bank_water(ti.get("bank") or [])},
@@ -142,7 +143,8 @@ def build_result(town_id: int, raw: dict, estimation_history: dict | None = None
         "citizens": _parse_citizens(citizens_raw, ti.get("roles") or {}, rel),
         "deaths": _parse_deaths(citizens_raw, rel),
         "bank": _parse_bank(ti.get("bank") or [], items),
-        "buildings": _parse_buildings(ti.get("constructions") or {}, raw.get("construction_data") or [], items),
+        "buildings": _parse_buildings(ti.get("constructions") or {}, raw.get("construction_data") or [], items,
+                                      hardcore=bool(ti.get("hard"))),
         "scout": _parse_scout(raw.get("town_maps") or [], rel, who),
         "zones": _parse_zones(raw.get("town_maps") or [], items, raw.get("building_data") or [], rel, who, day),
     }
@@ -254,6 +256,7 @@ def _item_fields(item_id: int, items: dict) -> dict:
     d = items.get(item_id) or {}
     return {
         "name": _name(d, f"Item #{item_id}"),
+        "uid": d.get("uid"),
         "category": ITEM_CATEGORIES.get(d.get("cat"), d.get("cat") or "Unknown"),
         "heavy": bool(d.get("heavy")),
         "guard": bool(d.get("guard")),
@@ -276,8 +279,16 @@ def _parse_bank(raw: list[dict], items: dict) -> list[dict]:
     return bank
 
 
-def _parse_buildings(constructions: dict, catalogue: list[dict], items: dict) -> list[dict]:
+RUINS = ("bunker", "hotel", "hospital")
+
+
+def _parse_buildings(constructions: dict, catalogue: list[dict], items: dict, *,
+                     hardcore: bool = False) -> list[dict]:
     """One entry per catalogue building. A key in `constructions` = blueprint unlocked here.
+
+    ruin_pools: the explorable ruins whose blueprints can unlock it, from the catalogue's
+    {bunker,hotel,hospital}_{normal,hardcore} flags (= rules.yml plan_limits lists;
+    hardcore towns use other lists). The tier is the building's rarity.
 
     constructionLog is per day: a building is built when its last entry has no
     destructionDay (temporary buildings get one the night they fall).
@@ -324,6 +335,7 @@ def _parse_buildings(constructions: dict, catalogue: list[dict], items: dict) ->
             "rarity": int(rarity or 0),
             "blueprint_found": con is not None,
             "parent_id": str(parent) if parent else None,
+            "ruin_pools": [r for r in RUINS if c.get(f"{r}_{'hardcore' if hardcore else 'normal'}")],
             "resources": resources,
         })
 

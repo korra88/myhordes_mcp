@@ -65,6 +65,7 @@ make advisor     # Claude Code with persona.md + knowledge/tactics/*.md + person
 | `get_bank_inventory` | Fata Morgana | Bank summary by strategic group (`detail='full'` for every item). Optional `day`. |
 | `get_buildings` | Fata Morgana | Built today / history / available buildings. |
 | `get_build_options` | Fata Morgana | Buildable buildings ranked with def/AP, def/water, def/nuts-and-bolts, bank availability, and the situation (buffer, water ratio, AP budget, multiplier gap). |
+| `get_blueprint_order` | Fata Morgana | Which blueprints in the bank to read first, which to hold (parent missing) and which would be wasted, with the odds of a normal blueprint taking a ruin building. |
 | `get_construction_history` | Fata Morgana + Gest'Hordes | Day-by-day paid AP vs budget, alive, attack, deaths, free vote upgrades. |
 | `get_town_changes` | Fata Morgana (snapshots) | Movements with AP, bank deposits/withdrawals, constructions, AP spent moving today, warnings — since the previous check, the day start or a time. |
 | `get_night_report` | Fata Morgana + Gest'Hordes | One night: survived/failed, defense vs attack, alive before/after, deaths with cause and position. |

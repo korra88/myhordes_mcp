@@ -32,6 +32,7 @@ How to move one rule:
 | Building efficiency (def/AP, def/resource), what the bank can build | `fata/planning.py` | `get_build_options` |
 | Defensive Focus multiplier (as Fata reports it) | `fata/town.py` | `get_defense_status` |
 | Attack window verdict: SAFE / AT RISK / DANGER with the gap | `fata/town.py:format_defense` | `get_defense_status` |
+| Blueprint reading order: random pick among locked buildings with unlocked parent; ruin lists per tier from Fata's catalogue; wasted / hold / odds | `fata/blueprints.py` | `get_blueprint_order` |
 | Gate: open by day is normal, ⚠ only from 23:00 on Fata's time (old data says so) | `fata/risk.py:gate_line`, `gate_alert` | overview, defense, citizens, `get_town_changes` |
 
 ## Candidates (prose today)
@@ -40,7 +41,6 @@ Ordered by value for the bot. "Prose" is where the rule lives now.
 
 | # | Rule | Prose | Idea | Notes |
 |---|---|---|---|---|
-| 3 | **Ruin blueprints before normal ones** | `strategy-quirks.md`, `game-mechanics.md` | `get_bank_inventory` flags "read the Bunker/Hospital/Hotel blueprints first" when both kinds are in the bank | `fata/bank.py` groups only `Construction Blueprint (…)` today. The parent-building exception stays prose. |
 | 4 | **Distances for one zone**: moves, km, EP zone, platform teleport, Heroic Return (9/11/13/15 km), Rescue (1/2/3 km) | `expedition-planning.md` | `get_zone_details` prints them | Ranges verified in source: both use `Zone::getDistance` (km). |
 | 5 | **Night alarms**: gate open near the attack, citizens out late, defense short | `session-protocols.md`, primer | Overview flags them with the time; the "normal states" list leaves the prose | Needs the clock and the gate state from Fata. |
 | 6 | **AP per citizen per day**: 6, 5 wounded; food/water raise to a level | `game-mechanics.md` | Already in supplies; a `citizen` view would need statuses Fata may not expose | Check `towndata.py` for statuses first. |

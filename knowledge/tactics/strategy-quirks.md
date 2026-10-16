@@ -5,17 +5,13 @@ Non-obvious strategies and quirks from experience. Not on wiki.
 ## Blueprints
 
 ### Read explorable ruin blueprints before normal construction blueprints
-Both ruin blueprints (Bunker/Hospital/Hotel variants) and normal blueprints unlock construction projects. Difference:
-- **Normal blueprints** draw from entire building pool — always find something unlockable.
-- **Ruin blueprints** draw from **preset, limited pool** specific to ruin type.
+**`get_blueprint_order` computes the order, the odds and which blueprints would be wasted — use it, do not work it out by hand.**
 
-On read, blueprint unlocks first unread project in pool. If normal blueprint unlocks building from ruin blueprint's preset pool first, ruin blueprint loses option — may be **wasted** (pool exhausted).
+Why (game code): a blueprint unlocks a **random** locked building whose parent is unlocked.
+- **Normal** `Construction Blueprint (rarity)`: any building of that rarity.
+- **Ruin** `Bunker/Hotel/Hospital Blueprint (rarity)`: only that ruin's short list for the tier (6 uncommon, 10 rare, 5 very rare).
 
-Distinct items — ruin blueprints named `Bunker/Hospital/Hotel Construction Blueprint (rarity)`, normal named `Construction Blueprint (rarity)`. Easy to tell apart in bank.
-
-**Rule:** Hold all normal blueprints, read ruin blueprints first to exhaust preset pool, then read normal blueprints for remainder.
-
-**Exception:** If ruin blueprint's remaining targets are child buildings whose parent not in preset pool, read normal blueprints first to unlock parent, then resume ruin blueprints.
+A normal blueprint can take a building from a ruin's list; when the list has nothing reachable left, a ruin blueprint is **consumed for nothing**. A ruin building can also wait on a locked parent (e.g. Small Trebuchet needs Catapult): then the ruin blueprint waits, and a normal blueprint of the parent's rarity is the way to unlock it.
 
 ## General
 

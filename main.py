@@ -226,6 +226,31 @@ async def get_build_options(town_id: int = 0, include_resources: bool = False) -
 
 
 @mcp.tool()
+async def get_blueprint_order(town_id: int = 0) -> str:
+    """
+    In which order to read the construction blueprints in the bank, and which
+    not to read yet. Use when the user asks about blueprints: what to read,
+    whether a ruin (Bunker/Hotel/Hospital) blueprint is worth reading, or why
+    reading one unlocked nothing.
+
+    Applies the game's rule: a blueprint unlocks a random locked building whose
+    parent is unlocked; ruin blueprints draw from a small list per ruin and tier,
+    normal ones from every building of their rarity, so a normal one can take a
+    ruin building, and a ruin blueprint with nothing reachable is consumed for
+    nothing. Returns the reading order with the odds, the blueprints to hold
+    (with the parent they wait for), those that would be wasted, and what each
+    explorable ruin on the map can still unlock. Report it; do not redo the odds.
+
+    Args:
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
+    """
+    tid = resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    return fata.format_blueprint_order(await fata.fetch_town_data(tid))
+
+
+@mcp.tool()
 async def get_construction_history(town_id: int = 0) -> str:
     """
     Day-by-day construction throughput: paid builds with AP cost, AP spent vs
