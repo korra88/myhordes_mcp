@@ -42,14 +42,17 @@ Ordered by value for the bot. "Prose" is where the rule lives now.
 
 | # | Rule | Prose | Idea | Notes |
 |---|---|---|---|---|
-| 6 | **AP per citizen per day**: 6, 5 wounded; food/water raise to a level | `game-mechanics.md` | Already in supplies; a `citizen` view would need statuses Fata may not expose | Check `towndata.py` for statuses first. |
 | 7 | **Map zombie respawn threshold** (25 × day) | `opti-town-meta.md` | `get_scout_map` prints total map zombies vs threshold | S18 formula, not checked in source: verify before coding. |
 | 8 | **Desert soul points** `days × (days + 1) / 2` | `opti-town-meta.md` | Low value | Verify in source. |
 
 Not candidates: strategy and reading other players' intent (Opti signs, coalition
 habits, player timezones). They stay in `knowledge/tactics/`.
 
-## Known prose issues
+## Rules that stay prose
 
-- `game-mechanics.md` repeats the thirst counter and the Observation Platform rules from
-  `expedition-planning.md`. Keep one copy when either moves to code.
+- **AP and statuses per citizen** (max 6 / 5 wounded, food/water/drugs raise to a level,
+  overnight thirst, Hooked): Fata does not send citizen statuses, so no tool can apply them
+  to a citizen. `game-mechanics.md` "Action Points" / "Water and thirst" was checked against
+  the game code on 2026-10-16 (it wrongly said water does not clear Thirsty, and missed that
+  the thirst counter restarts at midnight). The consumable rules for a route are in code
+  (`plan_expedition_supplies`).

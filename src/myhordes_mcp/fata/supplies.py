@@ -6,7 +6,7 @@ player-facing version is in knowledge/tactics/expedition-planning.md.
 
 - A move costs 1 point. Leaving a zone at 3+ km (risk.km) pays EP first, else AP only.
 - Thirst counter: +1 per move (AP or EP). Above 10 the thirst level goes up and the counter
-  restarts: thirsty at move 11, dehydrated at 22, dead at 33. Only water resets it
+  restarts: thirsty at move 11, dehydrated at 22, dead at 33. Only water (and midnight) resets it
   (not food, not Hydratone, not entering town).
 - Water: not thirsty → only if not drunk today and AP < max; AP to max. Thirsty → clears
   thirst; AP to max only if not drunk today. Dehydrated → becomes thirsty, no AP, so a

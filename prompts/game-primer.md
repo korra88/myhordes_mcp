@@ -34,7 +34,7 @@ math by hand, and never guess a value no tool gave you.
 ## Thirst
 
 - **Thirst counter:** every desert move +1. Move 11 → Thirsty, 22 → Dehydrated, 33 → death.
-  Only water resets it.
+  Only water resets it (and midnight).
 - **Overnight:** no water during the day → thirst goes up one level at midnight.
   Dehydrated at midnight → death. A Dehydrated citizen needs two rations.
 - Thirsty and Refreshed are separate statuses: coming home Thirsty but Refreshed is safe.

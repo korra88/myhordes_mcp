@@ -1,9 +1,12 @@
 # Core Game Mechanics
 
 ## Action Points (AP)
-- Players start 6 AP/day. AP used for moving, building, working.
-- **Wounded** cuts max AP 6→5 (all AP sources restore 1 less). Heal with Bandage before midnight or citizen becomes Infected.
-- **Exhausted** (0 AP): disables melee weapons, Scout/Scavenger Sense, desert entry.
+Checked in the game code (v5.0.6; `CitizenHandler::getMaxAP`, `NightlyHandler`, drink/eat actions).
+- **Max AP 6, 5 when Wounded.** The attack refills AP to max every night.
+- **AP items raise AP to a level, they never add:** 5 AP + food → 6, not 11. Use them at 0 AP. Full table (water by thirst state, 6/7 AP food, drugs, alcohol, coffee) in `expedition-planning.md`; `plan_expedition_supplies` applies it.
+- One meal a day; water gives AP once a day (Refreshed) and only below max AP.
+- **Exhausted** (0 AP): no melee weapons, Scouts/Scavengers lose their adjacent-zone info, cannot enter the World Beyond. Ends with any AP gain.
+- **Wounded** at midnight → **Infected** (unless healed with a bandage first); infection can kill at night.
 
 ## Observation Platform — map visibility
 Every night the zones within the platform's radius get today's zombie state on the map, without anyone visiting: **level 0 → 3 km, level 1 → 6 km, level 2+ → 10 km** (game code `NightlyZoneDiscoveryRadius`). Zones holding a citizen at night count too. Fata's `nvt=false` ("seen today") includes these zones, so it does not mean someone walked there today.
@@ -18,29 +21,19 @@ Every night the zones within the platform's radius get today's zombie state on t
 Eating, drinking, drugs, collecting water, searching zones, using weapons in desert, combining items, cooking, stealing, picking up/dropping items, taking from bank, estimating attacks.
 
 ## Other AP Sources
-Dice (chance 1 AP), Cards (chance 1 AP), Makeshift Guitar (1 AP to all in town, 2 if Drunk/Drugged), Siesta Time (chance 2 AP), EMS System (up to 5 AP but causes Wound), Bloody Hot Coffee (up to 4 AP).
+(From the wiki, not checked in code.) Dice (chance 1 AP), Cards (chance 1 AP), Makeshift Guitar (1 AP to all in town, 2 if Drunk/Drugged), Siesta Time (chance 2 AP), EMS System (up to 5 AP but causes Wound), Bloody Hot Coffee (+4 AP up to max, +1 EP; checked).
 
-## Eating & Drinking
-- Citizen eats only ONCE/day ("Fed" status). Basic food restores AP to max (6). Premium restores AP to max+1 (7 AP, or 6 if Wounded).
-- First water ration restores AP to max (6), gives "Refreshed" status, resets thirst counter. Further drinks don't restore AP but can improve thirst status.
-- Dehydrated citizen dies at midnight regardless of Refreshed status.
-- Drinking when Dehydrated does NOT restore AP — only improves status to Thirsty.
-
-### Thirst counter (in-desert movement)
-- Moving through zones increments thirst counter. After **11 zones** since last water ration → **Thirsty**.
-- **Thirsty and Refreshed are independent statuses** — both simultaneously possible. Drinking water ration gives Refreshed, resets counter; does not clear existing Thirsty.
-- **Overnight progression depends on Refreshed, not Thirsty:**
-  - Normal, not Refreshed → Thirsty at midnight
-  - Thirsty, not Refreshed → Dehydrated at midnight
-  - Thirsty + Refreshed → stays Thirsty next morning (no degradation, not reset to Normal)
-  - Dehydrated → Death at midnight regardless of Refreshed status
-- **Expedition goal:** return **Refreshed** — Thirsty + Refreshed on arrival is safe overnight. Returning without Refreshed risks overnight degradation.
+## Water and thirst
+- **Water:** not thirsty → AP to max, once a day (a second ration while not thirsty is refused). **Thirsty → clears Thirsty** (and AP to max if not drunk yet today). **Dehydrated → back to Thirsty only, no AP**: a second ration clears it. Every ration resets the thirst counter.
+- **Thirst counter** (moves in the desert, 11 / 22 / 33 → Thirsty / Dehydrated / death; only water resets it, and midnight): see `expedition-planning.md`.
+- **At midnight** (`NightlyHandler`): not Refreshed (no water today) → thirst goes up one level (OK → Thirsty → Dehydrated). Refreshed → no change, so Thirsty + Refreshed stays Thirsty. **Dehydrated at midnight → death.**
+- Expedition goal: be **Refreshed** before midnight (drink at least once that day).
 
 ## Alcohol
-Restores AP to max (6), gives "Drunk" status. Drunk citizens suffer -20% scavenging penalty and scrambled forum/note messages. Next day → "Hungover", cannot drink alcohol. Exception: Ergot Homebrew consumable while Drunk or Hungover.
+AP to max, gives "Drunk"; next day "Hungover"; no alcohol while Drunk or Hungover. Drunk: −1 CP. (Scavenging penalty and garbled messages: from the wiki, not checked in code.)
 
 ## Drugs
-Taking drug gives "Drugged" status, restores AP. Second drug while Drugged → "Hooked!" status — permanent, irreversible. Hooked citizen MUST take drug every day or die from withdrawal overnight.
+AP to max (Twinoid: max + 2), gives "Drugged" for the day. **A second drug while Drugged → "Hooked!"** (addict): permanent; a Hooked citizen not Drugged at midnight dies. −1 CP for good once drugged.
 
 ## Midnight Attack
 Every night at 23:59 CET, zombie horde attacks. Town total defense must exceed zombie attack estimation or citizens slaughtered. Town Gates MUST be closed before attack, usually after 23:00, or if every citizen is in town.

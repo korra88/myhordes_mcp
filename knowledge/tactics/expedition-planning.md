@@ -46,7 +46,8 @@ up and the counter restarts:
 | 22 | → **Dehydrated!** (dies at midnight unless cured) |
 | 33 | → **Death** |
 
-- **Only water resets it** (every drink, in every thirst state). Not entering town, not
+- **Only water resets it** (every drink, in every thirst state), and it restarts at midnight
+  (`NightlyHandler`: walking distance 0). Not entering town, not
   eating, not Hydratone (cures one thirst level, no AP, and it is a drug).
 
 ## Drinking and eating
