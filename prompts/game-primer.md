@@ -50,6 +50,7 @@ math by hand, and never guess a value no tool gave you.
   citizen with no boosts is trapped by 3 zombies. `get_citizen_cp` has each citizen's CP.
 - Ways home: Observation Platform level 3/4 teleports from 1/2 km (gate open); Heroic
   Return (hero skill) from 9–15 km; Rescue (cast from town) on a citizen 1–3 km out.
+  For one zone, `get_zone_details` with x1=x2, y1=y2 says which of these reach it.
 
 ## Town
 

@@ -256,6 +256,52 @@ def teleport_range(level: int | None) -> int:
     return 2 if level >= 4 else 1 if level >= 3 else 0
 
 
+# km reach of the hero skills (HeroSkillDataService; wiki Heroic Return / Rescue):
+# Heroic Return, Reclusive R1–R4, self-teleport home, works with the gate closed;
+# Rescue, University U1–U3, cast from town on a citizen outside.
+HEROIC_RETURN_KM = {1: 9, 2: 11, 3: 13, 4: 15}
+RESCUE_KM = {1: 1, 2: 2, 3: 3}
+EP_FROM_KM = 3  # moves leaving a zone at 3+ km pay EP first (supplies.EP_MIN_KM)
+
+
+def _skill_needed(table: dict[int, int], dist: int, prefix: str) -> str:
+    level = next((lvl for lvl, reach in table.items() if dist <= reach), None)
+    top = max(table.values())
+    if level is None:
+        return f"out of range ({dist} km, max {top} km)"
+    if level == 1:
+        return f"yes, any level ({prefix}1+: {table[1]} km)"
+    return f"needs {prefix}{level}+ ({table[level]} km)"
+
+
+def zone_reach(data: dict, x: int, y: int) -> list[str]:
+    """How far [x|y] is from town and which ways home reach it, as tool lines."""
+    dist = km(x, y)
+    level = platform_level(data)
+    reach = teleport_range(level)
+    if level is None or reach == 0:
+        why = "platform not built" if level is None else f"platform level {level}, teleport from level 3"
+        tele = f"no ({why})"
+    elif dist <= reach:
+        gate = ("gate open at the last update" if data.get("gate") == "open"
+                else "gate CLOSED at the last update: no teleport until it opens")
+        tele = f"yes (level {level} reaches {reach} km; {gate}; not a move, no thirst)"
+    else:
+        tele = f"no ({dist} km, level {level} reaches {reach} km)"
+    ep = ("yes: moves leaving this zone pay EP first" if dist >= EP_FROM_KM
+          else f"no: under {EP_FROM_KM} km, moves from here cost AP")
+    heroic = _skill_needed(HEROIC_RETURN_KM, dist, "R")
+    if not heroic.startswith("out of range"):
+        heroic += "; works with the gate closed"
+    return [
+        f"Distance: {abs(x) + abs(y)} moves from town (AP/EP to walk it) · {dist} km",
+        f"EP zone: {ep}",
+        f"Observation Platform teleport: {tele}",
+        f"Heroic Return (Reclusive): {heroic}",
+        f"Rescue from town (University): {_skill_needed(RESCUE_KM, dist, 'U')}",
+    ]
+
+
 def zone_cp(zone: dict, people: list[dict]) -> int | None:
     """The zone's CP reading (/towndata `human`, game-sourced) if it covers the
     citizens now standing there, else None.

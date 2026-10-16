@@ -622,6 +622,10 @@ async def get_zone_details(
     into one-line coordinate lists — the output stays compact for large areas,
     so prefer one call with a generous box over many small calls.
     Use this for expedition planning: "what's between [2|3] and [5|6] within 8 AP?"
+    One zone (x1=x2, y1=y2) also gets a "From town" block: moves, km, whether it is
+    an EP zone, and whether the Observation Platform teleport, Heroic Return
+    (Reclusive level) and Rescue (University level) reach it. Use that for "can I
+    teleport / Heroic Return from [x|y]?" instead of computing km yourself.
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.

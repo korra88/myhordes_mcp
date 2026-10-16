@@ -9,6 +9,8 @@ from .risk import (
     _zone_freshness,
     _zone_status,
     _zone_threat,
+    km,
+    zone_reach,
 )
 
 
@@ -221,6 +223,8 @@ def format_zone_path(
     if max_ap is not None:
         header_parts.append(f"AP budget: {max_ap}")
     lines = [" | ".join(header_parts), data_updated(meta), ""]
+    if (x1, y1) == (x2, y2) != (0, 0):
+        lines += ["### From town"] + [f"  {line}" for line in zone_reach(data, x1, y1)] + [""]
 
     if not in_range:
         lines.append("No explored zones in this area.")
@@ -246,7 +250,7 @@ def format_zone_path(
         else:
             label = "open zone"
 
-        entry = [f"  {z['coords']} ({ap} AP){budget_flag}{dried}: {label}{threat}{_zone_status(z)}{fresh}"]
+        entry = [f"  {z['coords']} ({ap} AP, {km(rx, ry)} km){budget_flag}{dried}: {label}{threat}{_zone_status(z)}{fresh}"]
         if z.get("items"):
             item_list = ", ".join(
                 f"{i['name']}x{i['count']}" + (" [B]" if i["broken"] else "")
@@ -269,7 +273,8 @@ def format_zone_path(
                 detailed.append((ap, z, rx, ry))
                 continue
             threat = _zone_threat(z, current_day, spread_map=spread_map, coords=(rx, ry))
-            key = (threat, z.get("updated_day"), bool(z.get("dried")), z.get("zombies", -1) < 0)
+            key = (threat, z.get("updated_day"), bool(z.get("dried")), z.get("zombies", -1) < 0,
+                   bool(z.get("danger_today")))
             groups.setdefault(key, []).append((ap, z))
         return detailed, groups
 
@@ -281,15 +286,17 @@ def format_zone_path(
         out = [f"  Nothing on ground ({total} zones, grouped by threat/freshness):"]
         # Threatened groups first (most dangerous info up top), then clear/no-data
         def _order(key):
-            threat, day, dried, noscout = key
+            threat, day, dried, noscout, _ = key
             return (threat == "", noscout, threat, -(day if day is not None else -1))
         for key in sorted(groups, key=_order):
-            threat, day, dried, noscout = key
+            threat, day, dried, noscout, today = key
             desc = threat.lstrip(", ") or ("never scouted" if noscout else "clear")
             if dried:
                 desc += ", dried"
             when = ""
-            if day is not None:
+            if day is not None and today:
+                when = f" (zone read day {day}; zombies seen today)"
+            elif day is not None:
                 stale = " STALE" if (isinstance(current_day, int) and current_day - day >= 1) else ""
                 when = f" (day {day}{stale})"
             cells = sorted(groups[key], key=lambda t: (t[0], t[1]["coords"]))

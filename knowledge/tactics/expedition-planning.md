@@ -72,10 +72,13 @@ Used at 0 AP they give the most.
 
 ## Return to town
 
+For one zone, `get_zone_details(x1=x, y1=y, x2=x, y2=y)` prints moves, km, EP, and which
+of these reach it (platform level and gate included).
+
 - **Observation Platform** level 3 / 4: teleport home from zones up to 1 / 2 km, gate open.
   A teleport is not a move (no thirst).
 - **Labyrinth:** entering town from [0|0] costs 1 AP.
-- **Heroic Return** (km): 9 km base, R2/R3/R4 = 11/13/15 km. Self-teleport home.
+- **Heroic Return** (km, Reclusive): R1/R2/R3/R4 = 9/11/13/15 km. Self-teleport home, gate closed or not.
 - **Rescue** (km, cast from town on a citizen outside): U1/U2/U3 = 1/2/3 km. The rescued
   citizen spends no AP. Safety net for a stranded citizen.
 
