@@ -40,7 +40,7 @@ myhordes_mcp/
 |---|---|
 | `main.py` | MCP server, tool definitions (thin wrappers) |
 | `src/myhordes_mcp/fata/client.py` | Single entry point for Fata Morgana requests (`/towndata`): coalesced + cached (`FATA_CACHE_TTL`, default 180 s), disk archive for past days. |
-| `src/myhordes_mcp/fata/` | `towndata.py` (`/towndata` → dict, field meanings), `parse.py` (legacy spy-page archives → dict), `cp.py` (per-citizen CP log), `town.py` / `bank.py` / `buildings.py` / `zones.py` (formatters), `pathing.py` (expedition Dijkstra), `risk.py` (shared zone helpers), `archive.py` (disk archive) |
+| `src/myhordes_mcp/fata/` | `towndata.py` (`/towndata` → dict, field meanings), `parse.py` (legacy spy-page archives → dict), `cp.py` (per-citizen CP log), `town.py` / `bank.py` / `buildings.py` / `zones.py` (formatters), `pathing.py` (expedition Dijkstra), `supplies.py` (consumables along a route), `planning.py` (build options, construction history), `blueprints.py` (blueprint reading order), `risk.py` (shared zone helpers: freshness, km and reach, gate/outside/defense evening alerts, respawn check), `archive.py` (disk archive). Which game rules live in code: [mechanics-in-code.md](mechanics-in-code.md) |
 | `src/myhordes_mcp/gesthordes/` | Gest'Hordes stats client + formatters |
 | `src/myhordes_mcp/myhordes/official_api.py` | *(disabled)* Official API client placeholder |
 | `src/myhordes_mcp/knowledgebase/` | `wiki.py` (indexes `wiki/processed/`), `curated.py` (searches `knowledge/`) |
