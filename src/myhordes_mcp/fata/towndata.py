@@ -403,15 +403,20 @@ def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who
         if isinstance(radar, dict) and "zone" in radar:
             radar_state = "depleted" if radar["zone"] else "replenished"
         exc_ts = m.get("exc_timestamp") or {}
-        # Depleted: the zone's own flag. Archived days from before Fata sent it
-        # have no key: there the scavenger radar stands in, unless the zone was
-        # excavated after that reading. Measured on town 8212 (2026-10-16): the
-        # flag marks 155 zones, the radar caught 34 of them.
+        # Depleted: the latest of three readings wins. `dried` is the zone's state
+        # at its last zone update (absent in archived days from before Fata sent
+        # it); the scavenger radar reads it later from afar; an excavation
+        # replenishes it. Town 8212 (2026-10-16): `dried` marks 155 zones, the
+        # radar alone caught 34; 5 zones were dried at their update (days 4–7) and
+        # replenished on a radar reading of day 7–8, e.g. [-1|3].
+        readings = []
         if "dried" in m:
-            dried = bool(m["dried"])
-        else:
-            dried = radar_state == "depleted" and not (
-                m.get("exc") and (exc_ts.get("time") or 0) > (radar_upd.get("time") or 0))
+            readings.append((upd.get("time") or 0, bool(m["dried"])))
+        if radar_state:
+            readings.append((radar_upd.get("time") or 0, radar_state == "depleted"))
+        if m.get("exc"):
+            readings.append((exc_ts.get("time") or 0, False))
+        dried = max(readings, key=lambda r: r[0])[1] if readings else False
 
         scav = m.get("scav_zone_level") or 0
         zones.append({
