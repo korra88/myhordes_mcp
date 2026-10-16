@@ -5,6 +5,7 @@ from .cp import cp_label
 from .risk import (
     _staleness_tag,
     defense_alert,
+    defense_status,
     format_trapped,
     gate_line,
     night_alerts,
@@ -229,23 +230,20 @@ def format_defense(data: dict, gh_defense: dict | None = None) -> str:
 
     total = defense.get("total", 0)
     today_est = est.get("today", {})
-    low = today_est.get("min")
-    high = today_est.get("max")
     tonight = _format_estimate(today_est)
 
     tomorrow_est = est.get("tomorrow", {})
     tomorrow = _format_estimate(tomorrow_est)
 
-    survival = ""
-    if low is not None and high is not None:
-        if total >= high:
-            survival = " — SAFE (defense exceeds max estimate)"
-        elif total >= low:
-            survival = f" — AT RISK (defense covers min, {high - total} short of max)"
-        else:
-            survival = f" — DANGER ({low - total} defense short of minimum estimate)"
+    status = defense_status(data)
+    survival = {
+        None: "",
+        "SAFE": " — SAFE (defense exceeds max estimate)",
+        "AT RISK": f" — AT RISK (defense covers min, {status[1]} short of max)" if status else "",
+        "DANGER": f" — DANGER ({status[1]} defense short of minimum estimate)" if status else "",
+    }[status[0] if status else None]
     alert = defense_alert(data)
-    if survival and total < high and not alert and data["meta"].get("live") is not False:
+    if status and status[0] != "SAFE" and not alert and data["meta"].get("live") is not False:
         survival += " — before 23:00: normal while the town still builds"
 
     lines = [

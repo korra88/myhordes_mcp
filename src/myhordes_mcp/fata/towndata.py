@@ -411,10 +411,11 @@ def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who
         z = int(m.get("zombies") or 0)
         if not observed or (z == 0 and danger > 0):
             z = -1
-        # Seen today but last updated earlier: `danger` is today's estimate (the
-        # platform radius, see nvt above) and `zombies` is a 0 placeholder: town
-        # 8212 day 8, all 277 such zones had zombies 0, 14 of them danger 1–3.
-        danger_today = not m.get("nvt") and observed and upd.get("day") != current_day
+        # Seen today but not updated today (earlier, or never): `danger` is today's
+        # estimate (the platform radius, see nvt above) and `zombies` is a 0
+        # placeholder. Town 8212 day 8: 277 such zones with zombies 0, 14 with
+        # danger 1–3; 28 of them never had a zone update at all.
+        danger_today = not m.get("nvt") and upd.get("day") != current_day
         zmax = int(m.get("max_zombies") or 0)
         if not (zmax > 0 or (observed and upd.get("day") == current_day)):
             zmax = None

@@ -252,14 +252,14 @@ def format_bank_summary(data: dict) -> str:
         f"{len(bank)} item types, {sum(i['count'] for i in bank)} total items",
         "",
     ]
-    lines += summary_lines(bank, data.get("buildings", []))
+    lines += summary_lines(bank, data.get("buildings", []), bp_hint=" — reading order: get_blueprint_order")
     lines.append("")
     lines.append("_Use get_bank_inventory(detail='full') for the complete item list._")
     return "\n".join(lines)
 
 
 def summary_lines(bank: list[dict], buildings: list[dict] | None = None, *,
-                  rest_hint: str = "use detail='full' to see all") -> list[str]:
+                  rest_hint: str = "use detail='full' to see all", bp_hint: str = "") -> list[str]:
     """Strategic groupings of a list of items ({name, count, broken, category}):
     the bank, or every item lying in the desert. `rest_hint` says how to see the
     types no group covers."""
@@ -321,7 +321,7 @@ def summary_lines(bank: list[dict], buildings: list[dict] | None = None, *,
         if tbp_ruin:
             ruin_names = ", ".join(n.replace(" Construction Blueprint", "").replace(" Blueprint", "")
                                    for n, *_ in itemsbp_ruin)
-            ruin_detail = f"; ruin: {tbp_ruin} ({ruin_names}) — reading order: get_blueprint_order"
+            ruin_detail = f"; ruin: {tbp_ruin} ({ruin_names}){bp_hint}"
         bp_parts = []
         for tier, count in (("common", tbp_common), ("uncommon", tbp_uncommon), ("rare", tbp_rare), ("very rare", tbp_vrare)):
             bp_parts.append(f"{tier} {count}")
@@ -332,15 +332,15 @@ def summary_lines(bank: list[dict], buildings: list[dict] | None = None, *,
     lines.extend(_fmt_bucket("Strong weapons", tweap, itemsweap))
     # Count weak weapons: anything in Weapon category not in strong set
     weak_count = sum(i["count"] for i in bank
-                     if i["category"] == "Weapon" and i["name"] not in _STRONG_WEAPONS)
+                     if i.get("category") == "Weapon" and i["name"] not in _STRONG_WEAPONS)
     lines.append(f"**Weak weapons:** {weak_count}")
 
     # Furniture — count only (exclude items already shown in named buckets above)
-    tfurn = sum(i["count"] for i in bank if i["category"] == "Furniture" and i["name"] not in _DEFENSE_ITEMS)
+    tfurn = sum(i["count"] for i in bank if i.get("category") == "Furniture" and i["name"] not in _DEFENSE_ITEMS)
     lines.append(f"**Furniture:** {tfurn} items")
 
     # Boxes / containers — count only
-    boxes = [i for i in bank if i["category"] == "Box"]
+    boxes = [i for i in bank if i.get("category") == "Box"]
     if boxes:
         tbox = sum(i["count"] for i in boxes)
         names = ", ".join(f"{i['name']} ×{i['count']}" for i in boxes)
@@ -354,7 +354,7 @@ def summary_lines(bank: list[dict], buildings: list[dict] | None = None, *,
                  | _STRONG_WEAPONS | _ALL_BLUEPRINTS)
     remainder = [i for i in bank
                  if i["name"] not in accounted
-                 and i["category"] not in ("Weapon", "Furniture", "Box")]
+                 and i.get("category") not in ("Weapon", "Furniture", "Box")]
     if remainder:
         lines.append(f"**Other:** {len(remainder)} types not shown ({rest_hint})")
 

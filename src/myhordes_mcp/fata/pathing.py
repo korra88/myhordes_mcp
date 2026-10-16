@@ -5,6 +5,7 @@ import heapq
 from ..utils.clock import data_updated
 from .risk import (
     DANGER_LEVELS,
+    DANGER_MAX_EST,
     _build_spread_map,
     _parse_coords,
     _spread_risk_for_clear,
@@ -83,7 +84,7 @@ def _classify_cell(
 
     if zone.get("danger_today"):
         # Today's danger estimate (Observation Platform radius): current, not exact.
-        est = {0: 0, 1: 1, 2: 4, 3: 6}.get(zone.get("danger", 0), 6)
+        est = DANGER_MAX_EST.get(zone.get("danger", 0), DANGER_MAX_EST[3])
         tag = "TRAP_RISK" if est > group_cp else ("CLEAR" if est == 0 else "SAFE")
         return {"tag": tag, "zombies": est, "fresh": True, "age": 0}
 
@@ -92,7 +93,7 @@ def _classify_cell(
     # Explored but unscouted — only danger level available
     if zm < 0:
         danger = zone.get("danger", 0)
-        est = {0: 0, 1: 1, 2: 4, 3: 6}.get(danger)
+        est = DANGER_MAX_EST.get(danger)
         tag = "TRAP_RISK" if est is not None and est > group_cp else "STALE"
         return {"tag": tag, "zombies": est, "fresh": False, "age": -1}
 
@@ -488,6 +489,9 @@ def find_safe_path(
     def _format_zom_str(z: dict | None, px: int, py: int) -> str:
         if z is None:
             return "unexplored"
+        if z.get("danger_today"):
+            danger = z.get("danger", 0)
+            return f"~{DANGER_LEVELS.get(danger, 'unknown')} today" if danger else "clear today"
         zm = z.get("zombies", -1)
         if zm >= 0:
             last_day = z.get("updated_day") or z.get("scouted_day")

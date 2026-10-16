@@ -12,7 +12,9 @@ from .risk import (
     _zone_threat,
     fmt_items,
     km,
+    never_visited,
     respawn_check,
+    zone_is_today,
     zone_reach,
 )
 
@@ -40,23 +42,21 @@ def format_scout(data: dict) -> str:
     meta = data["meta"]
     current_day = meta.get("day")
     zones = data.get("zones", [])
-    scout_only = [z for z in data.get("scout", []) if z["coords"] not in {m["coords"] for m in zones}]
+    map_coords = {m["coords"] for m in zones}
+    scout_only = [z for z in data.get("scout", []) if z["coords"] not in map_coords]
     if not zones and not scout_only:
         return "No scout or map data available."
 
-    def is_today(z):
-        return z.get("danger_today") or (z["zombies"] >= 0 and z.get("updated_day") == current_day)
-
-    today = [z for z in zones if is_today(z)]
+    today = [z for z in zones if zone_is_today(z, current_day)]
     today_danger = [z for z in today if (z["zombies"] < 0 or z.get("danger_today")) and z.get("danger")]
     today_count = [z for z in today if z["zombies"] > 0 and not z.get("danger_today")]
     today_clear = len(today) - len(today_danger) - len(today_count)
-    older = [z for z in zones if not is_today(z)]
+    older = [z for z in zones if not zone_is_today(z, current_day)]
     older_count = sorted((z for z in older if z["zombies"] > 0), key=lambda z: -z["zombies"])
     older_clear = sum(1 for z in older if z["zombies"] == 0)
     older_danger = [z for z in older if z["zombies"] < 0 and z.get("danger")]
     no_info = sum(1 for z in older if z["zombies"] < 0 and not z.get("danger"))
-    never = max(0, meta["map_zones"] - 1 - len(zones)) if meta.get("map_zones") else None
+    never = never_visited(data)
 
     lines = [
         f"## Scout Map — {meta.get('town_name', '?')} Day {current_day}",

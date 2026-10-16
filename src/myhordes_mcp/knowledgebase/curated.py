@@ -77,9 +77,6 @@ def search(query: str, section: str = "") -> str:
                 title = next((l.lstrip("# ").strip() for l in b if l.startswith("#")), "(top of file)")
                 body = "\n".join(b[1:] if b[0].startswith("#") else b).strip()
                 ranked.append((-n, -sum(hits.values()), file_rank, rel, title, body))
-    if not ranked:  # terms only in front matter: the head of the best file
-        _, _, md, text, _ = scored[0]
-        return f"## {md.relative_to(root)}\n\n{text[:3000]}"
     ranked.sort(key=lambda r: r[:3])
     best, rest = ranked[:SECTIONS], ranked[SECTIONS:]
     parts = []

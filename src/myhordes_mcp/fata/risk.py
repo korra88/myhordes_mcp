@@ -68,7 +68,10 @@ def outside_alert(data: dict, at: datetime | None = None, farthest: int = 5) -> 
     near = sum(1 for _, k, _ in rows if k <= reach) if reach else 0
     names = ", ".join(f"{c['name']} {c['coords']} {m} moves" for m, _, c in rows[:farthest])
     more = f", +{len(rows) - farthest} more" if len(rows) > farthest else ""
-    tele = f"; {near} within the platform teleport ({reach} km)" if near else ""
+    tele = ""
+    if near:
+        tele = (f"; {near} within the platform teleport ({reach} km)" if data.get("gate") == "open"
+                else f"; {near} within the platform teleport range, but the gate is closed: no teleport")
     return f"⚠ {len(rows)} citizens outside {when} — farthest: {names}{more}{tele}{old}"
 
 
@@ -382,6 +385,27 @@ DEFAULT_RESPAWN_PER_DAY = 25
 _DANGER_MIN = {0: 0, 1: 1, 2: 3, 3: 6}  # DANGER_LEVELS lower bounds
 
 
+# Upper bounds of the danger bands (DANGER_LEVELS) for trap checks: "6+" has no top,
+# so it counts as 9 — above any single citizen's 8 CP.
+DANGER_MAX_EST = {0: 0, 1: 2, 2: 5, 3: 9}
+
+
+def zone_is_today(zone: dict, day) -> bool:
+    """Whether a zone's zombie reading is today's: seen today (Fata nvt=false: a visit,
+    or the platform radius at night), or, in legacy data without that flag, counted
+    on an update made today."""
+    if "seen_today" in zone:
+        return bool(zone["seen_today"])
+    return zone.get("zombies", -1) >= 0 and zone.get("updated_day") == day
+
+
+def never_visited(data: dict) -> int | None:
+    """Zones nobody ever visited (Fata nyv). data['zones'] holds every other zone,
+    the town zone included."""
+    total = data["meta"].get("map_zones")
+    return max(0, total - len(data.get("zones", []))) if total else None
+
+
 def respawn_check(data: dict) -> list[str]:
     """Tonight's global-respawn threshold against the zombies Fata can see. Fata never
     sees the whole map (unvisited zones, counts from older days), so this states what
@@ -394,18 +418,15 @@ def respawn_check(data: dict) -> list[str]:
     threshold = per_day * (day + 1)
     zones = data.get("zones", [])
 
-    def today(z):
-        return z.get("danger_today") or (z["zombies"] >= 0 and z.get("updated_day") == day)
-
-    seen = [z for z in zones if today(z)]
-    stale = [z for z in zones if not today(z) and z["zombies"] >= 0]
-    uncounted = [z for z in zones if not today(z) and z["zombies"] < 0]
+    seen = [z for z in zones if zone_is_today(z, day)]
+    stale = [z for z in zones if not zone_is_today(z, day) and z["zombies"] >= 0]
+    uncounted = [z for z in zones if not zone_is_today(z, day) and z["zombies"] < 0]
     seen_n = sum(_DANGER_MIN.get(z.get("danger", 0), 0) if z["zombies"] < 0 or z.get("danger_today")
                  else z["zombies"] for z in seen)
     stale_n = sum(z["zombies"] for z in stale)
     days = sorted({z["updated_day"] for z in stale if z.get("updated_day") is not None})
     span = f"days {days[0]}–{days[-1]}" if len(days) > 1 else (f"day {days[0]}" if days else "earlier days")
-    never = max(0, meta["map_zones"] - 1 - len(zones)) if meta.get("map_zones") else None
+    never = never_visited(data)
     known = seen_n + stale_n
     missing = (f"{never} zones never visited, " if never is not None else "") + f"{len(uncounted)} without a count"
     if known >= threshold:

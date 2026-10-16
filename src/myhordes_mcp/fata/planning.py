@@ -236,7 +236,8 @@ def format_build_options(data: dict, include_resources: bool = False, include_al
             if include_resources:
                 lines.append(f"      needs: {_res_text(o)}")
         if len(ranked) > len(shown):
-            hidden = [o for o in ranked if o not in shown]
+            shown_names = {o["name"] for o in shown}
+            hidden = [o for o in ranked if o["name"] not in shown_names]
             lines.append(f"  +{len(hidden)} more ({sum(o['ready'] for o in hidden)} ready): "
                          + ", ".join(o["name"] for o in hidden) + " — include_all=True for their numbers")
         lines.append("")
