@@ -26,6 +26,9 @@ max_resume_tokens = 128000      # 0 switches the rule off
 enabled = false
 disclaimer_file = "prompts/discord-dm-disclaimer.md"
 maintainer = "YOUR_DISCORD_USER_ID"    # replaces {maintainer} in the text with a mention
+# A DM has no new thread to go to: a session the [sessions] rule cuts restarts by itself,
+# carrying this much of the latest talk (estimated tokens; 0 = none).
+carry_tokens = 4000
 
 [limits]
 max_turns_per_user_per_hour = 60

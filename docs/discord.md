@@ -94,8 +94,9 @@ in `../discord_mcp/README.md` ("Sessions that fit the cache", "Direct messages")
   the bot. In a DM the bot can write `towns/_bot/` (memory, feedback) like in a thread.
   The check mark is a conscious step, so the bot never adds it.
 - **Sessions**: a thread or DM idle for 55+ minutes whose context reached 128000
-  tokens gets a fixed English notice instead of an answer (thread: mention the bot in
-  the channel to open a new thread; DM: send `new`). Counters are kept in a state file
+  tokens is not resumed. A thread gets a fixed English notice asking for a new thread;
+  a DM starts a fresh session by itself, carrying the latest ~4000 tokens of talk
+  (`carry_tokens`). Counters are kept in a state file
   outside the repo.
 - Add `[sessions]` and `[dm]` by hand to the local `discord-listener.toml` on the Pi
   (it is gitignored), and restart the listener: prompts and toml changed.
