@@ -89,7 +89,8 @@ in `../discord_mcp/README.md` ("Sessions that fit the cache", "Direct messages")
 - **DMs** are off by default. When on, each person in `allow_users` sees the text of
   `prompts/discord-dm-disclaimer.md` on their first DM (`{maintainer}` becomes a
   mention of the `maintainer` id) and the bot answers only after they add the check
-  mark. Only their last waiting message is answered; removing the check mark silences
+  mark. Of what they wrote while waiting, only the last message is answered; later
+  messages are answered normally. Removing the check mark silences
   the bot. In a DM the bot can write `towns/_bot/` (memory, feedback) like in a thread.
   The check mark is a conscious step, so the bot never adds it.
 - **Sessions**: a thread or DM idle for 55+ minutes whose context reached 128000
