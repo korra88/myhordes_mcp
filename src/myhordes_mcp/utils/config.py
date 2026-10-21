@@ -99,7 +99,7 @@ def resolve_town_id(town_id: int = 0) -> int | str:
         except OSError:
             mine = ""
         if mine:
-            if mine.isdigit():
+            if mine.isascii() and mine.isdigit():
                 return int(mine)
             return f"Error: {USER_TOWNS_DIR.name}/{user} must contain only a town ID, found {mine!r}."
     try:
@@ -107,7 +107,7 @@ def resolve_town_id(town_id: int = 0) -> int | str:
     except OSError:
         current = ""
     if current:
-        if current.isdigit():
+        if current.isascii() and current.isdigit():
             return int(current)
         return f"Error: {CURRENT_TOWN_FILE.name} must contain only a town ID, found {current!r}."
     if FATAMORGANA_TOWN_ID:

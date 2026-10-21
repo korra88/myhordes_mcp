@@ -67,8 +67,13 @@ allowed_tools = [
   "Write(./towns/**)",
   "Edit(./towns/**)",
 ]
-# personal/ holds private notes on other players; answers are public.
-deny = ["Read(./personal/**)"]
+# personal/ holds private notes on other players; answers are public. The shared
+# default town is changed only from the terminal (deny wins over the towns/** allow).
+deny = [
+  "Read(./personal/**)",
+  "Write(./towns/_current_town)",
+  "Edit(./towns/_current_town)",
+]
 # Lifts the baseline deny on writes so the allows above can apply. Acceptable for a
 # few trusted users, given the Write/Edit allows cover only ./towns/** (memory, the
 # bot's feedback log, per-user default towns); revisit before opening allow_users.
