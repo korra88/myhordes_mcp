@@ -23,7 +23,9 @@ server over stdio can use it. What the listener does, and another bot should too
 - **Allow only the read-only tools.** List them by name (see `allowed_tools` in
   `discord-listener.example.toml`); never a wildcard, so a new tool is opt-in.
 - **Town per conversation:** pass `town_id` to every tool when the conversation is
-  about a given town; without it the tools use the default town.
+  about a given town; without it the tools use the default town. A bot that sets
+  `LISTENER_USER_ID=<discord id>` in the server's environment gets per-person
+  defaults (see "Default town per person").
 - **Answer only on demand** (a mention or a message to the bot), never on a timer:
   the game forbids scheduled polling, and Fata agreed to on-demand use only.
 - **Limit who can use it** and how often, since every turn costs model usage.
@@ -61,6 +63,41 @@ journalctl --user-unit discord-listener -f   # logs
 
 For it to start at boot without a login, run `sudo loginctl enable-linger $USER` once.
 Run one listener per bot: two would both answer.
+
+## Default town per person
+
+The listener runs `claude` with `LISTENER_USER_ID` set to the Discord id of whoever
+opened the conversation (the author of the message that opened the thread, or the
+person in the DM), and the MCP server inherits it (no `env` block in the MCP JSON).
+`resolve_town_id` then looks, in order, at: an explicit `town_id`,
+`towns/_user_towns/<id>`, `towns/_current_town`, `FATAMORGANA_TOWN_ID`. The id must be
+all digits, so it cannot name another path.
+
+- **Asking the bot** ("change my default town to 8212"): it writes only the
+  requester's own file. It no longer writes `towns/_current_town`; the shared default
+  changes only from the terminal (`make town TOWN=...`).
+- **From the terminal**: `make town TOWN=8212 FOR=<discord id>` (or
+  `python3 scripts/set_town.py --user <discord id> [<town id>]`); with no `TOWN` it
+  shows that person's default.
+- `towns/_user_towns/` lives in the private `towns/` repo and is committed with it.
+
+## Direct messages and long sessions
+
+Both are configured in `discord-listener.toml` (`[dm]`, `[sessions]`) and explained
+in `../discord_mcp/README.md` ("Sessions that fit the cache", "Direct messages").
+
+- **DMs** are off by default. When on, each person in `allow_users` sees the text of
+  `prompts/discord-dm-disclaimer.md` on their first DM (`{maintainer}` becomes a
+  mention of the `maintainer` id) and the bot answers only after they add the check
+  mark. Only their last waiting message is answered; removing the check mark silences
+  the bot. In a DM the bot can write `towns/_bot/` (memory, feedback) like in a thread.
+  The check mark is a conscious step, so the bot never adds it.
+- **Sessions**: a thread or DM idle for 55+ minutes whose context reached 128000
+  tokens gets a fixed English notice instead of an answer (thread: mention the bot in
+  the channel to open a new thread; DM: send `new`). Counters are kept in a state file
+  outside the repo.
+- Add `[sessions]` and `[dm]` by hand to the local `discord-listener.toml` on the Pi
+  (it is gitignored), and restart the listener: prompts and toml changed.
 
 ## Memory and feedback log
 

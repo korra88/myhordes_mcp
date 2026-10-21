@@ -82,7 +82,7 @@ make advisor     # Claude Code with persona.md + knowledge/tactics/*.md + person
 | `search_knowledge` | Knowledge | Search curated advisor KB — building phase guides, strategy, mechanics. |
 
 Every tool takes an optional `town_id`; without it, the default town is used
-(`towns/_current_town`, else `FATAMORGANA_TOWN_ID` in `.env`).
+(`towns/_current_town`, else `FATAMORGANA_TOWN_ID` in `.env`; the Discord bot first looks for the asking person's own `towns/_user_towns/<discord id>`).
 
 ## Skills
 

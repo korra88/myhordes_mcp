@@ -13,7 +13,7 @@ Read-only MCP server in Python for **MyHordes** (browser survival game, Eternalt
 ## Architecture
 
 - **Entry point:** `main.py` — FastMCP server, runs over stdio. Tool declarations only; logic lives in `src/myhordes_mcp/`.
-- **Data source:** `src/myhordes_mcp/fata/` — Fata Morgana public JSON `/towndata?town=…[&day=N]` (beta site; OK'd by the Fata dev for this MCP; not blocked by the nightly attack). Shape and field meanings: `fata/towndata.py`. Days archived from the legacy spy page are still parsed by `fata/parse.py`. No auth needed, just a town ID: `towns/_current_town` (set with `make town TOWN=…`, re-read every call), else `FATAMORGANA_TOWN_ID` in `.env`.
+- **Data source:** `src/myhordes_mcp/fata/` — Fata Morgana public JSON `/towndata?town=…[&day=N]` (beta site; OK'd by the Fata dev for this MCP; not blocked by the nightly attack). Shape and field meanings: `fata/towndata.py`. Days archived from the legacy spy page are still parsed by `fata/parse.py`. No auth needed, just a town ID, resolved by `utils/config.py:resolve_town_id`: explicit `town_id`, else `towns/_user_towns/<LISTENER_USER_ID>` (Discord listener only: the person who opened the conversation; digits only), else `towns/_current_town` (set with `make town TOWN=…`, re-read every call), else `FATAMORGANA_TOWN_ID` in `.env`.
   Every Fata request goes through `fata/client.py:fetch_town_data()` (single-flight + TTL cache, `FATA_CACHE_TTL` default 180 s). Never add another HTTP path to Fata.
 - **Secondary:** `src/myhordes_mcp/gesthordes/` — Gest'Hordes attack stats (same cache pattern).
 - **Disabled:** `src/myhordes_mcp/myhordes/official_api.py` — official JSON v1 API (needs `userkey` + `appkey`), not wired as tools.

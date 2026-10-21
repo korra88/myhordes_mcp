@@ -50,8 +50,8 @@ advisor: persona.md ## Start Claude Code as the town advisor (persona + tactics 
 		--append-system-prompt-file persona.md \
 		"Persona and knowledge loaded. Introduce yourself briefly and await orders."
 
-town: ## Show the default town, or set it: make town TOWN=<Fata town ID> (no restart needed)
-	@$(PYTHON) scripts/set_town.py $(TOWN)
+town: ## Show or set the default town: make town TOWN=<Fata town ID>; FOR=<discord id> for one user's own (no restart needed)
+	@$(PYTHON) scripts/set_town.py $(if $(FOR),--user $(FOR)) $(TOWN)
 
 kb: process ## Build the full knowledge base (fetch if needed, then process)
 

@@ -10,6 +10,23 @@ poll_seconds = 20
 backlog_minutes = 30
 settle_seconds = 8
 
+# A session idle for 55+ minutes (the prompt cache lives 1 hour) whose last model call
+# held 128000+ tokens is not resumed: the bot posts a fixed notice instead of paying to
+# rewrite that context. Counters live in a state file outside cwd (the bot writes in
+# towns/), default ~/.local/state/discord-listener/<bot id>.json.
+[sessions]
+idle_minutes = 55
+max_resume_tokens = 128000      # 0 switches the rule off
+# state_file = "~/.local/state/discord-listener/state.json"
+
+# DMs from allow_users (needs listed ids, not "*"). The first DM gets the disclaimer;
+# the person consents by adding a check mark themselves, the bot never adds one.
+# Remove it and the bot goes silent. `new` starts a fresh DM session.
+[dm]
+enabled = false
+disclaimer_file = "prompts/discord-dm-disclaimer.md"
+maintainer = "YOUR_DISCORD_USER_ID"    # replaces {maintainer} in the text with a mention
+
 [limits]
 max_turns_per_user_per_hour = 60
 max_turns_per_hour = 60
@@ -52,8 +69,9 @@ allowed_tools = [
 ]
 # personal/ holds private notes on other players; answers are public.
 deny = ["Read(./personal/**)"]
-# Lifts the baseline deny on writes so the allows above can apply. Acceptable while
-# a single trusted user is allowed; revisit before opening allow_users.
+# Lifts the baseline deny on writes so the allows above can apply. Acceptable for a
+# few trusted users, given the Write/Edit allows cover only ./towns/** (memory, the
+# bot's feedback log, per-user default towns); revisit before opening allow_users.
 unsafe_allow = ["Write", "Edit"]
 timeout_seconds = 600
 max_budget_usd = 100   # the maximum: on the subscription this is an equivalent, not a charge

@@ -1,7 +1,7 @@
 # Where you are: Discord
 
-You are answering in a Discord thread, not in a terminal. Whatever you write as
-your final text is posted to the thread as it is.
+You are answering in a Discord thread **or a private DM**, not in a terminal. Whatever you write as
+your final text is posted there as it is.
 
 - **Answer in the language of the message you are answering**, even when a skill,
   a tip file or this project's docs are in English. Translate a skill's output
@@ -22,16 +22,24 @@ your final text is posted to the thread as it is.
 
 ## Which town
 
-Tools called without `town_id` use the default town in `towns/_current_town`, which
-every thread shares.
+Tools called without `town_id` use the default town of **the person who opened this
+conversation** (the author of the message that opened the thread, or the person in
+the DM): their own `towns/_user_towns/<their Discord id>`, else the shared default
+in `towns/_current_town`. The server does that lookup itself; you never read those
+files to answer.
 
-- **A thread about another town**: when the reader names a town other than the
-  default (by ID), pass `town_id=<that ID>` on every tool call in this thread. Do
-  not touch `towns/_current_town` for it: another thread would silently get this
-  town's data.
-- **Changing the default town**: only when the reader explicitly asks to change the
-  default town. Write the town ID alone (digits, nothing else) to
-  `towns/_current_town`, then confirm the new default in one line.
+- **A conversation about another town**: when the reader names a town other than
+  the default (by ID), pass `town_id=<that ID>` on every tool call in this
+  conversation. Do not touch any default for it: another conversation would
+  silently get this town's data.
+- **Changing a default town**: only when the reader explicitly asks to change *their
+  own* default town. Write the town ID alone (digits, nothing else) to
+  `towns/_user_towns/<author id of the message asking>` (the `author id` shown on
+  their message), then confirm the new default in one line. Never write another
+  person's file, even when asked to, and **never `towns/_current_town`**: the shared
+  default is changed only from the terminal. The new default applies to
+  conversations that person opens; in a thread somebody else opened, keep passing
+  `town_id` for them.
 
 ## Memory
 

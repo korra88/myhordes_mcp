@@ -66,15 +66,42 @@ def env_int(name: str, default: int) -> int:
 # Default town, switchable without restarting the server: one town ID, read on every call.
 CURRENT_TOWN_FILE = TOWNS_DIR / "_current_town"
 
+# One file per Discord user, named by their id: that person's default town. The
+# Discord listener sets LISTENER_USER_ID (the person who opened the conversation)
+# in the server's environment; a terminal session has none and never reads these.
+USER_TOWNS_DIR = TOWNS_DIR / "_user_towns"
+
+
+def _listener_user_id() -> str | None:
+    """The Discord id the listener passed down, or None.
+
+    Digits only: the value becomes a file name, and anything else (`../x`) must
+    never reach the path. ASCII, because `str.isdigit()` also accepts characters
+    like `²`.
+    """
+    user = os.getenv("LISTENER_USER_ID", "")
+    return user if user.isascii() and user.isdigit() and len(user) <= 25 else None
+
 
 def resolve_town_id(town_id: int = 0) -> int | str:
     """Return a valid town ID (int) or an error message (str).
 
-    Order: explicit non-zero town_id, then towns/_current_town, then the
-    FATAMORGANA_TOWN_ID env var.
+    Order: explicit non-zero town_id, then the requester's own
+    towns/_user_towns/<LISTENER_USER_ID> (Discord only), then towns/_current_town,
+    then the FATAMORGANA_TOWN_ID env var.
     """
     if town_id:
         return int(town_id)
+    user = _listener_user_id()
+    if user:
+        try:
+            mine = (USER_TOWNS_DIR / user).read_text().strip()
+        except OSError:
+            mine = ""
+        if mine:
+            if mine.isdigit():
+                return int(mine)
+            return f"Error: {USER_TOWNS_DIR.name}/{user} must contain only a town ID, found {mine!r}."
     try:
         current = CURRENT_TOWN_FILE.read_text().strip()
     except OSError:
@@ -85,5 +112,5 @@ def resolve_town_id(town_id: int = 0) -> int | str:
         return f"Error: {CURRENT_TOWN_FILE.name} must contain only a town ID, found {current!r}."
     if FATAMORGANA_TOWN_ID:
         return int(FATAMORGANA_TOWN_ID)
-    return ("Error: No town ID provided, no towns/_current_town file, "
-            "and FATAMORGANA_TOWN_ID not configured in .env.")
+    return ("Error: No town ID provided, no towns/_user_towns/<your id> or towns/_current_town "
+            "file, and FATAMORGANA_TOWN_ID not configured in .env.")

@@ -7,6 +7,7 @@ is gitignored, so your logs and other players' names never end up in this repo.
 ```
 towns/
   _current_town               # default town ID (make town TOWN=...), re-read on every call
+  _user_towns/<discord id>    # one person's default (Discord bot), make town TOWN=... FOR=<id>
   s{season}-{town-slug}/      # created by the server on the first live fetch
     cache/                    # written by the server
       _meta.json              #   town ID → this folder; skills find the folder through it
@@ -25,8 +26,9 @@ towns/
       reviewed/               #   moved here by /review-bot-feedback
 ```
 
-Tools called without `town_id` use the default town: `towns/_current_town`, else
-`FATAMORGANA_TOWN_ID` from `.env`. `make town` shows it, `make town TOWN=8212` switches
+Tools called without `town_id` use the default town: `towns/_user_towns/<LISTENER_USER_ID>`
+when the Discord listener started the server for a person (docs/discord.md), else
+`towns/_current_town`, else `FATAMORGANA_TOWN_ID` from `.env`. `make town` shows it, `make town TOWN=8212` switches
 it; the server picks the change up on its next call. If `towns/` is a git repo (below),
 the file is tracked, so the switch reaches your other machines with the next commit.
 
