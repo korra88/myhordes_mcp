@@ -66,6 +66,7 @@ Used at 0 AP they give the most.
 | Twinoid 500mg | → 8 | Drug |
 | Alcohol | → 6 | Drunk; not when drunk or hungover (hungover the next day) |
 | Bloody Hot Coffee | +4, up to max | +1 EP; no daily limit |
+| Second Wind (hero skill) | +3/+3/+4/+4 AP (level 0/1/2/3), up to max | +1/+3/+4/+6 EP, even above max; the day's heroic action |
 
 - Max AP 6, **5 when wounded** (7 AP food then gives 6).
 - Second drug the same day → **addict** (permanent; an addict not drugged at night dies).
@@ -170,6 +171,9 @@ of these reach it (platform level and gate included).
   A teleport is not a move (no thirst).
 - **Labyrinth:** entering town from [0|0] costs 1 AP.
 - **Heroic Return** (km, Reclusive): R1/R2/R3/R4 = 9/11/13/15 km. Self-teleport home, gate closed or not.
+- **One heroic action per day**: Second Wind, Heroic Return and the other hero actions share
+  one daily use (status `tg_hero`, cleared at night). Using Second Wind on the way out
+  means no Heroic Return that day; a Rescue cast by another citizen still works.
 - **Rescue** (km, cast from town on a citizen outside): U1/U2/U3 = 1/2/3 km. The rescued
   citizen spends no AP. Safety net for a stranded citizen.
 

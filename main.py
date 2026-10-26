@@ -497,6 +497,7 @@ async def plan_expedition_supplies(
     step_table: bool = False,
     group_cp: int = 0,
     party: str = "",
+    second_wind: int = -1,
     town_id: int = 0,
 ) -> str:
     """
@@ -549,6 +550,11 @@ async def plan_expedition_supplies(
                     many it needs).
         step_table: Add the full move-by-move table (long: only when asked for it).
         group_cp / party: For route safety, as in find_expedition_path.
+        second_wind: The player's Second Wind hero skill level (0-3; -1 = none or keep it
+                     for something else). Level 0/1/2/3 = +3/+3/+4/+4 AP (up to max) and
+                     +1/+3/+4/+6 EP. The plan uses it only when it helps, and warns that it
+                     is the day's one heroic action (no Heroic Return that day). Pass it
+                     when the player said or the bot memory holds their level.
         town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
@@ -576,6 +582,12 @@ async def plan_expedition_supplies(
     items = supplies.parse_available(available)
     if isinstance(items, str):
         return f"Error: {items}"
+    sw_ap = sw_ep = 0
+    if second_wind >= 0:
+        if second_wind not in supplies.SECOND_WIND:
+            return "Error: second_wind is the skill level, 0 to 3 (-1 = none)."
+        sw_ap, sw_ep = supplies.SECOND_WIND[second_wind]
+        items["secondwind"] = 1
 
     data = await fata.fetch_town_data(tid)
     if data.get("error"):
@@ -614,38 +626,46 @@ async def plan_expedition_supplies(
         ap=start_ap, ep=None if start_ep < 0 else start_ep, counter=thirst_counter, thirst=level,
         drank=already_drank, ate=already_ate, drugged=drug_taken_today,
         no_alcohol=drunk_or_hungover, wounded=wounded, scout=scout, shoes=shoes, bike=bike,
+        sw_ap=sw_ap, sw_ep=sw_ep,
     )
     result = supplies.plan(route, st, items, end_ap=end_ap, slots=free_slots)
-    if back is not None and (result["cost"][0] or result["cost"][1]):
-        # The loop costs more AP than retracing: retrace when only that makes it feasible.
+    if back is not None:
+        # The loop is worth it only when it costs no more supplies than retracing (it is
+        # usually a few AP longer): compare death, AP short, thirst and items carried.
         alt_route = safest_route(data, points, group_cp)
         if alt_route is not None:
             alt_route, alt_end, alt_note = supplies.end_requirements(data, alt_route, points[-1])
             alt = supplies.plan(alt_route, st, items, end_ap=alt_end, slots=free_slots)
-            if not (alt["cost"][0] or alt["cost"][1]):
+            if alt["cost"][:6] < result["cost"][:6]:
                 extra = (len(route) - 1) - (len(alt_route) - 1)
+                why = ("not feasible with these supplies" if result["cost"][0] or result["cost"][1]
+                       else "needs more supplies")
                 route, end_ap, result = alt_route, alt_end, alt
                 risks = route_risks(data, route, points, group_cp)
                 note = (f"Way back retraces the way out (its zones are already dug): the loop over "
-                        f"other zones is {extra} AP longer and not feasible with these supplies. "
-                        f"{alt_note}").strip()
+                        f"other zones is {extra} AP longer and {why}. {alt_note}").strip()
     path = " → ".join(f"[{x}|{y}]" for x, y in points)
     notes = [data_updated(data["meta"]), note, f"Route safety computed for {group_cp} CP." + (" " + "; ".join(breakdown) if breakdown else "")]
     if not available.strip():
         notes.append("Assumed: water and one 7 AP food; drugs/alcohol only as extras if needed.")
     if result["cost"][0] or result["cost"][1]:
         # Not feasible: what would make it work (default items, no slot limit)?
-        more = {k: max(items.get(k, 0), n) for k, n in supplies.DEFAULT_AVAILABLE.items()}
+        more = {**items, **{k: max(items.get(k, 0), n) for k, n in supplies.DEFAULT_AVAILABLE.items()}}
         alt = supplies.plan(route, st, more, end_ap=end_ap)
         if not (alt["cost"][0] or alt["cost"][1]):
             need = ", ".join(f"{n} × {supplies.ITEMS[k].label}" for k, n in alt["used"].items())
             notes.append(f"Feasible with: {need} ({sum(alt['used'].values())} slots).")
         else:
             notes.append("Not feasible even with the default set of items: shorten the route.")
+    options = None
+    if not available.strip() and any(k in supplies.EXTRAS for k in result["used"]) \
+            and not (result["cost"][0] or result["cost"][1]):
+        options = supplies.extra_options(route, st, items, end_ap=end_ap, slots=free_slots,
+                                         stock=fata.expedition_extras(data["bank"]))
     return supplies.format_plan(route, st, result, title=f"Supplies plan {path}", notes=notes,
                                 slots=free_slots, end_ap=end_ap, step_table=step_table,
                                 teleport="teleport" in note, generic_extras=not available.strip(),
-                                risks=risks, cp=group_cp)
+                                risks=risks, cp=group_cp, waypoints=points[1:-1], options=options)
 
 
 @mcp.tool()

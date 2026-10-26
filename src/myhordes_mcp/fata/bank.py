@@ -77,6 +77,16 @@ _ALCOHOL = {
 }
 
 
+def expedition_extras(bank: list[dict]) -> dict[str, int]:
+    """Bank stock of the expedition extras the supplies planner knows (steroid, alcohol,
+    Twinoid), intact items only."""
+    def count(match) -> int:
+        return sum(i["count"] for i in bank if match(i["name"]) and not i.get("broken"))
+    return {"steroid": count(lambda n: n.startswith("Anabolic Steroids")),
+            "alcohol": count(_ALCOHOL.__contains__),
+            "twinoid": count(lambda n: n.startswith("Twinoid"))}
+
+
 _CLEAN_WATER = {
     # Items that provide clean water rations
     "Water Ration", "Purified Stagnant Water",
@@ -98,7 +108,7 @@ _FOOD_CONTAINERS = {
 
 
 _AP_DRUGS = {
-    "Anabolic Steroids", "Anabolic Steroids (infected)",
+    "Anabolic Steroids", "Anabolic Steroids (infected)", "Twinoid 500mg",
 }
 
 

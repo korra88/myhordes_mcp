@@ -16,6 +16,10 @@ player-facing version is in knowledge/tactics/expedition-planning.md.
   day makes the citizen an addict, so the planner uses at most one.
 - Alcohol → max AP; not when already drunk or hungover (hungover the next day).
 - Bloody Hot Coffee: +4 AP up to max, +1 EP up to max EP, no daily limit.
+- Second Wind (hero skill, HeroSkillDataService 'super_enduring_N' + effect 'just_ap_sw'):
+  adds AP up to max (never above) and EP even above max; levels 0-3 give +3/+1, +3/+3,
+  +4/+4, +4/+6. It is the day's one heroic action (status tg_hero, cleared at night),
+  shared with Heroic Return and the other hero actions. Not an item: no slot.
 - AP items raise AP to a level, they never add: AP left when using one is wasted.
 - They also refill EP up to the shoes (1) + bike (2) part, never the scout's 2;
   Twinoid one more. Max AP is 6, 5 when wounded.
@@ -48,7 +52,9 @@ ITEMS = {
     "steroid": Item("steroid", "Anabolic Steroids", "drug", 0),
     "twinoid": Item("twinoid", "Twinoid 500mg", "drug", 2),
     "coffee": Item("coffee", "Bloody Hot Coffee", "coffee", 4),
+    "secondwind": Item("secondwind", "Second Wind (hero action)", "hero", 0),
 }
+SECOND_WIND = {0: (3, 1), 1: (3, 3), 2: (4, 4), 3: (4, 6)}  # level → (AP, EP)
 ORDER = tuple(ITEMS)
 
 # When the player doesn't say what they have: water and one 7 AP food are assumed; drugs and
@@ -99,6 +105,8 @@ class Start:
     scout: bool = False
     shoes: bool = False
     bike: bool = False
+    sw_ap: int = 0               # Second Wind, when the player has it (see SECOND_WIND)
+    sw_ep: int = 0
 
     @property
     def max_ap(self) -> int:
@@ -115,13 +123,20 @@ class Start:
 
 # Cost, compared lexicographically (lower is better):
 # dead, moves short, dehydrated at the end, times dehydrated, thirsty at the end,
-# items, alcohol, drugs, AP wasted (alcohol is the last resort, after one drug),
-# premium items (7 AP food, Twinoid: kept for when they are needed)
+# items, alcohol, drugs (alcohol is the last resort, after one drug), premium items
+# (7 AP food, Twinoid: kept for when they are needed), AP wasted (only a tiebreak between
+# feasible plans: keeping a Twinoid beats an AP lost while arriving with AP to spare)
 ZERO = (0,) * 10
+PREMIUM = {"food7": 1, "twinoid": 2}  # a Twinoid is rarer than a 7 AP food
 
 
 def _add(a, b):
     return tuple(x + y for x, y in zip(a, b))
+
+
+def carried(used: dict[str, int]) -> int:
+    """Rucksack slots the used supplies take (Second Wind is an action, not an item)."""
+    return sum(n for k, n in used.items() if k != "secondwind")
 
 
 def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
@@ -146,11 +161,15 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
         i, ap, ep, cnt, th, drank, ate, drugged, drunk, used = state
         if used[ORDER.index(k)] >= avail[ORDER.index(k)]:
             return None
-        if slots and sum(used) >= slots:
-            return None
         it = ITEMS[k]
+        if slots and it.kind != "hero" and sum(used) - used[ORDER.index("secondwind")] >= slots:
+            return None
         waste = 0
-        if it.kind == "water":
+        if it.kind == "hero":
+            new = max(ap, min(ap + start.sw_ap, max_ap))
+            waste = start.sw_ap - (new - ap)
+            ap, ep = new, min(ep + start.sw_ep, max_ep + start.sw_ep)
+        elif it.kind == "water":
             if th == 0:
                 if drank or ap >= max_ap:
                     return None
@@ -182,7 +201,10 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
             waste = it.level - (new - ap)
             ap, ep = new, max(ep, min(ep + 1, max_ep))
         used = tuple(n + (1 if o == k else 0) for o, n in zip(ORDER, used))
-        cost = (0, 0, 0, 0, 0, 1, it.kind == "alcohol", it.kind == "drug", waste, k in ("food7", "twinoid"))
+        # Second Wind costs less than an item (no slot) but is kept when not needed: it is
+        # the day's heroic action (Heroic Return, ...).
+        cost = (0, 0, 0, 0, 0, 0.5 if it.kind == "hero" else 1, it.kind == "alcohol", it.kind == "drug",
+                PREMIUM.get(k, 0), waste)
         return (i, ap, ep, cnt, th, drank, ate, drugged, drunk, used), cost
 
     def move(state):
@@ -252,11 +274,35 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
             nxt, c = use(state, choice)
             steps.append({"kind": "use", "item": choice, "zone": route[i], "ap_before": state[1],
                           "ap": nxt[1], "ep": nxt[2], "counter": nxt[3], "thirst": nxt[4],
-                          "waste": c[8], "move": i})
+                          "waste": c[9], "move": i})
             state = nxt
     best.cache_clear()
     used = {k: n for k, n in zip(ORDER, state[9]) if n}
     return {"cost": cost, "steps": steps, "used": used, "final": state, "stuck_at": state[0]}
+
+
+EXTRA_SETS = (("steroid",), ("alcohol",), ("twinoid",), ("steroid", "alcohol"), ("alcohol", "twinoid"))
+STOCK_LABEL = {"steroid": "Steroids", "alcohol": "alcohol", "twinoid": "Twinoid"}
+
+
+def extra_options(route: list[tuple[int, int]], start: Start, available: dict[str, int], *,
+                  end_ap: int = 0, slots: int = 0, stock: dict[str, int] | None = None) -> list[str]:
+    """One line per way to cover the extras that works (one drug, alcohol, or both), with
+    the slots, water and arrival it implies and the bank stock: the planner picks by slots
+    and thirst, the player may prefer to keep a Twinoid."""
+    out = []
+    for keys in EXTRA_SETS:
+        avail = {k: n for k, n in available.items() if k not in EXTRAS}
+        avail.update({k: 1 for k in keys})
+        r = plan(route, start, avail, end_ap=end_ap, slots=slots)
+        if r["cost"][0] or r["cost"][1]:
+            continue
+        final, used = r["final"], r["used"]
+        name = " + ".join(ITEMS[k].label for k in keys)
+        bank = ", ".join(f"{STOCK_LABEL[k]} {stock.get(k, 0)}" for k in keys) if stock is not None else ""
+        out.append(f"{name}: {carried(used)} slots ({used.get('water', 0)} water), arrives "
+                   f"{THIRST[final[4]]} with {final[1]} AP" + (f" (bank: {bank})" if bank else ""))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +342,9 @@ def labels(used: dict[str, int], generic: bool) -> dict[str, str]:
     out = {k: it.label for k, it in ITEMS.items()}
     if generic:
         six = [k for k in ("steroid", "alcohol") if used.get(k)]
-        if len(six) == 1:
+        # "either" only when no other drug is used: with a Twinoid, steroids would be a
+        # second drug (addict).
+        if len(six) == 1 and not used.get("twinoid"):
             out[six[0]] = "6 AP extra (Anabolic Steroids or alcohol)"
         else:
             out["steroid"], out["alcohol"] = "Anabolic Steroids (extra)", "alcohol (extra)"
@@ -376,12 +424,24 @@ def _use_label(s: dict, names: dict[str, str]) -> str:
     return label
 
 
+def waypoint_moves(steps: list[dict], waypoints: list[tuple[int, int]]) -> set[int]:
+    """Moves that reach each waypoint, in order (the last one is the arrival)."""
+    hits, pending = set(), list(waypoints)
+    for s in steps:
+        if s["kind"] == "move" and pending and s["zone"] == pending[0]:
+            hits.add(s["move"])
+            pending.pop(0)
+    return hits
+
+
 def key_steps(steps: list[dict], route: list[tuple[int, int]], ending: str,
-              names: dict[str, str] | None = None, risky: dict | None = None) -> list[str]:
-    """Only what the player has to act on or watch: items used, thirst changes, risky
-    zones, arrival."""
+              names: dict[str, str] | None = None, risky: dict | None = None,
+              waypoints: list[tuple[int, int]] | None = None) -> list[str]:
+    """Only what the player has to act on or watch: waypoints reached, items used, thirst
+    changes, risky zones, arrival."""
     names = names or {k: it.label for k, it in ITEMS.items()}
     risky = risky or {}
+    reached = waypoint_moves(steps, waypoints or [])
     out, prev_th, prev_risk = [], None, None
     for s in steps:
         z = f"[{s['zone'][0]}/{s['zone'][1]}]"
@@ -391,6 +451,9 @@ def key_steps(steps: list[dict], route: list[tuple[int, int]], ending: str,
                        f"{s['ap']} AP, {s['ep']} EP, {THIRST[s['thirst']]}")
             prev_th = s["thirst"]
         elif s["kind"] == "move":
+            if s["move"] in reached and s is not steps[-1]:
+                out.append(f"- move {s['move']} to {z} → **waypoint reached**: {s['ap']} AP, {s['ep']} EP, "
+                           f"{THIRST[s['thirst']]}")
             gid, what = risky.get(s["zone"], (None, None))
             if gid is not None and gid != prev_risk:
                 out.append(f"- move {s['move']} to {z} → ⚠ {what}")
@@ -411,11 +474,16 @@ def key_steps(steps: list[dict], route: list[tuple[int, int]], ending: str,
 def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
                 title: str, notes: list[str], slots: int = 0, end_ap: int = 0,
                 step_table: bool = False, teleport: bool = False, generic_extras: bool = False,
-                risks: list[dict] | None = None, cp: int = 2) -> str:
-    """generic_extras: the player didn't list their items, so drugs/alcohol are extras to find."""
+                risks: list[dict] | None = None, cp: int = 2,
+                waypoints: list[tuple[int, int]] | None = None, options: list[str] | None = None) -> str:
+    """generic_extras: the player didn't list their items, so drugs/alcohol are extras to find.
+    waypoints: zones to flag when reached. options: other ways to cover the extras."""
     cost, steps, used = result["cost"], result["steps"], result["used"]
     names = labels(used, generic_extras)
-    dead, short, end_dehyd, n_dehyd, end_thirsty, n_items, n_alc, n_drugs, waste, _ = cost
+    dead, short, end_dehyd, n_dehyd, end_thirsty, _, n_alc, n_drugs, _, waste = cost
+    n_items = carried(used)
+    hero = used.get("secondwind")
+    used = {k: n for k, n in used.items() if k != "secondwind"}
     moves = len(route) - 1
     final = result["final"]
 
@@ -443,6 +511,11 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
             lines.append("  (a Water Cooler Bottle holds up to 3 rations in one slot)")
     elif not (short or dead):
         lines.append("**Bring:** nothing — the route fits in the starting AP/EP.")
+    if hero:
+        lines.append(f"**Hero action:** Second Wind (+{start.sw_ap} AP up to max, +{start.sw_ep} EP), no slot.")
+    if options:
+        lines.append("**Ways to cover the extra** (bank stock in brackets; pick by what the bank can spare):")
+        lines += [f"  - {o}" for o in options]
 
     if dead:
         verdict = "**DIES of dehydration on the way** — the route is too long for the water available."
@@ -477,6 +550,9 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
             warn.append("Uses a drug: a second drug today makes you an addict (permanent; must take a drug every day).")
         if n_alc:
             warn.append("Uses alcohol: Drunk today (-20% finding items when digging), hungover tomorrow (no alcohol).")
+    if hero:
+        warn.append("Second Wind is today's heroic action: no Heroic Return or other hero action "
+                    "today (it resets at night).")
     drank_today = start.drank or any(s["kind"] == "use" and s["item"] == "water" for s in steps)
     if not drank_today and not dead:
         warn.append("No water today so far: without a ration before the attack, thirst goes up tonight.")
@@ -494,14 +570,16 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
         lines += ["", "**Key steps** (full table: step_table=True)"]
         ending = ("stuck, out of points" if short else "dead" if dead
                   else "teleport home" if teleport else "arrival")
-        lines += key_steps(steps, route, ending, names, risky)
+        lines += key_steps(steps, route, ending, names, risky, waypoints)
         return "\n".join(lines)
+    reached = waypoint_moves(steps, waypoints or [])
 
     lines += ["", "| # | Zone | km | Action | AP | EP | Counter | Thirst |", "|---|---|---|---|---|---|---|---|"]
     for s in steps:
         z = f"[{s['zone'][0]}/{s['zone'][1]}]"
         if s["kind"] == "move":
             flag = " ⚠" if s["zone"] in risky else ""
+            flag += " · waypoint" if s["move"] in reached else ""
             lines.append(f"| {s['move']} | {z} | {km(*s['zone'])} | move ({s['paid']}){flag} | {s['ap']} | {s['ep']} "
                          f"| {s['counter']} | {THIRST[s['thirst']]} |")
         elif s["kind"] == "use":

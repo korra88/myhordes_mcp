@@ -122,4 +122,6 @@ The search matches words, so use specific terms (a file name returns the whole f
 home items → carrying; digging → digging; killing zombies → weapons. The rules above are
 the summary; the knowledge base has the numbers.
 
-For an expedition, call `find_expedition_path` then `plan_expedition_supplies`.
+For an expedition, call `find_expedition_path` then `plan_expedition_supplies`. When the
+player has Second Wind (they say so, or the bot memory holds their level), pass
+`second_wind=<level>`: it is the day's one heroic action, shared with Heroic Return.

@@ -8,7 +8,7 @@ from .changes import get_town_changes
 from .dump import format_dump_mapping
 from .night import format_night_report
 from .roster import format_roster
-from .bank import format_bank, format_bank_summary
+from .bank import expedition_extras, format_bank, format_bank_summary
 from .blueprints import format_blueprint_order
 from .buildings import format_buildings
 from .client import fetch_town_data
@@ -23,6 +23,7 @@ __all__ = [
     "format_cp_log",
     "load_cp_log",
     "party_cp",
+    "expedition_extras",
     "format_bank",
     "format_bank_summary",
     "format_blueprint_order",
