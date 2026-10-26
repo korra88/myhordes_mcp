@@ -444,11 +444,12 @@ async def find_expedition_path(
                     counter and status (Thirsty at 11, Dehydrated at 22, death at
                     33). No consumables are applied: for where to drink, eat
                     and take drugs, and what to carry, use plan_expedition_supplies.
-        round_trip: With step_table, continue the table back along the same path.
-                    Not for a digging trip: the outbound zones are already dug
-                    (one dig per zone per day). Plan the way back as a second
-                    call over other zones, ending off row 0 / column 0 when the
-                    Observation Platform teleports (e.g. [2|1] at level 4).
+        round_trip: Also plan the way back, as a loop: over zones the way out
+                    does not use (a zone can be dug once a day), and, when the
+                    trip starts in town and the Observation Platform is level
+                    3+, ending on the teleport zone cheapest to reach (off row 0 /
+                    column 0, e.g. [2|1] at level 4). Gives the round-trip AP and
+                    the AP saved. With step_table, the table covers both ways.
         start_ap: AP at departure (default 6).
         start_ep: EP at departure (Scout 2, shoes +1, bike +2; default 0).
         thirst_counter: Zones already walked since the last water ration.

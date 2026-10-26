@@ -108,6 +108,8 @@ Checked in `CitizenChanceQueryListener::getDigChances`, `ZoneHandler`, `MapMaker
 Keywords: route, loop, return path, way back, same zones, teleport, observation platform,
 axis, row 0, column 0, diagonal, farthest, max distance, AP budget.
 
+- `find_expedition_path(..., round_trip=True)` plans this loop: way back over other zones,
+  ending on the best teleport zone, with the round-trip AP and the AP saved.
 - **Go out and come back over different zones.** Each zone can be dug once a day, so a
   return over the outbound zones finds nothing new to dig.
 - **With the Observation Platform, end the walk on a diagonal zone, not on row 0 or

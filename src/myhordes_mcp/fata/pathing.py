@@ -13,6 +13,8 @@ from .risk import (
     _zombie_max_estimate,
     fmt_items,
     km,
+    platform_level,
+    teleport_range,
 )
 
 
@@ -249,6 +251,97 @@ def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int = 2,
             cur = prev[cur]
         route.extend(reversed(leg))
     return route
+
+
+def _route_exposure(data: dict, route: list[tuple[int, int]], group_cp: int) -> float:
+    """Summed safest-mode risk of the zones entered along `route`."""
+    zone_map, _, spread_map, cd = _zone_grid(data, group_cp)
+    return sum(_cell_risk(zone_map.get(c), cd, coords=c, spread_map=spread_map,
+                          group_cp=group_cp, mode="safest") for c in route[1:])
+
+
+def _cheapest_route(data: dict, src: tuple[int, int], dst: tuple[int, int], group_cp: int,
+                    banned: frozenset) -> list[tuple[int, int]] | None:
+    """Fewest AP from src to dst, least risk among equal AP; trap zones and `banned`
+    zones are never entered. None if no path within MAX_PATH_AP."""
+    zone_map, cell_class, spread_map, cd = _zone_grid(data, group_cp)
+    margin = 3
+    bx = (min(src[0], dst[0]) - margin, max(src[0], dst[0]) + margin)
+    by = (min(src[1], dst[1]) - margin, max(src[1], dst[1]) + margin)
+    heap = [(0, 0.0, src)]
+    best = {src: (0, 0.0)}
+    prev: dict[tuple[int, int], tuple[int, int]] = {}
+    while heap:
+        ap, risk, cur = heapq.heappop(heap)
+        if cur == dst:
+            break
+        if best.get(cur, (MAX_PATH_AP + 1, 0.0)) < (ap, risk) or ap >= MAX_PATH_AP:
+            continue
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            n = (cur[0] + dx, cur[1] + dy)
+            if n in banned or (n not in zone_map and not (bx[0] <= n[0] <= bx[1] and by[0] <= n[1] <= by[1])):
+                continue
+            if cell_class.get(n, {}).get("tag") in ("TRAPPED", "TRAP_RISK"):
+                continue
+            cand = (ap + 1, risk + _cell_risk(zone_map.get(n), cd, coords=n, spread_map=spread_map,
+                                              group_cp=group_cp, mode="safest"))
+            if cand < best.get(n, (MAX_PATH_AP + 1, 0.0)):
+                best[n] = cand
+                prev[n] = cur
+                heapq.heappush(heap, (cand[0], cand[1], n))
+    if dst not in best:
+        return None
+    route, cur = [dst], dst
+    while cur != src:
+        cur = prev[cur]
+        route.append(cur)
+    return route[::-1]
+
+
+def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> dict | None:
+    """The way back of a trip that walked `out` (start first, destination last).
+
+    A zone can be dug once a day, so the way back avoids the outbound zones. When the
+    trip starts in town and the Observation Platform teleports (level 3+), the walk ends
+    on the teleport zone that is cheapest to reach: walking costs |x|+|y| but the
+    teleport works by km, so the best end is off row 0 / column 0 ([2|1] at level 4).
+
+    The way back takes the fewest AP (least risk among equal AP) and never enters a
+    trap zone. Returns {route, teleport_from, saved_ap, level, reused, retrace_ap} or
+    None if no way back exists. `reused` = outbound zones it still had to cross.
+    """
+    start, dest = out[0], out[-1]
+    level = platform_level(data) if start == (0, 0) else None
+    reach = teleport_range(level)
+    if reach and km(*dest) <= reach:
+        return {"route": [dest], "teleport_from": dest, "saved_ap": abs(dest[0]) + abs(dest[1]),
+                "level": level, "reused": [], "retrace_ap": len(out) - 1}
+    if reach:
+        ends = [(x, y) for x in range(-reach, reach + 1) for y in range(-reach, reach + 1)
+                if (x, y) != (0, 0) and km(x, y) <= reach]
+    else:
+        ends = [start]
+    banned = frozenset(out[1:-1]) - {start}
+    best = None
+    for avoid in (banned, frozenset()):
+        for end in ends:
+            if end in avoid:
+                continue
+            route = _cheapest_route(data, dest, end, group_cp, avoid)
+            if route is None:
+                continue
+            key = (len(route), _route_exposure(data, route, group_cp), -(abs(end[0]) + abs(end[1])))
+            if best is None or key < best[0]:
+                best = (key, route, end)
+        if best is not None:
+            break
+    if best is None:
+        return None
+    _, route, end = best
+    tele = end if reach else None
+    return {"route": route, "teleport_from": tele,
+            "saved_ap": abs(end[0]) + abs(end[1]) if tele else 0, "level": level,
+            "reused": [c for c in route[1:-1] if c in banned], "retrace_ap": len(out) - 1}
 
 
 RISKY_TAGS = ("TRAPPED", "TRAP_RISK", "UNKNOWN")
@@ -561,6 +654,31 @@ def find_safe_path(
 
         return f"  {i:>2}. {coord_str} — {zom_str}{tag_str}{ruin_str}{items_str}{stale}"
 
+    def _render_back(back: dict | None, out: list[tuple[int, int]]) -> list[str]:
+        if back is None:
+            return ["### Way back", f"No way back found within {ap_limit} AP.", ""]
+        walk = len(back["route"]) - 1
+        tele = back["teleport_from"]
+        if tele and not walk:
+            how = (f"the Observation Platform (level {back['level']}) teleports you home from here "
+                   f"if the gate is open: {back['saved_ap']} AP saved")
+        elif tele:
+            how = (f"walk {walk} AP to [{tele[0]}|{tele[1]}], then the Observation Platform "
+                   f"(level {back['level']}) teleports you home if the gate is open: "
+                   f"{back['saved_ap']} AP saved")
+        else:
+            how = f"walk {walk} AP" + (" (no platform teleport: level 3+ needed)"
+                                       if out[0] == (0, 0) else "")
+        out_ap = len(out) - 1
+        head = [f"### Way back (loop: other zones than the way out, which are already dug)",
+                f"Round trip {out_ap} + {walk} = {out_ap + walk} AP walked; {how}. "
+                f"Retracing the way out would cost {back['retrace_ap']} AP."]
+        if back["reused"]:
+            head.append("No way back avoids every outbound zone: it crosses again "
+                        + ", ".join(f"[{x}|{y}]" for x, y in back["reused"]) + " (already dug).")
+        rows = [_format_step(i, px, py) for i, (px, py) in enumerate(back["route"], start=out_ap)]
+        return head + rows + [""]
+
     def _render_path(
         label: str,
         result: tuple,
@@ -573,11 +691,15 @@ def find_safe_path(
         lines.append("")
 
     first = safest if safest is not None else shortest
+    back = loop_return(data, list(first[2]), group_cp) if round_trip and first is not None else None
     if step_table and first is not None:
         route = list(first[2])
-        if round_trip:
-            route += list(reversed(route[:-1]))
+        if back is not None:
+            route += back["route"][1:]
         lines.extend(format_step_table(route, start_ap, start_ep, thirst_counter))
+        if back is not None and back["teleport_from"]:
+            tx, ty = back["teleport_from"]
+            lines.append(f"Then teleport home from [{tx}/{ty}]: not a move, no AP, no thirst.")
         lines.append("")
 
     if safest is not None:
@@ -589,6 +711,8 @@ def find_safe_path(
     if shortest is not None:
         _render_path("Shortest Path", shortest)
 
+    if round_trip and first is not None:
+        lines.extend(_render_back(back, first[2]))
     return "\n".join(lines)
 
 
