@@ -141,7 +141,7 @@ def citizen_cp(log: dict, citizen_id: int) -> dict | None:
 
 
 def _cp(r: dict) -> str:
-    return "0 (terrorised?)" if r["cp"] == 0 else str(r["cp"])
+    return "0 (terrorised)" if r["cp"] == 0 else str(r["cp"])
 
 
 def cp_label(log: dict, citizen_id: int) -> str:
@@ -198,7 +198,8 @@ def format_cp_log(log: dict, citizens: list[dict]) -> list[str]:
         last, best = cp["last"], cp["max"]
         src = ", derived" if last.get("source") == "derived" else ""
         maxday = f", max d{best['day']}" if best["day"] != last["day"] else ""
-        rows.append(f"  {c['name']} ({c['job']}) {_cp(last)}/{best['cp']} — d{last['day']} {last['coords']}{src}{maxday}")
+        terror = " (terrorised)" if last["cp"] == 0 else ""
+        rows.append(f"  {c['name']} ({c['job']}) {last['cp']}/{best['cp']}{terror} — d{last['day']} {last['coords']}{src}{maxday}")
     lines = ["Last/Max CP — day and zone of the last reading:"] + rows
     if unread:
         lines.append(f"Never read alone on a zone (assume 2): {', '.join(unread)}")

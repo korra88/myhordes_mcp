@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from myhordes_mcp import fata, gesthordes  # noqa: E402
 from myhordes_mcp.fata import supplies  # noqa: E402
-from myhordes_mcp.fata.pathing import route_risks, safest_route  # noqa: E402
+from myhordes_mcp.fata.pathing import loop_return, route_risks, safest_route  # noqa: E402
 from myhordes_mcp.knowledgebase import curated, wiki  # noqa: E402
 from myhordes_mcp.utils.clock import data_updated  # noqa: E402
 from myhordes_mcp.utils.config import CURRENT_TOWN_FILE, FATAMORGANA_TOWN_ID, resolve_town_id  # noqa: E402
@@ -155,12 +155,7 @@ async def get_defense_status(day: int = 0, town_id: int = 0) -> str:
     if isinstance(tid, str):
         return tid
     data = await fata.fetch_town_data(tid, day=day or None)
-    # Enrich current-day defense with Gest'Hordes breakdown (watchmen, temps, dead bonus)
-    gh_defense = None
-    if not (day and day != data.get("meta", {}).get("day")):
-        gh_data = await gesthordes.fetch_stats(tid)
-        gh_defense = gesthordes.extract_current_defense(gh_data)
-    return fata.format_defense(data, gh_defense=gh_defense)
+    return fata.format_defense(data)
 
 
 @mcp.tool()
@@ -514,8 +509,10 @@ async def plan_expedition_supplies(
     EP is spent first when leaving a zone 3+ km from town.
 
     The route is the safest path (as find_expedition_path) from `start` through the
-    waypoints, back to `start` if round_trip. Returning to town uses the Observation
-    Platform teleport when built (level 3-4) and accounts for the Labyrinth's 1 AP.
+    waypoints, back to `start` if round_trip: the way back is a loop over other zones (the
+    outbound ones are already dug) and, from town with the Observation Platform level 3+,
+    ends on the best teleport zone; when the loop is not feasible but retracing is, it
+    retraces and says so. Accounts for the Labyrinth's 1 AP.
     The plan minimises, in order: death, running out of AP, ending Dehydrated, ending
     Thirsty, items carried (slots), alcohol, drugs, AP wasted. At most one drug and one
     alcohol (warned about). Output: items to bring with slot count, warnings, route risks
@@ -569,6 +566,10 @@ async def plan_expedition_supplies(
         return "Error: give at least one waypoint."
     if round_trip:
         points.append(points[0])
+    # "0,0; 14,2; 0,0" with the default start and round_trip would repeat the town.
+    points = [p for i, p in enumerate(points) if i == 0 or p != points[i - 1]]
+    if len(points) < 2:
+        return "Error: give at least one waypoint other than the start."
     level = {"none": 0, "ok": 0, "thirsty": 1, "dehydrated": 2}.get(thirst.strip().lower())
     if level is None:
         return "Error: thirst must be 'none', 'thirsty' or 'dehydrated'."
@@ -584,10 +585,30 @@ async def plan_expedition_supplies(
         group_cp = 2
         if party:
             group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
-    route = safest_route(data, points, group_cp)
-    if route is None:
-        return "Error: no route found between the given zones (40 AP cap per leg)."
-    route, end_ap, note = supplies.end_requirements(data, route, points[-1])
+    back = None
+    if len(points) >= 3 and points[-1] == points[0]:
+        # Round trip: the way back is a loop (outbound zones are already dug), ending
+        # on the best Observation Platform teleport zone, as find_expedition_path.
+        out = safest_route(data, points[:-1], group_cp)
+        back = loop_return(data, out, group_cp) if out else None
+    if back is not None:
+        route = out + back["route"][1:]
+        note = "Way back over other zones than the way out (already dug)."
+        if back["reused"]:
+            note += " It still crosses " + ", ".join(f"[{x}|{y}]" for x, y in back["reused"]) + "."
+        if back["teleport_from"]:
+            tx, ty = back["teleport_from"]
+            end_ap = 0
+            note += (f" Observation Platform level {back['level']}: teleport home from [{tx}|{ty}] "
+                     f"({back['saved_ap']} AP saved; needs the gate open).")
+        else:
+            route, end_ap, end_note = supplies.end_requirements(data, route, points[-1])
+            note = f"{note} {end_note}".strip()
+    else:
+        route = safest_route(data, points, group_cp)
+        if route is None:
+            return "Error: no route found between the given zones (40 AP cap per leg)."
+        route, end_ap, note = supplies.end_requirements(data, route, points[-1])
     risks = route_risks(data, route, points, group_cp)
     st = supplies.Start(
         ap=start_ap, ep=None if start_ep < 0 else start_ep, counter=thirst_counter, thirst=level,
@@ -595,6 +616,19 @@ async def plan_expedition_supplies(
         no_alcohol=drunk_or_hungover, wounded=wounded, scout=scout, shoes=shoes, bike=bike,
     )
     result = supplies.plan(route, st, items, end_ap=end_ap, slots=free_slots)
+    if back is not None and (result["cost"][0] or result["cost"][1]):
+        # The loop costs more AP than retracing: retrace when only that makes it feasible.
+        alt_route = safest_route(data, points, group_cp)
+        if alt_route is not None:
+            alt_route, alt_end, alt_note = supplies.end_requirements(data, alt_route, points[-1])
+            alt = supplies.plan(alt_route, st, items, end_ap=alt_end, slots=free_slots)
+            if not (alt["cost"][0] or alt["cost"][1]):
+                extra = (len(route) - 1) - (len(alt_route) - 1)
+                route, end_ap, result = alt_route, alt_end, alt
+                risks = route_risks(data, route, points, group_cp)
+                note = (f"Way back retraces the way out (its zones are already dug): the loop over "
+                        f"other zones is {extra} AP longer and not feasible with these supplies. "
+                        f"{alt_note}").strip()
     path = " → ".join(f"[{x}|{y}]" for x, y in points)
     notes = [data_updated(data["meta"]), note, f"Route safety computed for {group_cp} CP." + (" " + "; ".join(breakdown) if breakdown else "")]
     if not available.strip():

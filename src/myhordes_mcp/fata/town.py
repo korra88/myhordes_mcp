@@ -36,9 +36,9 @@ def roster_line(data: dict) -> str:
 def _format_estimate(est: dict) -> str:
     """Format a single attack estimate with confirmed/partial indicator."""
     if est.get("min") is None:
-        return "???"
+        return "not estimated yet"
     label = "(confirmed)" if est.get("maxed") else "(partial)"
-    return f"{est['min']}-{est['max']} {label}"
+    return f"{est['min']}-{est['max']} zombies {label}"
 
 
 def format_town_overview(data: dict, season_points: int | None = None, detail: str = "compact") -> str:
@@ -92,8 +92,8 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
         f"  Multiplier: x{defense.get('multiplier', '?')}",
         "",
         "## Attack Estimation",
-        f"  Tonight: {tonight} zombies",
-        f"  Tomorrow: {tomorrow} zombies",
+        f"  Tonight: {tonight}",
+        f"  Tomorrow: {tomorrow}",
         "",
         "## Water",
         f"  Well: {water.get('well', '?')} | Bank rations: {water.get('bank', '?')}",
@@ -213,15 +213,8 @@ def format_citizens(data: dict, cp_log: dict | None = None) -> str:
     return "\n".join(lines)
 
 
-def format_defense(data: dict, gh_defense: dict | None = None) -> str:
-    """Format defense breakdown and attack estimation.
-
-    Args:
-        data: Fata Morgana town data dict.
-        gh_defense: Optional Gest'Hordes current-day defence breakdown from
-                    gesthordes.extract_current_defense(). Adds watchers,
-                    temporary, and dead_bonus lines that Fata lumps into 'other'.
-    """
+def format_defense(data: dict) -> str:
+    """Format defense breakdown and attack estimation, from Fata only."""
     if data.get("error"):
         return f"Error: {data['error']}"
 
@@ -262,19 +255,7 @@ def format_defense(data: dict, gh_defense: dict | None = None) -> str:
     ]
 
     other = defense.get("other", 0) or 0
-    if gh_defense is not None:
-        watchers = gh_defense.get("watchers", 0)
-        temporary = gh_defense.get("temporary", 0)
-        dead_bonus = gh_defense.get("dead_bonus", 0)
-        lines.append(f"  Watchmen: {watchers}")
-        lines.append(f"  Temporary bonuses: {temporary}")
-        lines.append(f"  Dead-citizen bonus: {dead_bonus}")
-        gh_accounted = watchers + temporary + dead_bonus
-        remainder = other - gh_accounted
-        if remainder != 0:
-            lines.append(f"  Other (unaccounted): {remainder}")
-        lines.append("  (Gest'Hordes breakdown)")
-    elif "watchmen" in defense:
+    if "watchmen" in defense:
         lines.append(f"  Watchmen: {defense['watchmen']}")
         lines.append(f"  Temporary bonuses: {defense.get('temporary', 0)}")
         if other - defense["watchmen"] - defense.get("temporary", 0):
@@ -284,8 +265,8 @@ def format_defense(data: dict, gh_defense: dict | None = None) -> str:
 
     lines += [
         "",
-        f"Tonight's attack: {tonight} zombies",
-        f"Tomorrow's attack: {tomorrow} zombies",
+        f"Tonight's attack: {tonight}",
+        f"Tomorrow's attack: {tomorrow}",
     ]
 
     # Estimation history, with the actual attack where Fata has it (newspaper)

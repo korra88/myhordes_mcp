@@ -259,16 +259,16 @@ def _zone_threat(zone: dict, current_day: int | None = None, spread_map: dict | 
 
 
 def _zone_freshness(zone: dict, current_day: int | None) -> str:
-    """Compact freshness for a zone line: ' (d7)', ' (d4) [STALE]', or for a zone seen
-    today through the platform radius ' (read d7; zombies today)' — zombies are today's,
-    items and depletion from that day. Who updated it is left out (token cost)."""
+    """Compact freshness for a zone line: ' (updated d7)', ' (updated d4, STALE)', or for
+    a zone seen today through the platform radius ' (zombies today, items d7)' — zombies
+    are today's, items and depletion from that day. Who updated it is left out (token cost)."""
     updated_day = zone.get("updated_day")
     if updated_day is None:
         return ""
     if zone.get("danger_today"):
-        return f" (read d{updated_day}; zombies today)"
+        return f" (zombies today, items d{updated_day})"
     stale = current_day is not None and current_day - updated_day >= 1
-    return f" (d{updated_day})" + (" [STALE]" if stale else "")
+    return f" (updated d{updated_day}" + (", STALE)" if stale else ")")
 
 
 # Heavy parts that assemble into a defensive object; Fata files them under Miscellaneous.
@@ -298,7 +298,8 @@ def _zone_status(zone: dict) -> str:
     if not zone.get("dried") and zone.get("scav_level"):
         parts.append(zone["scav_level"])
     if zone.get("excavated"):
-        parts.append(f"excavated day {zone['excavated_day']}" if zone.get("excavated_day") else "excavated")
+        parts.append(f"Scavenger-excavated d{zone['excavated_day']}" if zone.get("excavated_day")
+                     else "Scavenger-excavated")
     if zone.get("cp"):
         parts.append(f"CP {zone['cp']} at last update")
     return "".join(f", {p}" for p in parts)
@@ -527,7 +528,7 @@ def format_trapped(hits: list[dict], fmt_time) -> list[str]:
         extra = f", {h['ruin']}" if h["ruin"] else ""
         tp = " — platform teleport home available" if h["teleport"] else ""
         if h.get("cp_exact"):
-            cp = f"{h['cp_min']} CP{' (terrorised?)' if h['cp_min'] == 0 else ''} — TRAPPED"
+            cp = f"{h['cp_min']} CP{' (terrorised)' if h['cp_min'] == 0 else ''} — TRAPPED"
         else:
             cp = f"≥{h['cp_min']} CP"
         lines.append(f"  {', '.join(h['citizens'])} {h['coords']}{extra}: {h['zombies']} zombies vs {cp} ({when}){tp}")

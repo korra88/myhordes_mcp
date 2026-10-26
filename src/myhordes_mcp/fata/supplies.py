@@ -367,6 +367,15 @@ def format_risks(risks: list[dict], cp: int, items: int, slots: int) -> list[str
     return lines
 
 
+def _use_label(s: dict, names: dict[str, str]) -> str:
+    """Item name; water that gives no AP (already drunk for AP today, or Dehydrated) is
+    there for the thirst only."""
+    label = names[s["item"]]
+    if s["item"] == "water" and s["ap"] == s["ap_before"]:
+        label += " (thirst only, no AP)"
+    return label
+
+
 def key_steps(steps: list[dict], route: list[tuple[int, int]], ending: str,
               names: dict[str, str] | None = None, risky: dict | None = None) -> list[str]:
     """Only what the player has to act on or watch: items used, thirst changes, risky
@@ -378,7 +387,7 @@ def key_steps(steps: list[dict], route: list[tuple[int, int]], ending: str,
         z = f"[{s['zone'][0]}/{s['zone'][1]}]"
         if s["kind"] == "use":
             when = f"{s['ap_before']} AP, exception" if s["ap_before"] else "0 AP"
-            out.append(f"- after move {s['move']}, at {z} ({when}) → **{names[s['item']]}**: "
+            out.append(f"- after move {s['move']}, at {z} ({when}) → **{_use_label(s, names)}**: "
                        f"{s['ap']} AP, {s['ep']} EP, {THIRST[s['thirst']]}")
             prev_th = s["thirst"]
         elif s["kind"] == "move":
@@ -496,7 +505,7 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
             lines.append(f"| {s['move']} | {z} | {km(*s['zone'])} | move ({s['paid']}){flag} | {s['ap']} | {s['ep']} "
                          f"| {s['counter']} | {THIRST[s['thirst']]} |")
         elif s["kind"] == "use":
-            lines.append(f"| | {z} | | **{names[s['item']]}**"
+            lines.append(f"| | {z} | | **{_use_label(s, names)}**"
                          + (f" (at {s['ap_before']} AP)" if s["ap_before"] else "")
                          + f" | {s['ap']} | {s['ep']} | {s['counter']} | {THIRST[s['thirst']]} |")
         else:

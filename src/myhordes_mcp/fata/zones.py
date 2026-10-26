@@ -91,9 +91,21 @@ def format_scout(data: dict) -> str:
         lines.append("")
     if scout_only:
         lines.append(f"### Scout estimates ({len(scout_only)} zones beyond explored map)")
-        for z in sorted(scout_only, key=lambda z: -z["zombies"]):
-            lines.append(f"  {z['coords']}: ~{z['zombies']} (d{z['scouted_day']})"
-                         + _staleness_tag(z.get("scouted_day"), current_day))
+
+        def _est_day(z: dict) -> str:
+            d = z.get("scouted_day")
+            old = d is not None and isinstance(current_day, int) and current_day - d >= 1
+            return f"d{d}, stale" if old else f"d{d}"
+
+        for z in sorted((z for z in scout_only if z["zombies"] > 0), key=lambda z: -z["zombies"]):
+            lines.append(f"  {z['coords']}: ~{z['zombies']} ({_est_day(z)})")
+        empty: dict = {}
+        for z in scout_only:
+            if z["zombies"] <= 0:
+                empty[_est_day(z)] = empty.get(_est_day(z), 0) + 1
+        if empty:
+            lines.append("  ~0: " + ", ".join(f"{n} zones ({d})" for d, n in
+                                              sorted(empty.items(), key=lambda kv: kv[0], reverse=True)))
     return "\n".join(lines).rstrip()
 
 
@@ -307,10 +319,10 @@ def format_zone_path(
                 desc += ", dried"
             when = ""
             if day is not None and today:
-                when = f" (read d{day}; zombies today)"
+                when = f" (zombies today, items d{day})"
             elif day is not None:
-                stale = " STALE" if (isinstance(current_day, int) and current_day - day >= 1) else ""
-                when = f" (d{day}{stale})"
+                stale = ", STALE" if (isinstance(current_day, int) and current_day - day >= 1) else ""
+                when = f" (updated d{day}{stale})"
             cells = sorted(groups[key], key=lambda t: (t[0], t[1]["coords"]))
             coords = ", ".join(f"{z['coords']} {ap}AP" for ap, z in cells)
             out.append(f"    {desc}{when}: {coords}")

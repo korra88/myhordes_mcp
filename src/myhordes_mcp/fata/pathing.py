@@ -540,14 +540,25 @@ def find_safe_path(
         lines.append(f"No path found within {ap_limit} AP.")
         return "\n".join(lines)
 
+    def _zombies_on(path: list[tuple[int, int]]) -> str:
+        """'zombies on route: [3|0] 1, [4|2] ~5' — counts of today, else estimates (~)."""
+        parts = []
+        for p in path[1:]:
+            cc = cell_class.get(p)
+            if cc and cc.get("zombies"):
+                parts.append(f"[{p[0]}|{p[1]}] {'' if cc.get('fresh') else '~'}{cc['zombies']}")
+        unknown = sum(1 for p in path[1:] if p not in cell_class)
+        out = "zombies on route: " + (", ".join(parts) if parts else "none")
+        return out + (f"; {unknown} never-explored zones" if unknown else "")
+
     lines.append("### Summary")
     if safest is not None:
         s_risk, s_ap, s_path, _, _ = safest
         trap_count = sum(1 for p in s_path if cell_class.get(p, {}).get("tag") in ("TRAPPED", "TRAP_RISK"))
-        lines.append(f"Safest: {s_ap} AP, {s_risk:.1f} exposure, {trap_count} trap zones on route")
+        lines.append(f"Safest: {s_ap} AP, {trap_count} trap zones; {_zombies_on(s_path)}")
     if shortest is not None:
         sh_risk, sh_ap, sh_path, sh_flashes, _ = shortest
-        lines.append(f"Shortest: {sh_ap} AP, {sh_risk:.1f} exposure, {sh_flashes} flash items used")
+        lines.append(f"Shortest: {sh_ap} AP, {sh_flashes} flash items used; {_zombies_on(sh_path)}")
     elif safest is not None:
         lines.append("Shortest path is identical to safest.")
     lines.append("")

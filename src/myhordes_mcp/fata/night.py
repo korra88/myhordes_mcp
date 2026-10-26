@@ -9,21 +9,13 @@ from .planning import alive_by_day
 TOWN_COORDS = "[0|0]"
 
 
-def _gh_day(gh: dict | None, day: int) -> dict:
+def _gh_deaths(gh: dict | None, day: int) -> int | None:
+    """Gest'Hordes death count for the night of `day`, to cross-check Fata's cadavers."""
     if not gh or "error" in gh:
-        return {}
-    atk = gh.get("data", {}).get("stats", {}).get("atk", {})
-
-    def at(key):
-        lst = atk.get(key, [])
-        return lst[day] if 0 <= day < len(lst) else None
-
-    # attaque_jour/def/estimates put day N at index N; morts_reels puts it at N-1
-    # (checked against Fata cadavers on towns 8212 and 7493).
-    deaths = atk.get("morts_reels", [])
-    return {"attack": at("attaque_jour"), "defense": at("def"),
-            "est_min": at("min_estim"), "est_max": at("max_estim"),
-            "deaths": deaths[day - 1] if 1 <= day <= len(deaths) else None}
+        return None
+    # morts_reels puts day N at index N-1 (checked against Fata cadavers on towns 8212 and 7493).
+    deaths = gh.get("data", {}).get("stats", {}).get("atk", {}).get("morts_reels", [])
+    return deaths[day - 1] if 1 <= day <= len(deaths) else None
 
 
 def night_report(data: dict, day: int, gh: dict | None = None, day_data: dict | None = None) -> dict:
@@ -32,8 +24,8 @@ def night_report(data: dict, day: int, gh: dict | None = None, day_data: dict | 
     current = data["meta"].get("day") or 0
     alive = alive_by_day(data)
     deaths = [d for d in data["deaths"] if d["day"] == day]
-    g = _gh_day(gh, day)
-    defense = g.get("defense")
+    paper = (data.get("attacks") or {}).get(day) or {}
+    defense = paper.get("defense")
     if defense is None and day_data and not day_data.get("error"):
         defense = day_data["defense"].get("total")
     estimate = None
@@ -41,8 +33,6 @@ def night_report(data: dict, day: int, gh: dict | None = None, day_data: dict | 
         est = day_data["estimations"].get("today", {})
         if est.get("min") is not None:
             estimate = (est["min"], est["max"], bool(est.get("maxed")))
-    if estimate is None and g.get("est_min") is not None:
-        estimate = (g["est_min"], g["est_max"], False)
     return {
         "day": day,
         "closed": day < current,
@@ -50,9 +40,9 @@ def night_report(data: dict, day: int, gh: dict | None = None, day_data: dict | 
         "alive_before": alive.get(day),
         "alive_after": alive.get(day + 1),
         "defense": defense,
-        "attack": g.get("attack"),
+        "attack": paper.get("zombies"),
         "estimate": estimate,
-        "gh_deaths": g.get("deaths"),
+        "gh_deaths": _gh_deaths(gh, day),
     }
 
 
@@ -89,5 +79,5 @@ def format_night_report(data: dict, day: int, gh: dict | None = None, day_data: 
     if r["gh_deaths"] is not None and r["gh_deaths"] != len(r["deaths"]):
         lines.append(f"Note: Gest'Hordes counts {r['gh_deaths']} death(s) for this night — check with players.")
     lines.append("")
-    lines.append("Sources: deaths from Fata cadavers; attack/defense from Gest'Hordes, falling back to the Fata page of that day.")
+    lines.append("Sources: Fata only (deaths from cadavers, attack and defense from the town newspaper, else the Fata page of that day); Gest'Hordes only cross-checks the death count.")
     return "\n".join(lines)

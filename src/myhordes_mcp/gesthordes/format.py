@@ -1,4 +1,4 @@
-"""Gest'Hordes formatters: attack forecast/distribution, defence and season-point extraction."""
+"""Gest'Hordes formatters: attack forecast/distribution and season-point extraction."""
 
 
 def extract_season_points(data: dict) -> int | None:
@@ -9,38 +9,9 @@ def extract_season_points(data: dict) -> int | None:
         return None
 
 
-def extract_current_defense(data: dict) -> dict | None:
-    """Extract current-day Gest'Hordes defence breakdown as a flat dict.
-
-    Returns keys: watchers, temporary, dead_bonus (all int), or None on failure.
-    These are sources that Fata Morgana doesn't break out individually.
-    """
-    if "error" in data:
-        return None
-    stats = data.get("data", {}).get("stats", {})
-    current_day = stats.get("current_ville_jour")
-    if current_day is None:
-        return None
-
-    def_block = stats.get("def", {})
-    days = def_block.get("day", [])
-    if current_day not in days:
-        return None
-    i = days.index(current_day)
-
-    def _get(lst):
-        v = lst[i] if i < len(lst) else None
-        return v if v is not None else 0
-
-    return {
-        "watchers": _get(def_block.get("veilleurs", [])),
-        "temporary": _get(def_block.get("tempos", [])),
-        "dead_bonus": _get(def_block.get("morts", [])),
-    }
-
-
 def format_attack_forecast(data: dict) -> str:
-    """Format attack forecast and defence history from Gest'Hordes stats."""
+    """Format the attack forecast from Gest'Hordes stats. Defense is left out: the
+    tools take it from Fata only (get_defense_status, get_night_report)."""
     if "error" in data:
         return f"Error fetching Gest'Hordes stats: {data['error']}"
 
@@ -56,7 +27,6 @@ def format_attack_forecast(data: dict) -> str:
     atk_min = stats.get("atk", {}).get("atk_min_theo", [])
     atk_max = stats.get("atk", {}).get("atk_max_theo", [])
     atk_actual = stats.get("atk", {}).get("attaque_jour", [])
-    def_actual = stats.get("atk", {}).get("def", [])
     est_min = stats.get("atk", {}).get("min_estim", [])
     est_max = stats.get("atk", {}).get("max_estim", [])
     deaths = stats.get("atk", {}).get("morts_reels", [])
@@ -77,8 +47,8 @@ def format_attack_forecast(data: dict) -> str:
     # --- Tonight and next few days ---
     lines.append("### Theoretical Attack Range (Gest'Hordes model)")
     lines.append("")
-    lines.append(f"{'Day':<5} {'Min':>7} {'Max':>7}  {'Actual':>8}  {'GH Est Min':>10}  {'GH Est Max':>10}  {'Def':>7}  Deaths")
-    lines.append("-" * 70)
+    lines.append(f"{'Day':<5} {'Min':>7} {'Max':>7}  {'Actual':>8}  {'GH Est Min':>10}  {'GH Est Max':>10}  Deaths")
+    lines.append("-" * 62)
 
     # Show history + lookahead (up to day+5 or max_day)
     show_from = max(1, current_day - 3)
@@ -90,7 +60,6 @@ def format_attack_forecast(data: dict) -> str:
         actual = _val(atk_actual, d)
         gh_min = _val(est_min, d)
         gh_max = _val(est_max, d)
-        defence = _val(def_actual, d)
         died = _val(deaths, d - 1)  # morts_reels is 0-based (day 1 at index 0)
 
         marker = " ◄ tonight" if d == current_day else ""
@@ -102,7 +71,6 @@ def format_attack_forecast(data: dict) -> str:
             f"{(str(actual) if actual is not None else '—'):>8}  "
             f"{(str(gh_min) if gh_min is not None else '—'):>10}  "
             f"{(str(gh_max) if gh_max is not None else '—'):>10}  "
-            f"{(str(defence) if defence is not None else '—'):>7}  "
             f"{(str(died) if died is not None else '—')}"
             f"{marker}"
         )
@@ -128,36 +96,7 @@ def format_attack_forecast(data: dict) -> str:
 
     lines.append("")
 
-    # --- Defence history summary ---
-    def_total = stats.get("def", {})
-    def_days = def_total.get("day", [])
-    def_totals = def_total.get("total", [])
-    def_buildings = def_total.get("chantiers_up_chantier_ame", [])
-    def_items = def_total.get("objet_def", [])
-    def_homes = def_total.get("maison_citizen", [])
-    def_guardians = def_total.get("gardiens", [])
-    def_watchers = def_total.get("veilleurs", [])
-
-    if def_days and any(v is not None for v in def_totals):
-        lines.append("### Defence Breakdown History")
-        lines.append("")
-        lines.append(f"{'Day':<5} {'Total':>7}  {'Buildings':>10}  {'Items':>6}  {'Homes':>6}  {'Guards':>7}  {'Watch':>6}")
-        lines.append("-" * 60)
-        for i, d in enumerate(def_days):
-            if i >= len(def_totals) or def_totals[i] is None:
-                continue
-            lines.append(
-                f"D{d:<4} "
-                f"{str(def_totals[i]):>7}  "
-                f"{str(def_buildings[i] if i < len(def_buildings) and def_buildings[i] is not None else '—'):>10}  "
-                f"{str(def_items[i] if i < len(def_items) and def_items[i] is not None else '—'):>6}  "
-                f"{str(def_homes[i] if i < len(def_homes) and def_homes[i] is not None else '—'):>6}  "
-                f"{str(def_guardians[i] if i < len(def_guardians) and def_guardians[i] is not None else '—'):>7}  "
-                f"{str(def_watchers[i] if i < len(def_watchers) and def_watchers[i] is not None else '—'):>6}"
-            )
-        lines.append("")
-
-    lines.append("_Source: Gest'Hordes community stats. Theoretical ranges use the standard MyHordes attack formula. Actual counts are crowd-reported._")
+    lines.append("_Source: Gest'Hordes community stats. Theoretical ranges use the standard MyHordes attack formula. Actual counts are crowd-reported. Defense: get_defense_status (Fata)._")
 
     return "\n".join(lines)
 

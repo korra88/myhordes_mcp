@@ -25,7 +25,7 @@ Fata Morgana crowd-sourced — updates only when a player sends their data to Fa
 
 **Don't use log entry timestamps to guess current time.** `daily-log.md` records when *you* last wrote entry, not when Fata last updated. "~late evening" log entry + stale Fata snapshot ≠ currently late evening.
 
-**Zones** carry their own date: `(zone read by X, day N; zombies seen today)` means today's zombie estimate (Observation Platform radius) but items and depletion from day N; `[STALE]` means everything is from day N.
+**Zones** carry their own date: `(zombies today, items dN)` means today's zombie estimate (Observation Platform radius) but items and depletion from day N; `(updated dN, STALE)` means everything is from day N.
 
 ## Town Memory
 
