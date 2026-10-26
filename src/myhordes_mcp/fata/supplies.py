@@ -434,41 +434,75 @@ def waypoint_moves(steps: list[dict], waypoints: list[tuple[int, int]]) -> set[i
     return hits
 
 
-def key_steps(steps: list[dict], route: list[tuple[int, int]], ending: str,
+def _turns(path: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """The zones where a walk changes direction, plus its last zone."""
+    out = []
+    for a, b, c in zip(path, path[1:], path[2:]):
+        if (b[0] - a[0], b[1] - a[1]) != (c[0] - b[0], c[1] - b[1]):
+            out.append(b)
+    return out + path[-1:]
+
+
+def itinerary(steps: list[dict], route: list[tuple[int, int]], ending: str,
               names: dict[str, str] | None = None, risky: dict | None = None,
               waypoints: list[tuple[int, int]] | None = None) -> list[str]:
-    """Only what the player has to act on or watch: waypoints reached, items used, thirst
-    changes, risky zones, arrival."""
+    """One numbered list in walking order: each walk (turning points only, moves, what is
+    left) and, between walks, what to use where. A walk ends where something happens:
+    an item is used, a waypoint is reached, thirst changes, a risky zone starts."""
     names = names or {k: it.label for k, it in ITEMS.items()}
     risky = risky or {}
     reached = waypoint_moves(steps, waypoints or [])
-    out, prev_th, prev_risk = [], None, None
+    out: list[str] = []
+    walk: list[dict] = []
+    pos = route[0]
+    prev_th, prev_risk = None, None
+
+    def fmt(z):
+        return f"[{z[0]}/{z[1]}]"
+
+    def flush(events: list[str]):
+        nonlocal walk, pos
+        if not walk:
+            return
+        path = [pos] + [w["zone"] for w in walk]
+        last = walk[-1]
+        n = len(walk)
+        text = (f"Walk {fmt(pos)} → " + " → ".join(fmt(z) for z in _turns(path))
+                + f" ({n} move{'s' if n > 1 else ''}) — {last['ap']} AP, {last['ep']} EP left")
+        out.append(text + "".join(f"; {e}" for e in events))
+        pos, walk = last["zone"], []
+
     for s in steps:
-        z = f"[{s['zone'][0]}/{s['zone'][1]}]"
         if s["kind"] == "use":
-            when = f"{s['ap_before']} AP, exception" if s["ap_before"] else "0 AP"
-            out.append(f"- after move {s['move']}, at {z} ({when}) → **{_use_label(s, names)}**: "
-                       f"{s['ap']} AP, {s['ep']} EP, {THIRST[s['thirst']]}")
+            flush([])
+            when = f" (at {s['ap_before']} AP, exception)" if s["ap_before"] else ""
+            out.append(f"At {fmt(s['zone'])}{when}: **{_use_label(s, names)}** → {s['ap']} AP, "
+                       f"{s['ep']} EP, {THIRST[s['thirst']]}")
+            pos = s["zone"]
             prev_th = s["thirst"]
         elif s["kind"] == "move":
-            if s["move"] in reached and s is not steps[-1]:
-                out.append(f"- move {s['move']} to {z} → **waypoint reached**: {s['ap']} AP, {s['ep']} EP, "
-                           f"{THIRST[s['thirst']]}")
+            walk.append(s)
+            events = []
             gid, what = risky.get(s["zone"], (None, None))
             if gid is not None and gid != prev_risk:
-                out.append(f"- move {s['move']} to {z} → ⚠ {what}")
+                events.append(f"⚠ {fmt(s['zone'])}: {what}")
             prev_risk = gid
             if prev_th is not None and s["thirst"] > prev_th:
-                out.append(f"- move {s['move']} to {z} → becomes **{THIRST[s['thirst']]}**")
+                events.append(f"becomes **{THIRST[s['thirst']]}** at {fmt(s['zone'])}")
             prev_th = s["thirst"]
+            if s["move"] in reached:
+                events.append(f"**waypoint {fmt(s['zone'])} reached**")
+            if events:
+                flush(events)
         else:
-            out.append(f"- move {s['move'] if 'move' in s else '?'} {z} → **dies of dehydration**")
+            flush([])
+            out.append(f"At {fmt(s['zone'])}: **dies of dehydration**")
     moves = [s for s in steps if s["kind"] == "move"]
-    if moves:
-        z = moves[-1]["zone"]
-        out.append(f"- move {moves[-1]['move']} to [{z[0]}/{z[1]}] → {ending}: {moves[-1]['ap']} AP, "
-                   f"{moves[-1]['ep']} EP, {THIRST[moves[-1]['thirst']]}")
-    return out
+    if walk:
+        flush([ending])
+    elif moves and out:
+        out[-1] += f"; {ending}"
+    return [f"{i}. {line}" for i, line in enumerate(out, 1)]
 
 
 def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
@@ -567,10 +601,10 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
     risky = {z: (i, _risk_what(r, cp)) for i, r in enumerate(risks) for z in (r.get("zones") or [r["zone"]])}
 
     if not step_table:
-        lines += ["", "**Key steps** (full table: step_table=True)"]
-        ending = ("stuck, out of points" if short else "dead" if dead
-                  else "teleport home" if teleport else "arrival")
-        lines += key_steps(steps, route, ending, names, risky, waypoints)
+        lines += ["", "**Itinerary** (in walking order; every move: step_table=True)"]
+        ending = ("**stuck, out of points**" if short else "**dead**" if dead
+                  else "then **teleport home**" if teleport else "**arrival**")
+        lines += itinerary(steps, route, ending, names, risky, waypoints)
         return "\n".join(lines)
     reached = waypoint_moves(steps, waypoints or [])
 

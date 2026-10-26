@@ -475,6 +475,16 @@ async def find_expedition_path(
     )
 
 
+def _walked_again(route: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Zones a route enters more than once (town aside), in order."""
+    seen, again = set(), []
+    for c in route:
+        if c in seen and c != (0, 0) and c not in again:
+            again.append(c)
+        seen.add(c)
+    return again
+
+
 @mcp.tool()
 async def plan_expedition_supplies(
     waypoints: str,
@@ -510,17 +520,20 @@ async def plan_expedition_supplies(
     EP is spent first when leaving a zone 3+ km from town.
 
     The route is the safest path (as find_expedition_path) from `start` through the
-    waypoints, back to `start` if round_trip: the way back is a loop over other zones (the
-    outbound ones are already dug) and, from town with the Observation Platform level 3+,
-    ends on the best teleport zone; when the loop is not feasible but retracing is, it
-    retraces and says so. Accounts for the Labyrinth's 1 AP.
+    waypoints, back to `start` if round_trip. Legs after the first avoid zones already
+    walked (a zone can be dug once a day) unless that needs more supplies; a round trip
+    from town with the Observation Platform level 3+ ends on the best teleport zone. The
+    output names the zones walked again. Accounts for the Labyrinth's 1 AP.
     The plan minimises, in order: death, running out of AP, ending Dehydrated, ending
-    Thirsty, items carried (slots), alcohol, drugs, AP wasted. At most one drug and one
-    alcohol (warned about). Output: items to bring with slot count, warnings, route risks
-    (zones where the group may get blocked: zombies above its CP, or never scouted — each
-    with the extra AP to go around it or the zombies to kill), and the key steps (where to
-    eat/drink, thirst changes, risky zones, arrival); step_table=True for every move.
-    Report the risks as given: do not invent a different route.
+    Thirsty, items carried (slots), alcohol, drugs, premium items (Twinoid, 7 AP food),
+    AP wasted. At most one drug and one alcohol (warned about). Output: items to bring
+    with slot count, the other ways to cover drugs/alcohol with the bank stock, warnings,
+    route risks (zones where the group may get blocked: zombies above its CP, or never
+    scouted — each with the extra AP to go around it or the zombies to kill), and a
+    numbered Itinerary in walking order (walks with turning points, what to use where,
+    thirst changes, waypoints, risky zones, arrival); step_table=True for every move.
+    Give the Itinerary as it is, and report the risks as given: do not invent a different
+    route.
 
     Defaults: 6 AP, no scout, no shoes, no bike, no Scout's Lair, nothing drunk or eaten
     yet, carrying water and one 7 AP food. Every extra must be declared by the player.
@@ -597,31 +610,30 @@ async def plan_expedition_supplies(
         group_cp = 2
         if party:
             group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
+    # Legs after the first avoid zones already walked: their one dig of the day is used.
+    avoid = len(points) >= 3
     back = None
-    if len(points) >= 3 and points[-1] == points[0]:
-        # Round trip: the way back is a loop (outbound zones are already dug), ending
-        # on the best Observation Platform teleport zone, as find_expedition_path.
-        out = safest_route(data, points[:-1], group_cp)
+    if avoid and points[-1] == points[0]:
+        # Round trip: the way back is a loop ending on the best Observation Platform
+        # teleport zone, as find_expedition_path.
+        out = safest_route(data, points[:-1], group_cp, avoid_revisits=True)
         back = loop_return(data, out, group_cp) if out else None
     if back is not None:
         route = out + back["route"][1:]
-        note = "Way back over other zones than the way out (already dug)."
-        if back["reused"]:
-            note += " It still crosses " + ", ".join(f"[{x}|{y}]" for x, y in back["reused"]) + "."
+        note = ""
         if back["teleport_from"]:
             tx, ty = back["teleport_from"]
             end_ap = 0
-            note += (f" Observation Platform level {back['level']}: teleport home from [{tx}|{ty}] "
-                     f"({back['saved_ap']} AP saved; needs the gate open).")
+            note = (f"Observation Platform level {back['level']}: teleport home from [{tx}|{ty}] "
+                    f"({back['saved_ap']} AP saved; needs the gate open).")
         else:
-            route, end_ap, end_note = supplies.end_requirements(data, route, points[-1])
-            note = f"{note} {end_note}".strip()
+            route, end_ap, note = supplies.end_requirements(data, route, points[-1])
     else:
-        route = safest_route(data, points, group_cp)
+        route = safest_route(data, points, group_cp, avoid_revisits=avoid)
         if route is None:
             return "Error: no route found between the given zones (40 AP cap per leg)."
         route, end_ap, note = supplies.end_requirements(data, route, points[-1])
-    risks = route_risks(data, route, points, group_cp)
+    risks = route_risks(data, route, points, group_cp, avoid_revisits=avoid)
     st = supplies.Start(
         ap=start_ap, ep=None if start_ep < 0 else start_ep, counter=thirst_counter, thirst=level,
         drank=already_drank, ate=already_ate, drugged=drug_taken_today,
@@ -629,10 +641,11 @@ async def plan_expedition_supplies(
         sw_ap=sw_ap, sw_ep=sw_ep,
     )
     result = supplies.plan(route, st, items, end_ap=end_ap, slots=free_slots)
-    if back is not None:
-        # The loop is worth it only when it costs no more supplies than retracing (it is
-        # usually a few AP longer): compare death, AP short, thirst and items carried.
-        alt_route = safest_route(data, points, group_cp)
+    if avoid:
+        # Avoiding zones already walked is worth it only when it costs no more supplies
+        # (compare death, AP short, thirst and items carried) than the shortest routes;
+        # among those, the one walking the fewest zones again.
+        alt_route = safest_route(data, points, group_cp, avoid_revisits=True, revisit_weight=0.01)
         if alt_route is not None:
             alt_route, alt_end, alt_note = supplies.end_requirements(data, alt_route, points[-1])
             alt = supplies.plan(alt_route, st, items, end_ap=alt_end, slots=free_slots)
@@ -640,10 +653,14 @@ async def plan_expedition_supplies(
                 extra = (len(route) - 1) - (len(alt_route) - 1)
                 why = ("not feasible with these supplies" if result["cost"][0] or result["cost"][1]
                        else "needs more supplies")
-                route, end_ap, result = alt_route, alt_end, alt
-                risks = route_risks(data, route, points, group_cp)
-                note = (f"Way back retraces the way out (its zones are already dug): the loop over "
-                        f"other zones is {extra} AP longer and {why}. {alt_note}").strip()
+                route, end_ap, result, note = alt_route, alt_end, alt, alt_note
+                risks = route_risks(data, route, points, group_cp, avoid_revisits=True)
+                note = (f"Avoiding zones already walked would be {extra} AP longer and {why}. "
+                        f"{note}").strip()
+        again = _walked_again(route)
+        if again:
+            note = (f"Walks again (already dug today): {', '.join(f'[{x}|{y}]' for x, y in again)}. "
+                    f"{note}").strip()
     path = " → ".join(f"[{x}|{y}]" for x, y in points)
     notes = [data_updated(data["meta"]), note, f"Route safety computed for {group_cp} CP." + (" " + "; ".join(breakdown) if breakdown else "")]
     if not available.strip():

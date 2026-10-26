@@ -18,40 +18,29 @@ from .risk import (
 )
 
 
-# Risk weight assigned to cells with no scout data, only a danger level estimate.
-# Midpoints of each danger band (0 zombies / 1-2 / 3-5 / 6+).
-_DANGER_RISK = {0: 0, 1: 1.5, 2: 4.0, 3: 6.0}
-
-
-# Risk penalty for cells with no information at all (unexplored).
-# Set above the highest danger band so known-clear paths are preferred,
-# but unknown cells are still traversable when no other route exists.
-_UNKNOWN_RISK = 8.0
-
-
 MAX_PATH_AP = 40
 
 
-# Safest-path cost of one move, on the same scale as zombie risk: a detour is taken only
-# when it avoids more risk than the AP it adds. Without it any zombie, even one the group
-# easily controls, was worth an unlimited detour.
+# ---------------------------------------------------------------------------
+# Walkability: how much entering a zone is worth avoiding, in moves of detour (0 = ideal,
+# 1 = worth one extra move). Route cost = moves x _AP_COST + walkability of each zone
+# entered. Internal only: answers show moves, AP and zombies, never these numbers.
+# One weight per reason, so a new reason to avoid a zone is one more entry here.
+# ---------------------------------------------------------------------------
+WALK = {
+    "at_limit": 1.0,          # zombies == CP: one more zombie traps the group
+    "stale_zombies": 0.5,     # zombies under CP, counted on an older day (may have grown)
+    "over_cp": 2.0,           # per zombie above CP, on top of the trap weight
+    "trap": 50.0,             # zombies above CP seen today: blocked
+    "trap_risk": 20.0,        # zombies above CP estimated (old count, spread, danger band)
+    "unknown": 8.0,           # never explored
+    "revisit": 1.0,           # already walked on this trip: its one dig of the day is used
+    "scout_detection": 50.0,  # Scout with Camouflage Vest in a trap zone: x detection chance
+}
+# Zones known only by a danger band, without an estimate (0 / 1-2 / 3-5 / 6+ zombies).
+_DANGER_WALK = {0: 0, 1: 1.5, 2: 4.0, 3: 6.0}
+# Cost of one move on the walkability scale.
 _AP_COST = 1.0
-
-
-# Risk of a zone the group controls (zombies <= CP) = share of the group's CP the zombies
-# use x this: 3 zombies vs CP 3 = 3.0 (borderline, one more zombie traps), 1 vs CP 5 = 0.6.
-_CONTROLLED_WEIGHT = 3.0
-
-
-# CP-aware trap penalties (added to base zombie risk in safest-path Dijkstra).
-_TRAP_PENALTY_CERTAIN = 50.0   # Fresh data confirms zombies >= group_cp
-
-
-_TRAP_PENALTY_STALE = 20.0     # Stale/estimated zombies >= group_cp
-
-
-# Scout detection cost: detection_probability * this = risk added per cell.
-_SCOUT_DETECTION_COST = 50.0
 
 
 def _scout_detection(zone_zombies: int, total_cp: int) -> tuple[float, float]:
@@ -137,6 +126,37 @@ def _classify_cell(
     return {"tag": "SAFE", "zombies": effective, "fresh": fresh, "age": age}
 
 
+def walkability(
+    zone: dict | None,
+    current_day: int | None = None,
+    coords: tuple[int, int] | None = None,
+    spread_map: dict | None = None,
+    *,
+    group_cp: int = 2,
+    scout_mode: bool = False,
+    revisit: bool = False,
+) -> float:
+    """Sum of the WALK weights that apply to entering this zone (0 = nothing to avoid)."""
+    c = _classify_cell(zone, current_day, coords, spread_map, group_cp)
+    tag, zombies = c["tag"], c["zombies"]
+    w = WALK["revisit"] if revisit else 0.0
+    if tag == "UNKNOWN":
+        return w + WALK["unknown"]
+    if zombies is None:
+        return w + _DANGER_WALK.get(zone.get("danger", 0), WALK["unknown"])
+    if tag in ("TRAPPED", "TRAP_RISK"):
+        w += max(0, zombies - group_cp) * WALK["over_cp"]
+        if scout_mode:
+            day_pct, _ = _scout_detection(zombies, group_cp)
+            return w + max(day_pct, 0.01) * WALK["scout_detection"] * (1.0 if tag == "TRAPPED" else 0.5)
+        return w + WALK["trap" if tag == "TRAPPED" else "trap_risk"]
+    if zombies > 0 and zombies >= group_cp:
+        w += WALK["at_limit"]
+    if zombies > 0 and not c["fresh"]:
+        w += WALK["stale_zombies"]
+    return w
+
+
 def _cell_risk(
     zone: dict | None,
     current_day: int | None = None,
@@ -147,59 +167,22 @@ def _cell_risk(
     scout_mode: bool = False,
     mode: str = "safest",
 ) -> float:
-    """Return the risk cost for a single cell.
+    """Step cost for one zone.
 
-    Modes:
-      "safest"  — minimise zombie exposure; trapped cells get heavy penalty.
-      "shortest" — minimise AP (cost=1 per cell); trapped cells are inf
-                   unless scout_mode (then detection cost). Flash consumption
-                   is handled by the Dijkstra caller, not here.
-
-    A zone the group controls costs the share of its CP the zombies use, so a higher
-    CP makes the same zombies cheaper.
+    "safest"   — walkability (see WALK).
+    "shortest" — 1 per move; trap zones are inf (the caller spends a flash item on them)
+                 unless scout_mode, which pays the detection risk instead.
     """
-    classification = _classify_cell(zone, current_day, coords, spread_map, group_cp)
-    tag = classification["tag"]
-    zombies = classification["zombies"]
-
-    # Base zombie risk (used by safest mode and as tiebreaker)
-    if zone is None:
-        base_risk = _UNKNOWN_RISK
-    elif zombies is not None:
-        base_risk = float(zombies)
-    else:
-        danger = zone.get("danger", 0) if zone else 0
-        base_risk = _DANGER_RISK.get(danger, _UNKNOWN_RISK)
-
-    if mode == "shortest":
-        # Shortest mode: cost = 1 per cell (pure AP), with trap handling
-        if tag in ("TRAPPED", "TRAP_RISK"):
-            if scout_mode:
-                zm_est = zombies if zombies is not None else int(base_risk)
-                day_pct, _ = _scout_detection(zm_est, group_cp)
-                return 1.0 + day_pct * _SCOUT_DETECTION_COST * 0.01
-            # Non-scout trapped: caller handles flash logic; return inf to block
-            return float("inf")
-        return 1.0 + base_risk * 0.001  # epsilon tiebreaker
-
-    # Safest mode
-    if tag == "TRAPPED":
+    if mode != "shortest":
+        return walkability(zone, current_day, coords, spread_map, group_cp=group_cp,
+                           scout_mode=scout_mode)
+    c = _classify_cell(zone, current_day, coords, spread_map, group_cp)
+    if c["tag"] in ("TRAPPED", "TRAP_RISK"):
         if scout_mode:
-            zm_est = zombies if zombies is not None else int(base_risk)
-            day_pct, _ = _scout_detection(zm_est, group_cp)
-            return base_risk + max(day_pct, 0.01) * _SCOUT_DETECTION_COST
-        return base_risk + _TRAP_PENALTY_CERTAIN
-    if tag == "TRAP_RISK":
-        if scout_mode:
-            zm_est = zombies if zombies is not None else int(base_risk)
-            day_pct, _ = _scout_detection(zm_est, group_cp)
-            return base_risk + max(day_pct, 0.01) * _SCOUT_DETECTION_COST * 0.5
-        return base_risk + _TRAP_PENALTY_STALE
-    if tag == "UNKNOWN":
-        return _UNKNOWN_RISK
-    if tag in ("SAFE", "STALE") and zombies is not None:
-        return zombies / max(group_cp, 1) * _CONTROLLED_WEIGHT
-    return base_risk
+            day_pct, _ = _scout_detection(c["zombies"] or 0, group_cp)
+            return 1.0 + day_pct * WALK["scout_detection"] * 0.01
+        return float("inf")
+    return 1.0 + walkability(zone, current_day, coords, spread_map, group_cp=group_cp) * 0.001
 
 
 def _zone_grid(data: dict, group_cp: int):
@@ -223,13 +206,19 @@ def _zone_grid(data: dict, group_cp: int):
 
 
 def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int = 2,
-                 banned: frozenset = frozenset()) -> list[tuple[int, int]] | None:
-    """Safest path through `points` in order (Dijkstra on zombie risk + _AP_COST per move),
-    as the list of zones walked, start included. `banned` zones are never entered.
+                 banned: frozenset = frozenset(), revisit: frozenset = frozenset(),
+                 avoid_revisits: bool = False,
+                 revisit_weight: float | None = None) -> list[tuple[int, int]] | None:
+    """Safest path through `points` in order (Dijkstra on moves + walkability), as the list
+    of zones walked, start included. `banned` zones are never entered; `revisit` zones (and,
+    with avoid_revisits, the zones earlier legs walked) cost WALK["revisit"] to enter again,
+    or `revisit_weight` (a tiny one = fewest zones walked again among the shortest routes).
     None if a leg has no path."""
+    rw = WALK["revisit"] if revisit_weight is None else revisit_weight
     zone_map, _, spread_map, cd = _zone_grid(data, group_cp)
     route = [points[0]]
     for (x1, y1), (x2, y2) in zip(points, points[1:]):
+        seen = (revisit | (set(route) if avoid_revisits else set())) - {(0, 0), (x1, y1), (x2, y2)}
         margin = 3
         bx = (min(x1, x2) - margin, max(x1, x2) + margin)
         by = (min(y1, y2) - margin, max(y1, y2) + margin)
@@ -248,8 +237,8 @@ def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int = 2,
                     continue
                 if n in banned:
                     continue
-                step = _cell_risk(zone_map.get(n), cd, coords=n, spread_map=spread_map,
-                                  group_cp=group_cp, mode="safest") + _AP_COST
+                step = (walkability(zone_map.get(n), cd, coords=n, spread_map=spread_map,
+                                    group_cp=group_cp) + _AP_COST + (rw if n in seen else 0.0))
                 cand = (risk + step, ap + 1)
                 if cand < best.get(n, (float("inf"), 0)):
                     best[n] = cand
@@ -275,13 +264,15 @@ def _route_exposure(data: dict, route: list[tuple[int, int]], group_cp: int) -> 
 def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> dict | None:
     """The way back of a trip that walked `out` (start first, destination last).
 
-    A zone can be dug once a day, so the way back avoids the outbound zones. When the
+    A zone can be dug once a day, so the way back avoids the outbound zones when that
+    costs at most WALK["revisit"] moves per zone (they stay walkable). When the
     trip starts in town and the Observation Platform teleports (level 3+), the walk ends
     on the teleport zone that is cheapest to reach: walking costs |x|+|y| but the
     teleport works by km, so the best end is off row 0 / column 0 ([2|1] at level 4).
 
-    The way back is the safest route (risk weighed against AP, as the way out). Returns {route, teleport_from, saved_ap, level, reused, retrace_ap} or
-    None if no way back exists. `reused` = outbound zones it still had to cross.
+    The way back is the safest route (moves + walkability, as the way out). Returns
+    {route, teleport_from, saved_ap, level, reused, retrace_ap} or None if no way back
+    exists. `reused` = outbound zones it walks again.
     """
     start, dest = out[0], out[-1]
     level = platform_level(data) if start == (0, 0) else None
@@ -294,34 +285,31 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> di
                 if (x, y) != (0, 0) and km(x, y) <= reach]
     else:
         ends = [start]
-    banned = frozenset(out[1:-1]) - {start}
+    walked = frozenset(out[1:-1]) - {start}
     best = None
-    for avoid in (banned, frozenset()):
-        for end in ends:
-            if end in avoid:
-                continue
-            route = safest_route(data, [dest, end], group_cp, banned=avoid)
-            if route is None:
-                continue
-            key = (len(route), _route_exposure(data, route, group_cp), -(abs(end[0]) + abs(end[1])))
-            if best is None or key < best[0]:
-                best = (key, route, end)
-        if best is not None:
-            break
+    for end in ends:
+        route = safest_route(data, [dest, end], group_cp, revisit=walked)
+        if route is None:
+            continue
+        reused = [c for c in route[1:] if c in walked]
+        key = (len(route) - 1 + WALK["revisit"] * len(reused), _route_exposure(data, route, group_cp),
+               -(abs(end[0]) + abs(end[1])))
+        if best is None or key < best[0]:
+            best = (key, route, end, reused)
     if best is None:
         return None
-    _, route, end = best
+    _, route, end, reused = best
     tele = end if reach else None
     return {"route": route, "teleport_from": tele,
             "saved_ap": abs(end[0]) + abs(end[1]) if tele else 0, "level": level,
-            "reused": [c for c in route[1:-1] if c in banned], "retrace_ap": len(out) - 1}
+            "reused": reused, "retrace_ap": len(out) - 1}
 
 
 RISKY_TAGS = ("TRAPPED", "TRAP_RISK", "UNKNOWN")
 
 
 def route_risks(data: dict, route: list[tuple[int, int]], points: list[tuple[int, int]],
-                group_cp: int = 2) -> list[dict]:
+                group_cp: int = 2, avoid_revisits: bool = False) -> list[dict]:
     """Stretches of `route` where the group may get blocked: zombies above its CP (seen
     today = TRAPPED, estimated from old data or spread = TRAP_RISK), or no data at all
     (UNKNOWN; consecutive unknown zones form one stretch).
@@ -330,7 +318,7 @@ def route_risks(data: dict, route: list[tuple[int, int]], points: list[tuple[int
     control back (zombies - CP), and the extra AP of the safest route that avoids the
     stretch (None = no way around within the 40 AP cap per leg, or a waypoint)."""
     _, cell_class, _, _ = _zone_grid(data, group_cp)
-    base = safest_route(data, points, group_cp)
+    base = safest_route(data, points, group_cp, avoid_revisits=avoid_revisits)
 
     groups: list[dict] = []
     prev_move = None
@@ -365,7 +353,8 @@ def route_risks(data: dict, route: list[tuple[int, int]], points: list[tuple[int
         g["detour_ap"] = None
         g["waypoint"] = bool(set(g["zones"]) & set(points))
         if base is not None and not g["waypoint"]:
-            alt = safest_route(data, points, group_cp, banned=frozenset(g["zones"]))
+            alt = safest_route(data, points, group_cp, banned=frozenset(g["zones"]),
+                               avoid_revisits=avoid_revisits)
             if alt is not None:
                 g["detour_ap"] = len(alt) - len(base)
     return merged
@@ -658,8 +647,8 @@ def find_safe_path(
                 f"Round trip {out_ap} + {walk} = {out_ap + walk} AP walked; {how}. "
                 f"Retracing the way out would cost {back['retrace_ap']} AP."]
         if back["reused"]:
-            head.append("No way back avoids every outbound zone: it crosses again "
-                        + ", ".join(f"[{x}|{y}]" for x, y in back["reused"]) + " (already dug).")
+            head.append("Walks again (avoiding them costs more moves): "
+                        + ", ".join(f"[{x}|{y}]" for x, y in back["reused"]) + " — already dug today.")
         rows = [_format_step(i, px, py) for i, (px, py) in enumerate(back["route"], start=out_ap)]
         return head + rows + [""]
 
