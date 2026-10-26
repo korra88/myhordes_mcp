@@ -71,8 +71,39 @@ Used at 0 AP they give the most.
 - Second drug the same day → **addict** (permanent; an addict not drugged at night dies).
 - Each item takes a rucksack slot; a Water Cooler Bottle holds 3 rations in one slot.
 
+## Rucksack capacity
+
+Keywords: rucksack, backpack, bag, slots, space, carry, carrying, inventory.
+Checked in `InventoryHandler::getSize`.
+
+- **4 slots** for a resident. Profession tools and the uniform add their own slot (they
+  never take free space). Hero skills add 1–3 slots (wiki: a hero has 5; "A place for
+  everything" adds more).
+- Ultra-Rucksack or Shopping Trolley +3, else Manbag +2; Utility Belt +2 stacks with them.
+  The container takes a slot itself: net +2 / +1 / +1. The Shopping Trolley is heavy.
+
+## Digging (scavenging a zone)
+
+Keywords: dig, digging, scavenge, scavenging, search, auto-search, dried, depleted,
+exhausted zone, find items, dig all day.
+Checked in `CitizenChanceQueryListener::getDigChances`, `ZoneHandler`, `MapMaker`, town defaults.
+
+- **Chance per dig: 60%**, **80% for a Scavenger**. A **dried / depleted** zone: **35%**
+  for everyone (no profession or status bonus there), and it gives only Rotting Log and
+  Scrap Metal (wiki).
+- Night (in-game 19:00–06:59): −10%, a quarter of that with a light (Torch, lit lamp) on
+  the zone floor. Not depleted only: Learned Camper +10%, Drunk −20%, eye wound halves it.
+  Result kept between 10% and 90%.
+- After the first dig, **auto-search every 2 h** (Scavenger 1 h 30) while you stay in the
+  zone. Leaving the zone stops it there for the rest of the day (wiki).
+- A zone starts with **4–8 finds**; each successful dig uses one; at 0 it is dried. Night
+  winds can refill zones in one compass direction (the Search Tower shows which).
+- "Dig all day": every 2 h × 60% is about one item every 3 h 20 min, so a day's dig fills
+  2–4 slots: leave rucksack space for it.
+
 ## Heavy items and defensive objects
 
+Keywords: heavy, carry, defensive objects, defence, defense items, DO, guardian shield.
 Checked in the game code: `InventoryHandler::getHeavyItemSize`, items with `heavy(true)`.
 
 - A citizen carries **one** heavy item. A Guardian with the shield lowered (`shield_off`)
@@ -84,8 +115,11 @@ Checked in the game code: `InventoryHandler::getHeavyItemSize`, items with `heav
   Torch, Lit Pumpkin.
 - **Incomplete defensive objects** (heavy, worth carrying, assembled later): Sheet Metal
   (parts), Crate Lid, Bag of Cement, Flatpacked Furniture, Car Door (incomplete).
+- **Heavy resources:** Patchwork Beam, Metal Support, Engine.
+- Heavy weapons: Lawnmower, Chainsaw, Kalashni-Splash, Retro Overhead Projector, Stake
+  Launcher, appliances (Washing Machine, Oven, Beer Fridge, PC Base Unit, chairs).
 - Other heavy items: boxes and chests, big furniture, water dispensers, Mountain Bike,
-  corpses, Python and Pig.
+  Shopping Trolley, corpses, Huge Snake and Stinking Pig.
 
 ### Bringing defensive objects home (relay)
 

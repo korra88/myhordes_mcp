@@ -750,11 +750,15 @@ def search_knowledge(query: str, section: str = "") -> str:
     guides and tactical notes not found in the wiki. Content lives in knowledge/.
 
     Use for: expedition planning (AP/EP, thirst step counter, consumable order),
-    building priority by game phase, opti-town tactics, wonders, player meta.
+    digging and dried zones, rucksack slots and heavy items, weapons and kill runs
+    (zoo trimming), building priority by game phase, opti-town tactics, wonders,
+    player meta. Search before planning a trip that digs, carries items home or
+    kills zombies.
 
     Args:
-        query: Search terms (e.g. "thirst step counter", "day 5 buildings",
-            "restore to max", "exploration points").
+        query: Search terms (e.g. "thirst step counter", "digging dried",
+            "rucksack", "heavy defensive relay", "weapons" (whole table),
+            "day 5 buildings", "exploration points").
         section: Optional subfolder filter. Valid sections:
             "buildings" — AP costs, defense values, build priority by phase, wonders.
             "tactics"   — expedition planning, game mechanics, strategy, meta.
