@@ -61,7 +61,12 @@ math by hand, and never guess a value no tool gave you.
   or not, takes one. Count the slots a plan fills.
 - **Digging:** 60% per dig (Scavenger 80%), only 35% on a **dried** (depleted) zone,
   which gives only Rotting Log and Scrap Metal. After the first dig the citizen
-  auto-digs every 2 h (Scavenger 1 h 30) while staying in the zone.
+  auto-digs every 2 h (Scavenger 1 h 30) while staying in the zone. **One dig per zone
+  per day**: once left, a zone cannot be dug again until midnight.
+- **Route shape:** go out and come back over different zones (the outbound ones are
+  already dug). With the Observation Platform, end the walk on a diagonal zone, not on
+  row 0 / column 0: level 4 teleports from [±2|±1] / [±1|±2] (3 AP saved, 2 on an axis),
+  level 3 from [±1|±1] (2 AP saved, 1 on an axis).
 - Ways home: Observation Platform level 3/4 teleports from 1/2 km (gate open); Heroic
   Return (hero skill) from 9–15 km; Rescue (cast from town) on a citizen 1–3 km out.
   For one zone, `get_zone_details` with x1=x2, y1=y2 says which of these reach it.
@@ -103,7 +108,7 @@ The search matches words, so use specific terms (a file name returns the whole f
 
 | Question about | Search |
 |---|---|
-| Thirst counter, EP, drinking/eating rules, ways home | `search_knowledge("thirst counter" / "exploration points" / "drinking eating" / "return to town", "tactics")` |
+| Thirst counter, EP, drinking/eating rules, ways home, route shape (loop, teleport) | `search_knowledge("thirst counter" / "exploration points" / "drinking eating" / "return to town" / "route loop teleport", "tactics")` |
 | Digging all day, dried/depleted zones, auto-search | `search_knowledge("digging dried", "tactics")` |
 | Carrying: rucksack slots, heavy items, bringing defensive objects home | `search_knowledge("rucksack" / "heavy defensive relay", "tactics")` |
 | Killing zombies: weapons, kill run, zoo trimming, cutting zeds | `search_knowledge("weapons", "tactics")` (whole table) |

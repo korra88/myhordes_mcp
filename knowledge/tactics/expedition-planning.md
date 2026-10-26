@@ -95,11 +95,34 @@ Checked in `CitizenChanceQueryListener::getDigChances`, `ZoneHandler`, `MapMaker
   the zone floor. Not depleted only: Learned Camper +10%, Drunk −20%, eye wound halves it.
   Result kept between 10% and 90%.
 - After the first dig, **auto-search every 2 h** (Scavenger 1 h 30) while you stay in the
-  zone. Leaving the zone stops it there for the rest of the day (wiki).
+  zone. **One dig per zone per day**: leaving stops it, and the zone cannot be dug again
+  until midnight (`desert_dig_api`: a dig timer on the zone refuses a new dig; timers are
+  cleared at night; the town option "allow redig" is off by default).
 - A zone starts with **4–8 finds**; each successful dig uses one; at 0 it is dried. Night
   winds can refill zones in one compass direction (the Search Tower shows which).
 - "Dig all day": every 2 h × 60% is about one item every 3 h 20 min, so a day's dig fills
   2–4 slots: leave rucksack space for it.
+
+## Route shape: a loop, ending off the axes
+
+Keywords: route, loop, return path, way back, same zones, teleport, observation platform,
+axis, row 0, column 0, diagonal, farthest, max distance, AP budget.
+
+- **Go out and come back over different zones.** Each zone can be dug once a day, so a
+  return over the outbound zones finds nothing new to dig.
+- **With the Observation Platform, end the walk on a diagonal zone, not on row 0 or
+  column 0.** The teleport works by km (rounded straight line) but walking costs
+  |x| + |y|: the farthest walk it saves is off the axes.
+
+| Platform | Teleports from | Best last zone | AP saved | On an axis |
+|---|---|---|---|---|
+| level 3 | 1 km | [±1\|±1] | 2 | [±1\|0] saves 1 |
+| level 4 | 2 km | [±2\|±1], [±1\|±2] | 3 | [±2\|0] saves 2 |
+
+  The gate must be open for the teleport; it is not a move (no thirst).
+- **Budget example** (level 4, water + 7 AP food, used when AP hit 0): 6 + 6 + 7 = 19 AP
+  walked + 3 saved = 22 AP of round trip → farthest zone **11 AP** away: 11 out, 8 back to
+  [2|1], teleport.
 
 ## Heavy items and defensive objects
 
