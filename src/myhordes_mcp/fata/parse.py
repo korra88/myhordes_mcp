@@ -397,6 +397,8 @@ def _parse_map(js_data: dict) -> list[dict]:
                     "name": name,
                     "count": item.get("count", 0),
                     "broken": item.get("broken", 0),
+                    "category": item_def.get("category", "Unknown"),
+                    "heavy": bool(item_def.get("heavy")),
                 })
 
             # Parse ruin/building

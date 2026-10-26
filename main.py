@@ -638,6 +638,8 @@ async def get_zone_details(
       "can I teleport / Heroic Return from [x|y]?" instead of computing km
       yourself. Prefer one call with a generous box over many small ones.
     Items are as last seen in each zone; the zone's day says how old.
+    Item tags: (heavy) = one per citizen, two for a Guardian with the shield lowered;
+    (defense) = adds defense in the bank; (defense part) = assembles into one.
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.

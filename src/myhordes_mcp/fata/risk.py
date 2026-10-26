@@ -271,9 +271,24 @@ def _zone_freshness(zone: dict, current_day: int | None) -> str:
     return f" (d{updated_day})" + (" [STALE]" if stale else "")
 
 
+# Heavy parts that assemble into a defensive object; Fata files them under Miscellaneous.
+DEFENSE_PARTS = {"Sheet Metal (parts)", "Crate Lid", "Bag of Cement", "Flatpacked Furniture",
+                 "Car Door (incomplete)"}
+
+
+def _item_tags(item: dict) -> str:
+    """' (heavy, defense)' — what limits carrying it and what it is worth to the bank."""
+    tags = ["heavy"] if item.get("heavy") else []
+    if item.get("category") == "Armor":
+        tags.append("defense")
+    elif item["name"] in DEFENSE_PARTS:
+        tags.append("defense part")
+    return f" ({', '.join(tags)})" if tags else ""
+
+
 def fmt_items(items: list[dict]) -> str:
-    """'Battery ×2, Open Can, Screwdriver [B]' — ×1 left out."""
-    return ", ".join(i["name"] + (f" ×{i['count']}" if i["count"] != 1 else "")
+    """'Battery ×2, Old Door (heavy, defense), Screwdriver [B]' — ×1 left out."""
+    return ", ".join(i["name"] + _item_tags(i) + (f" ×{i['count']}" if i["count"] != 1 else "")
                      + (" [B]" if i.get("broken") else "") for i in items)
 
 
