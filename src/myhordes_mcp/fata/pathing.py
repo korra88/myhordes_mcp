@@ -32,6 +32,17 @@ _UNKNOWN_RISK = 8.0
 MAX_PATH_AP = 40
 
 
+# Safest-path cost of one move, on the same scale as zombie risk: a detour is taken only
+# when it avoids more risk than the AP it adds. Without it any zombie, even one the group
+# easily controls, was worth an unlimited detour.
+_AP_COST = 1.0
+
+
+# Risk of a zone the group controls (zombies <= CP) = share of the group's CP the zombies
+# use x this: 3 zombies vs CP 3 = 3.0 (borderline, one more zombie traps), 1 vs CP 5 = 0.6.
+_CONTROLLED_WEIGHT = 3.0
+
+
 # CP-aware trap penalties (added to base zombie risk in safest-path Dijkstra).
 _TRAP_PENALTY_CERTAIN = 50.0   # Fresh data confirms zombies >= group_cp
 
@@ -144,8 +155,8 @@ def _cell_risk(
                    unless scout_mode (then detection cost). Flash consumption
                    is handled by the Dijkstra caller, not here.
 
-    When group_cp/scout_mode are at defaults, behavior matches the original
-    zombie-exposure-only model.
+    A zone the group controls costs the share of its CP the zombies use, so a higher
+    CP makes the same zombies cheaper.
     """
     classification = _classify_cell(zone, current_day, coords, spread_map, group_cp)
     tag = classification["tag"]
@@ -186,7 +197,8 @@ def _cell_risk(
         return base_risk + _TRAP_PENALTY_STALE
     if tag == "UNKNOWN":
         return _UNKNOWN_RISK
-
+    if tag in ("SAFE", "STALE") and zombies is not None:
+        return zombies / max(group_cp, 1) * _CONTROLLED_WEIGHT
     return base_risk
 
 
@@ -212,7 +224,7 @@ def _zone_grid(data: dict, group_cp: int):
 
 def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int = 2,
                  banned: frozenset = frozenset()) -> list[tuple[int, int]] | None:
-    """Safest path through `points` in order (Dijkstra on zombie risk, AP as tiebreak),
+    """Safest path through `points` in order (Dijkstra on zombie risk + _AP_COST per move),
     as the list of zones walked, start included. `banned` zones are never entered.
     None if a leg has no path."""
     zone_map, _, spread_map, cd = _zone_grid(data, group_cp)
@@ -237,7 +249,7 @@ def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int = 2,
                 if n in banned:
                     continue
                 step = _cell_risk(zone_map.get(n), cd, coords=n, spread_map=spread_map,
-                                  group_cp=group_cp, mode="safest")
+                                  group_cp=group_cp, mode="safest") + _AP_COST
                 cand = (risk + step, ap + 1)
                 if cand < best.get(n, (float("inf"), 0)):
                     best[n] = cand
@@ -260,44 +272,6 @@ def _route_exposure(data: dict, route: list[tuple[int, int]], group_cp: int) -> 
                           group_cp=group_cp, mode="safest") for c in route[1:])
 
 
-def _cheapest_route(data: dict, src: tuple[int, int], dst: tuple[int, int], group_cp: int,
-                    banned: frozenset) -> list[tuple[int, int]] | None:
-    """Fewest AP from src to dst, least risk among equal AP; trap zones and `banned`
-    zones are never entered. None if no path within MAX_PATH_AP."""
-    zone_map, cell_class, spread_map, cd = _zone_grid(data, group_cp)
-    margin = 3
-    bx = (min(src[0], dst[0]) - margin, max(src[0], dst[0]) + margin)
-    by = (min(src[1], dst[1]) - margin, max(src[1], dst[1]) + margin)
-    heap = [(0, 0.0, src)]
-    best = {src: (0, 0.0)}
-    prev: dict[tuple[int, int], tuple[int, int]] = {}
-    while heap:
-        ap, risk, cur = heapq.heappop(heap)
-        if cur == dst:
-            break
-        if best.get(cur, (MAX_PATH_AP + 1, 0.0)) < (ap, risk) or ap >= MAX_PATH_AP:
-            continue
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            n = (cur[0] + dx, cur[1] + dy)
-            if n in banned or (n not in zone_map and not (bx[0] <= n[0] <= bx[1] and by[0] <= n[1] <= by[1])):
-                continue
-            if cell_class.get(n, {}).get("tag") in ("TRAPPED", "TRAP_RISK"):
-                continue
-            cand = (ap + 1, risk + _cell_risk(zone_map.get(n), cd, coords=n, spread_map=spread_map,
-                                              group_cp=group_cp, mode="safest"))
-            if cand < best.get(n, (MAX_PATH_AP + 1, 0.0)):
-                best[n] = cand
-                prev[n] = cur
-                heapq.heappush(heap, (cand[0], cand[1], n))
-    if dst not in best:
-        return None
-    route, cur = [dst], dst
-    while cur != src:
-        cur = prev[cur]
-        route.append(cur)
-    return route[::-1]
-
-
 def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> dict | None:
     """The way back of a trip that walked `out` (start first, destination last).
 
@@ -306,8 +280,7 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> di
     on the teleport zone that is cheapest to reach: walking costs |x|+|y| but the
     teleport works by km, so the best end is off row 0 / column 0 ([2|1] at level 4).
 
-    The way back takes the fewest AP (least risk among equal AP) and never enters a
-    trap zone. Returns {route, teleport_from, saved_ap, level, reused, retrace_ap} or
+    The way back is the safest route (risk weighed against AP, as the way out). Returns {route, teleport_from, saved_ap, level, reused, retrace_ap} or
     None if no way back exists. `reused` = outbound zones it still had to cross.
     """
     start, dest = out[0], out[-1]
@@ -327,7 +300,7 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> di
         for end in ends:
             if end in avoid:
                 continue
-            route = _cheapest_route(data, dest, end, group_cp, avoid)
+            route = safest_route(data, [dest, end], group_cp, banned=avoid)
             if route is None:
                 continue
             key = (len(route), _route_exposure(data, route, group_cp), -(abs(end[0]) + abs(end[1])))
@@ -510,8 +483,8 @@ def find_safe_path(
                 else:  # safest
                     risk = _cell_risk(next_zone, cd, coords=(nx, ny), spread_map=spread_map,
                                       group_cp=group_cp, scout_mode=scout_mode, mode="safest")
-                    step_pri = risk   # risk
-                    step_sec = 1.0    # AP as tiebreaker
+                    step_pri = risk + _AP_COST  # risk, each move weighed against it
+                    step_sec = 1.0              # AP
                     next_pri = pri + step_pri
                     next_sec = sec + step_sec
 
@@ -538,7 +511,7 @@ def find_safe_path(
                     count += 1
         total_risk = sec if mode == "safest" else pri  # secondary is AP for safest
         total_ap = int(sec) if mode == "safest" else int(pri)
-        total_risk_val = pri if mode == "safest" else sec
+        total_risk_val = pri - sec * _AP_COST if mode == "safest" else sec
         return (total_risk_val, total_ap, path, flashes, flash_cells)
 
     # -- Run both Dijkstra passes --
@@ -571,7 +544,7 @@ def find_safe_path(
     if safest is not None:
         s_risk, s_ap, s_path, _, _ = safest
         trap_count = sum(1 for p in s_path if cell_class.get(p, {}).get("tag") in ("TRAPPED", "TRAP_RISK"))
-        lines.append(f"Safest: {s_ap} AP, {s_risk:.0f} exposure, {trap_count} trap zones on route")
+        lines.append(f"Safest: {s_ap} AP, {s_risk:.1f} exposure, {trap_count} trap zones on route")
     if shortest is not None:
         sh_risk, sh_ap, sh_path, sh_flashes, _ = shortest
         lines.append(f"Shortest: {sh_ap} AP, {sh_risk:.1f} exposure, {sh_flashes} flash items used")
