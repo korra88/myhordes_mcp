@@ -115,13 +115,6 @@ _STATUS_DRUGS = {
 }
 
 
-_DEFENSE_ITEMS = {
-    "Old Door", "Sheet Metal",
-    "Trestle", "Solid Wooden Board", "Unshaped Concrete Blocks",
-    "Jarpen Table",  # required for Building Registry — must not be hidden in Furniture bucket
-}
-
-
 _METAL = {"Wrought Iron", "Scrap Metal", "Metal Support"}
 
 
@@ -297,8 +290,9 @@ def summary_lines(bank: list[dict], buildings: list[dict] | None = None, *,
     lines.extend(_fmt_bucket("Healing", theal, itemsheal))
     lines.extend(_fmt_bucket("Status drugs", tstat, itemsstat))
 
-    # Defense consumables
-    tdef, itemsdef = _sum_items(bank, _DEFENSE_ITEMS)
+    # Defense items: the game's Defences category (its `defence` items), as planning.py counts them
+    defense_names = {i["name"] for i in bank if i.get("category") == "Armor"}
+    tdef, itemsdef = _sum_items(bank, defense_names)
     lines.extend(_fmt_bucket("Defense items", tdef, itemsdef))
 
     # Construction materials — metal and wood summed, then other key resources
@@ -336,7 +330,7 @@ def summary_lines(bank: list[dict], buildings: list[dict] | None = None, *,
     lines.append(f"**Weak weapons:** {weak_count}")
 
     # Furniture — count only (exclude items already shown in named buckets above)
-    tfurn = sum(i["count"] for i in bank if i.get("category") == "Furniture" and i["name"] not in _DEFENSE_ITEMS)
+    tfurn = sum(i["count"] for i in bank if i.get("category") == "Furniture" and i["name"] not in defense_names)
     lines.append(f"**Furniture:** {tfurn} items")
 
     # Boxes / containers — count only
@@ -350,7 +344,7 @@ def summary_lines(bank: list[dict], buildings: list[dict] | None = None, *,
     accounted = (_CLEAN_WATER | _CONDITIONAL_WATER
                  | _FOOD_7AP | _FOOD_6AP | _ALCOHOL | _FOOD_CONTAINERS
                  | _AP_DRUGS | _HEALING | _STATUS_DRUGS
-                 | _DEFENSE_ITEMS | _METAL | _WOOD | _KEY_RESOURCES
+                 | defense_names | _METAL | _WOOD | _KEY_RESOURCES
                  | _STRONG_WEAPONS | _ALL_BLUEPRINTS)
     remainder = [i for i in bank
                  if i["name"] not in accounted

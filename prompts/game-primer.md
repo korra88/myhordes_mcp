@@ -49,11 +49,12 @@ math by hand, and never guess a value no tool gave you.
   Terrorised**, −1 when Drunk or Thirsty). If zombies have more CP than the citizens in a
   zone, everyone there is **Trapped**: cannot move or search, fleeing wounds. A lone
   citizen with no boosts is trapped by 3 zombies. `get_citizen_cp` has each citizen's CP.
-- **Heavy items: one per citizen.** Every defensive object (Old Door, Sheet Metal, Solid
-  Wooden Board, Trestle, Unshaped Concrete Blocks, Jarpen Table, Mattress, Car Door) and
-  its incomplete form (Sheet Metal (parts), Crate Lid, Bag of Cement, Flatpacked
-  Furniture, Car Door (incomplete)) is heavy, like boxes, big furniture and the Mountain
-  Bike. A citizen carries **one** heavy item; a Guardian who lowers the shield carries
+- **Heavy items: one per citizen.** The big defensive objects (Old Door, Sheet Metal,
+  Solid Wooden Board, Trestle, Unshaped Concrete Blocks, Järpen Table, Mattress, Car Door)
+  and their incomplete forms (Sheet Metal (parts), Crate Lid, Bag of Cement, Flatpacked
+  Furniture, Car Door (incomplete)) are heavy, like boxes, big furniture and the Mountain
+  Bike. The other defensive objects are light: Guard Dog, Mangy Dachshund, Torch, Lit
+  Pumpkin. A citizen carries **one** heavy item; a Guardian who lowers the shield carries
   **two**, but loses the shield's protection until the night raises it again. A heavy
   item also takes a rucksack slot. Never plan a trip that picks up more than that.
 - Ways home: Observation Platform level 3/4 teleports from 1/2 km (gate open); Heroic

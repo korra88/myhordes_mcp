@@ -78,8 +78,10 @@ Checked in the game code: `InventoryHandler::getHeavyItemSize`, items with `heav
 - A citizen carries **one** heavy item. A Guardian with the shield lowered (`shield_off`)
   carries **two**, but loses the shield's 2 zombies of protection; the night raises the
   shield again (`NightlyHandler`). A heavy item still takes a rucksack slot.
-- **Defensive objects** (Armor category, all heavy): Old Door, Sheet Metal, Solid Wooden
-  Board, Trestle, Unshaped Concrete Blocks, Jarpen Table, Mattress, Car Door.
+- **Defensive objects** (item property `defence`, Fata category Defences; each one in the
+  bank adds defense). Heavy: Old Door, Sheet Metal, Solid Wooden Board, Trestle, Unshaped
+  Concrete Blocks, Järpen Table, Mattress, Car Door. Light: Guard Dog, Mangy Dachshund,
+  Torch, Lit Pumpkin.
 - **Incomplete defensive objects** (heavy, worth carrying, assembled later): Sheet Metal
   (parts), Crate Lid, Bag of Cement, Flatpacked Furniture, Car Door (incomplete).
 - Other heavy items: boxes and chests, big furniture, water dispensers, Mountain Bike,
