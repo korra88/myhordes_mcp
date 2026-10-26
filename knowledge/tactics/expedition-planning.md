@@ -71,6 +71,35 @@ Used at 0 AP they give the most.
 - Second drug the same day → **addict** (permanent; an addict not drugged at night dies).
 - Each item takes a rucksack slot; a Water Cooler Bottle holds 3 rations in one slot.
 
+## Heavy items and defensive objects
+
+Checked in the game code: `InventoryHandler::getHeavyItemSize`, items with `heavy(true)`.
+
+- A citizen carries **one** heavy item. A Guardian with the shield lowered (`shield_off`)
+  carries **two**, but loses the shield's 2 zombies of protection; the night raises the
+  shield again (`NightlyHandler`). A heavy item still takes a rucksack slot.
+- **Defensive objects** (Armor category, all heavy): Old Door, Sheet Metal, Solid Wooden
+  Board, Trestle, Unshaped Concrete Blocks, Jarpen Table, Mattress, Car Door.
+- **Incomplete defensive objects** (heavy, worth carrying, assembled later): Sheet Metal
+  (parts), Crate Lid, Bag of Cement, Flatpacked Furniture, Car Door (incomplete).
+- Other heavy items: boxes and chests, big furniture, water dispensers, Mountain Bike,
+  corpses, Python and Pig.
+
+### Bringing defensive objects home (relay)
+
+A play style for coordinated towns, not a rule:
+
+1. Going out, pick up nothing but what the expedition needs (food, water, weapons).
+2. Dig at the farthest point of the day.
+3. On the way back, pick up a defensive object and carry it toward town; when a better
+   one (or one closer to its goal) is on the path, swap it.
+4. What is left on the ground is closer to town than before: another citizen, or you on
+   another day, brings it the rest of the way.
+
+Planning a run: dig zone as far as the AP allow (out and back on the same AP), not dried,
+with defensive objects on the return path (`get_zone_details` lists the items per zone).
+One object per citizen, two for a Guardian with the shield lowered.
+
 ## Return to town
 
 For one zone, `get_zone_details(x1=x, y1=y, x2=x, y2=y)` prints moves, km, EP, and which
