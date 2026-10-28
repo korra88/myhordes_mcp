@@ -96,7 +96,8 @@ itself, without Claude (mechanism: `../discord_mcp/README.md`, "Slash commands")
 | `/set-my-town <town>` | Sets the caller's default town (`towns/_user_towns/<id>`) through `scripts/set_town.py --user`. Answers with the town name, season and day when `towns/` holds that town, and the previous ID when it changed. |
 
 Answers are visible only to the person who ran the command. Only `allow_users` may use
-them. To change the help, edit `prompts/discord-help.md` and restart the listener (the
+them; anyone else is told "You are not on this bot's list; ask @<maintainer> to be added."
+(`[dm] maintainer`), so `/help` doubles as "am I allowed?". To change the help, edit `prompts/discord-help.md` and restart the listener (the
 file is read once at start); the text is not read by the model, so keep it in step with
 what the bot can do. The server needs the `applications.commands` scope, and the
 Developer Portal must have no Interactions Endpoint URL.
