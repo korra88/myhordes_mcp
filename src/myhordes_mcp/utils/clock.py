@@ -44,11 +44,23 @@ def _duration(minutes: int) -> str:
     return f"{h} h {m:02d} min"
 
 
-def data_updated(meta: dict, at: datetime | None = None) -> str:
+def data_updated(meta: dict, at: datetime | None = None, suffix: str = "") -> str:
     """The 'Data updated:' header line: when Fata last got a report, how long ago,
     and whether that is stale, so the model never compares clock times itself.
     Fata updates only when a player sends data, so a live day ages as the game
-    goes on; a past day's snapshot gets no age (`meta['live']` False)."""
+    goes on; a past day's snapshot gets no age (`meta['live']` False).
+    A pending meta['log_note'] (town log update) is added once as a second line;
+    `suffix` stays on the first line, before it."""
+    line = _data_updated(meta, at) + suffix
+    note = meta.pop("log_note", None)  # shown once: a cached result no longer carries it
+    if not note:
+        return line
+    if "logged →" in note:
+        note += " (read that section only if the question is about what changed)"
+    return line + "\n" + note
+
+
+def _data_updated(meta: dict, at: datetime | None) -> str:
     raw = meta.get("data_time")
     if not raw:
         return "Data updated: unknown (treat as stale)"

@@ -13,18 +13,21 @@ day is stored once and then always served from disk. Days archived from the
 legacy spy page (before 2026-10-15) are still read through parse.py.
 
 Every parsed result also feeds the per-citizen CP log (cp.py) and, for the
-current day, the intraday snapshots (snapshot.py).
+current day, the intraday snapshots (snapshot.py) and the town log files
+(townlog.py, TOWN_LOG_AUTO). A log update leaves a one-line note in
+meta["log_note"], which the first tool header that formats the result shows.
 
 The endpoint is not affected by the nightly attack (Fata developer, 2026-10-15).
 """
 
+import logging
 import os
 
 import httpx
 
 from ..utils.cache import TTLCache
 from ..utils.config import USER_AGENT, env_int
-from . import archive, cp
+from . import archive, cp, townlog
 from .parse import _build_result
 from .snapshot import snapshot
 from .towndata import build_result, is_towndata
@@ -126,4 +129,11 @@ async def _load(town_id: int, day: int | None) -> dict:
     cp.update_cp_log(town_id, result)
     if day is None and result_day is not None:
         archive.save_snapshot(town_id, result_day, snapshot(result))
+        try:
+            parts = townlog.update_town_log(
+                town_id, result, lambda d: _from_archive(town_id, d, final_only=False))
+            if parts:
+                result["meta"]["log_note"] = "Town log: " + " · ".join(parts)
+        except Exception as e:  # a log failure must never break a tool call
+            logging.getLogger(__name__).warning("town log update failed: %s", e)
     return result

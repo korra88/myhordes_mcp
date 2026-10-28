@@ -86,7 +86,7 @@ def format_roster(data: dict, listed: str = "") -> str:
     meta = data["meta"]
     r = roster(data, parse_listed(listed))
     lines = [f"## Expedition roster — {meta.get('town_name')} Day {meta.get('day')}",
-             data_updated(meta) + " · distance = Manhattan (AP from town)", ""]
+             data_updated(meta, suffix=" · distance = Manhattan (AP from town)"), ""]
     n_out = len(r["outside"])
     if r["has_list"]:
         lines.append(f"Accounting: {len(r['on_list'])} listed + {len(r['scrappers'])} scrappers + "

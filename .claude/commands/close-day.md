@@ -1,5 +1,10 @@
 Finalize previous day's log using current morning MCP snapshot (post-attack state). Run at start of new game day. Pass `backfill` to close all unclosed days from day-01 up to N-1.
 
+**Auto log.** With `TOWN_LOG_AUTO` on, the server may already have appended the Night
+outcome and the daily-log row when it fetched today's data (the tool header says
+"Town log: closed day D"). Then do not append a second one: only add the Gest'Hordes
+cross-check (`get_night_report` notes) and context from the day file.
+
 ## Step 1 — Resolve town, current day, target days
 
 - Town ID: the content of `towns/_current_town`; if that file is missing,

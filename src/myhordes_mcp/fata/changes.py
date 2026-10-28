@@ -75,8 +75,8 @@ def format_town_changes(data: dict, snaps: list[dict], ref: dict | None, ref_lab
     cur = snaps[-1]
     lines = [
         f"## Town changes — {meta.get('town_name')} Day {meta.get('day')}",
-        data_updated(meta) + f" · {len(snaps)} snapshot(s) today, "
-        f"first {fmt_epoch(snaps[0]['taken_at'])}",
+        data_updated(meta, suffix=f" · {len(snaps)} snapshot(s) today, "
+                     f"first {fmt_epoch(snaps[0]['taken_at'])}"),
     ]
     if ref is None or ref is cur:
         lines.append(f"Compared against: {ref_label} — no earlier snapshot today, nothing to compare.")

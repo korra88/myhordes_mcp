@@ -347,7 +347,7 @@ def format_construction_history(data: dict, gh: dict | None = None) -> str:
     rows = construction_history(data, gh)
     lines = [
         f"## Construction history — {meta.get('town_name')} Day {meta.get('day')}",
-        data_updated(meta) + f" · budget = {AP_PER_CITIZEN} AP × citizens alive at day start",
+        data_updated(meta, suffix=f" · budget = {AP_PER_CITIZEN} AP × citizens alive at day start"),
         "",
         f"{'Day':<4} {'AP':>4} {'Budget':>7} {'%':>4} {'Alive':>5} {'Attack':>11} {'Deaths':>6}  Paid builds",
     ]

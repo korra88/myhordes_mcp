@@ -97,7 +97,7 @@ def format_dump_mapping(data: dict, sheet_items: str) -> str:
     meta = data["meta"]
     m = map_dump_rows(data["bank"], items)
     lines = [f"## Dump sheet mapping — bank of {meta.get('town_name')} Day {meta.get('day')}",
-             data_updated(meta) + f" · {len(items)} sheet rows, broken items included", ""]
+             data_updated(meta, suffix=f" · {len(items)} sheet rows, broken items included"), ""]
     for i, (name, value, sources) in enumerate(m["rows"]):
         src = ""
         if len(sources) > 1 or (sources and sources[0].lower() != name.strip().lower()):

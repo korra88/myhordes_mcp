@@ -17,8 +17,8 @@ towns/
       estimations.json        #   attack estimate per day, for the defense history
       snapshots/              #   intra-day snapshots for get_town_changes
     citizens-cp.json          # CP log per citizen (last / max), written by the server
-    daily-log.md              # written by the skills (inspect-town, close-day),
-    day-NN.md                 #   started from templates/town/
+    daily-log.md              # kept by the server (townlog.py), started from templates/town/;
+    day-NN.md                 #   the skills (inspect-town, close-day) add judgment on top
     notes.md
   _bot/                       # Discord bot (docs/discord.md, "Memory and feedback log")
     memory.md                 #   facts kept across threads, written by the bot
@@ -50,6 +50,14 @@ best value, since CP drops with status (drugs, drunk, thirsty, guardian without
 shield); 0 is kept, since terrorised citizens have none. Limit: Fata does not say who
 was on the zone at the update, so a citizen who left afterwards can inflate a reading.
 The log only grows when tools fetch the town (no polling).
+
+**Town log.** Every live fetch of the current day also updates `daily-log.md` and
+`day-NN.md` (`fata/townlog.py`): it opens the current day, closes past days from Fata
+data (Night outcome block and table row, without Gest'Hordes), and appends a "Check"
+entry when something changed, at most every `TOWN_LOG_INTERVAL` minutes (default 60).
+The first tool header after an update carries a one-line note saying what was written.
+Switch it off with `TOWN_LOG_AUTO=0`; with two machines sharing `towns/` via git, enable
+it on one only, or both will write the same entries and conflict.
 
 ## Tracking your logs in a private git repo
 

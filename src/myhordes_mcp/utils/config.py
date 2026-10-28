@@ -63,6 +63,10 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
+# Automatic town log (fata/townlog.py): 0 = off. Interval = minutes between two auto "Check" entries.
+TOWN_LOG_AUTO = env_int("TOWN_LOG_AUTO", 1)
+TOWN_LOG_INTERVAL = env_int("TOWN_LOG_INTERVAL", 60)
+
 # Default town, switchable without restarting the server: one town ID, read on every call.
 CURRENT_TOWN_FILE = TOWNS_DIR / "_current_town"
 

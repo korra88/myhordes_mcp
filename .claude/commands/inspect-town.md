@@ -3,6 +3,10 @@ Run a town snapshot: movements, AP spent, bank changes, warnings — and write i
 All numbers come from `get_town_changes`: do not recompute distances, AP or bank
 deltas. Your job is to write the log entry and judge what deserves a warning.
 
+**Auto log.** With `TOWN_LOG_AUTO` on, the server already appends the Check entry
+itself (the tool header says "Town log: check HH:MM logged"). Then do not duplicate it:
+add only the one-line judgment, and the day-transition warning if still relevant.
+
 ## Log structure
 
 - `towns/{folder}/daily-log.md` — index, one summary row per day
