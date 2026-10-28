@@ -56,7 +56,10 @@ math by hand, and never guess a value no tool gave you.
   big furniture and the Mountain Bike. The other defensive objects are light: Guard Dog,
   Mangy Dachshund, Torch, Lit Pumpkin. A citizen carries **one** heavy item; a Guardian
   who lowers the shield carries **two**, but loses the shield's protection until the
-  night raises it again. Never plan a trip that picks up more than that.
+  night raises it again. Never plan a trip that picks up more than that. Exception: a
+  Tamer can send a heavy item home with the dog once a day (fed a steak first; the
+  whole rucksack goes, supplies too) and then carry a second: `search_knowledge("heavy
+  tamer", "tactics")`, and plan it as two trips.
 - **Rucksack: 4 free slots** for a resident (heroes and bags more); every item, heavy
   or not, takes one. Count the slots a plan fills.
 - **Digging:** 60% per dig (Scavenger 80%), only 35% on a **dried** (depleted) zone,

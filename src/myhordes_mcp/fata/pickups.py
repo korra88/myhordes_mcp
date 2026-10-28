@@ -118,7 +118,8 @@ def heavy_check(picks: list[Pickup], *, bike: bool, trolley: bool, guardian: boo
         if guardian:
             return text + "even a Guardian with the shield lowered carries only 2."
         return (text + "a citizen carries only 1 (a bike and a trolley count). A Guardian can carry 2 "
-                f"(guardian=True), at -{GUARDIAN_CP_LOSS} CP for the group.")
+                f"(guardian=True), at -{GUARDIAN_CP_LOSS} CP for the group. A Tamer can send one home with "
+                "the dog first: plan two trips, split at the send zone.")
 
     if len(held) > cap:
         return too_many()

@@ -129,12 +129,20 @@ axis, row 0, column 0, diagonal, farthest, max distance, AP budget.
 
 ## Heavy items and defensive objects
 
-Keywords: heavy, carry, defensive objects, defence, defense items, DO, guardian shield.
+Keywords: heavy, carry, defensive objects, defence, defense items, DO, guardian shield, tamer, dog, send to bank.
 Checked in the game code: `InventoryHandler::getHeavyItemSize`, items with `heavy(true)`.
 
 - A citizen carries **one** heavy item. A Guardian with the shield lowered (`shield_off`)
   carries **two**, but loses the shield's 2 zombies of protection; the night raises the
   shield again (`NightlyHandler`). A heavy item still takes a rucksack slot.
+- **Tamer:** the dog sends the **whole rucksack** to the bank (or the home chest), gate
+  open, **once a day** (the dog is tired until the night). Unfed it refuses when a heavy
+  item is in the rucksack; fed a steak (a 7 AP food, `meat_#00`) first, it takes heavy
+  items too (`hero_tamer_1/2/3`). So a Tamer can bring home a heavy item by dog and then
+  carry a second one, but every supply still in the rucksack goes home with it: the
+  supplies for the rest of the trip must be used before the send, or picked up after.
+  `plan_expedition_supplies` does not model the send: plan the trip in two parts (up to
+  the send zone, then from there with `start`, AP and thirst as they will be).
 - **Defensive objects** (item property `defence`, Fata category Defences; each one in the
   bank adds defense). Heavy: Old Door, Sheet Metal, Solid Wooden Board, Trestle, Unshaped
   Concrete Blocks, Järpen Table, Mattress, Car Door. Light: Guard Dog, Mangy Dachshund,
