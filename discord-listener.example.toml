@@ -21,7 +21,8 @@ max_resume_tokens = 128000      # 0 switches the rule off
 
 # DMs from allow_users (needs listed ids, not "*"). The first DM gets the disclaimer;
 # the person consents by adding a check mark themselves, the bot never adds one.
-# Remove it and the bot goes silent. `new` starts a fresh DM session.
+# Remove it and the bot goes silent. `/new` (a slash command the listener adds by
+# itself, offered in DMs only) starts a fresh DM session.
 [dm]
 enabled = false
 disclaimer_file = "prompts/discord-dm-disclaimer.md"

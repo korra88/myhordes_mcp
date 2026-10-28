@@ -94,8 +94,9 @@ itself, without Claude (mechanism: `../discord_mcp/README.md`, "Slash commands")
 | --- | --- |
 | `/help` | Fixed English text from `prompts/discord-help.md`: what to ask, with examples. At most 2000 characters. |
 | `/set-my-town <town>` | Sets the caller's default town (`towns/_user_towns/<id>`) through `scripts/set_town.py --user`. Answers with the town name, season and day when `towns/` holds that town, and the previous ID when it changed. |
+| `/new` | DMs only, built into the listener (not in the toml; there whenever `[dm]` is on): starts a fresh DM conversation. Its answer stays visible in the DM, as the start of the new session. |
 
-Answers are visible only to the person who ran the command. Only `allow_users` may use
+Answers are visible only to the person who ran the command (except `/new`). Only `allow_users` may use
 them; anyone else is told "You are not on this bot's list; ask @<maintainer> to be added."
 (`[dm] maintainer`), so `/help` doubles as "am I allowed?". To change the help, edit `prompts/discord-help.md` and restart the listener (the
 file is read once at start); the text is not read by the model, so keep it in step with

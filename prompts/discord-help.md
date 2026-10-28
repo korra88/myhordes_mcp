@@ -1,5 +1,5 @@
 **Town Elder — your MyHordes advisor**
-Ask in plain words, in any language. In a channel, mention me and I answer in a thread; carry on there without mentioning me. In a DM just write; `new` starts a fresh conversation. Answers take up to a minute.
+Ask in plain words, in any language. In a channel, mention me and I answer in a thread; carry on there without mentioning me. In a DM just write; `/new` starts a fresh conversation. Answers take up to a minute.
 
 **Town**
 - "How is the town doing?" · "What changed since this morning?"
