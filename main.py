@@ -466,7 +466,10 @@ async def find_expedition_path(
                     the AP saved. With step_table, the table covers both ways.
         start_ap: AP at departure (default 6).
         start_ep: EP at departure (Scout 2, shoes +1, bike +2; default 0).
-        thirst_counter: Zones already walked since the last water ration.
+        thirst_counter: Thirst at departure. Not thirsty: zones already walked since
+                        the last drink (0 if just drank). Already Thirsty: 11 + zones
+                        walked since becoming Thirsty (11 if unknown). Dehydrated: 22
+                        the same way. The step table then starts from that status.
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
