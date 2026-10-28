@@ -386,6 +386,19 @@ async def get_scout_map(
     return fata.format_scout(data)
 
 
+def _parse_zones(raws: list[str]) -> list[tuple[int, int]] | str:
+    """Town-relative zones from "x,y" texts ("[-7|5]" and "-7/5" work too), or an error text."""
+    zones = []
+    for raw in raws:
+        nums = raw.replace("|", ",").replace("[", "").replace("]", "").replace("/", ",").split(",")
+        try:
+            x, y = (int(n) for n in nums)
+        except ValueError:
+            return f"Error: can't read the zone '{raw.strip()}' (use 'x,y', e.g. '-7,5')."
+        zones.append((x, y))
+    return zones
+
+
 @mcp.tool()
 async def find_expedition_path(
     x1: int,
@@ -402,11 +415,12 @@ async def find_expedition_path(
     start_ep: int = 0,
     thirst_counter: int = 0,
     show_items: bool = False,
+    waypoints: str = "",
     day: int = 0,
     town_id: int = 0,
 ) -> str:
     """
-    Runs CP-aware Dijkstra pathfinding between two map coordinates.
+    Runs CP-aware Dijkstra pathfinding between two map coordinates, through waypoints if given.
     Returns up to two paths:
     - Safest path: minimises zombie exposure, avoids traps entirely.
     - Shortest path: minimises AP, using escape items to pass through traps.
@@ -434,6 +448,10 @@ async def find_expedition_path(
                     instead of being impassable.
         show_items: Set True to list the ground items on each step (only when
                     the user wants to pick things up on the way).
+        waypoints: Zones the route must pass through, in order, town-relative, e.g.
+                   "-7,5" or "-7,5; -3,8". Legs after the first avoid zones already
+                   walked (a zone can be dug once a day). Flash items are shared by
+                   all legs. Omit for a direct route.
         step_table: Set True when planning an actual trip. Adds a step-by-step
                     table for the first path: AP or EP paid per move (EP is used
                     first when leaving a zone 3+ km from town), AP/EP left, thirst
@@ -455,6 +473,11 @@ async def find_expedition_path(
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
+    wps = []
+    if waypoints.strip():
+        wps = _parse_zones(waypoints.split(";"))
+        if isinstance(wps, str):
+            return wps
     data = await fata.fetch_town_data(tid, day=day or None)
     breakdown = None
     if group_cp < 0:
@@ -473,6 +496,7 @@ async def find_expedition_path(
         start_ap=start_ap,
         start_ep=start_ep,
         thirst_counter=thirst_counter,
+        waypoints=wps,
     )
 
 
@@ -574,14 +598,9 @@ async def plan_expedition_supplies(
     tid = resolve_town_id(town_id)
     if isinstance(tid, str):
         return tid
-    points = []
-    for raw in [start] + waypoints.replace("|", ",").split(";"):
-        nums = raw.replace("|", ",").replace("[", "").replace("]", "").replace("/", ",").split(",")
-        try:
-            x, y = (int(n) for n in nums)
-        except ValueError:
-            return f"Error: can't read the zone '{raw.strip()}' (use 'x,y', e.g. '-7,5')."
-        points.append((x, y))
+    points = _parse_zones([start] + waypoints.split(";"))
+    if isinstance(points, str):
+        return points
     if len(points) < 2:
         return "Error: give at least one waypoint."
     if round_trip:

@@ -205,60 +205,136 @@ def _zone_grid(data: dict, group_cp: int):
     return zone_map, cell_class, spread_map, cd
 
 
+def _leg_search(grid: tuple, a: tuple[int, int], b: tuple[int, int], f0: int, *, mode: str,
+                budget: int, scout_mode: bool, banned: frozenset, seen: set,
+                rw: float) -> dict[int, tuple]:
+    """One leg a -> b, starting with f0 flashes used. Returns {flashes used at b: (pri, sec,
+    cells walked after a, flash cells)}, each the cheapest for that count (one entry when
+    budget is 0). Cost is the (pri, sec) tuple; AP is capped at MAX_PATH_AP per leg."""
+    zone_map, cell_class, spread_map, cd, cp = grid
+    margin = 3
+    bx = (min(a[0], b[0]) - margin, max(a[0], b[0]) + margin)
+    by = (min(a[1], b[1]) - margin, max(a[1], b[1]) + margin)
+    start = (a[0], a[1], f0)
+    heap = [(0.0, 0.0, 0, a[0], a[1], f0)]
+    prev: dict[tuple, tuple | None] = {start: None}
+    best: dict[tuple, tuple[float, float]] = {start: (0.0, 0.0)}
+    found: dict[int, tuple] = {}
+    while heap:
+        pri, sec, ap, x, y, f = heapq.heappop(heap)
+        key = (x, y, f)
+        if best.get(key, (float("inf"), 0.0)) < (pri, sec):
+            continue
+        if (x, y) == b:
+            found[f] = (pri, sec, key)
+            if budget == 0 or len(found) == budget - f0 + 1:
+                break
+            continue
+        if ap >= MAX_PATH_AP:
+            continue
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            n = (x + dx, y + dy)
+            if n not in zone_map and not (bx[0] <= n[0] <= bx[1] and by[0] <= n[1] <= by[1]):
+                continue
+            if n in banned:
+                continue
+            extra = rw if n in seen else 0.0
+            nf = f
+            if mode == "shortest":
+                # AP first, risk as tiebreak; a trap zone needs a flash (which clears it).
+                if cell_class.get(n, {}).get("tag") in ("TRAPPED", "TRAP_RISK") and not scout_mode:
+                    if f >= budget:
+                        continue
+                    nf, step = f + 1, (1.0, extra)
+                else:
+                    step = (1.0, _cell_risk(zone_map.get(n), cd, coords=n, spread_map=spread_map,
+                                            group_cp=cp, scout_mode=scout_mode, mode="shortest") + extra)
+            else:
+                # Risk and moves weighed together (walkability + _AP_COST), AP as tiebreak.
+                step = (walkability(zone_map.get(n), cd, coords=n, spread_map=spread_map,
+                                    group_cp=cp, scout_mode=scout_mode) + _AP_COST + extra, 1.0)
+            cand = (pri + step[0], sec + step[1])
+            nkey = (n[0], n[1], nf)
+            if cand < best.get(nkey, (float("inf"), 0.0)):
+                best[nkey] = cand
+                prev[nkey] = (key, nf > f)
+                heapq.heappush(heap, (cand[0], cand[1], ap + 1, n[0], n[1], nf))
+    out = {}
+    for f, (pri, sec, key) in found.items():
+        cells, flashed = [], []
+        while prev[key] is not None:
+            pkey, used = prev[key]
+            cells.append((key[0], key[1]))
+            if used:
+                flashed.append((key[0], key[1]))
+            key = pkey
+        out[f] = (pri, sec, cells[::-1], flashed)
+    return out
+
+
+def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[int] = 2,
+                 mode: str = "safest", flash_budget: int = 0, scout_mode: bool = False,
+                 banned: frozenset = frozenset(), revisit: frozenset = frozenset(),
+                 avoid_revisits: bool = False, revisit_weight: float | None = None) -> dict | None:
+    """The one route search: through `points` (start, waypoints..., end) in order.
+
+    mode "safest":   cost = walkability + _AP_COST per move, AP as tiebreak.
+    mode "shortest": AP first, risk as tiebreak; a trap zone needs a flash (budget shared
+                     by all legs) unless scout_mode, which pays the detection risk instead.
+    cp: group CP, an int or one value per leg. `banned` zones are never entered; `revisit`
+    zones (and, with avoid_revisits, the zones earlier legs walked) cost WALK["revisit"] to
+    enter again, or `revisit_weight` (a tiny one = fewest zones walked again among the
+    shortest routes).
+
+    Returns {route (start included), ap, flashes, flash_cells, risk} or None if a leg has
+    no path. risk = summed walkability of the zones entered (not counting revisit costs).
+    """
+    legs = len(points) - 1
+    cps = list(cp) if isinstance(cp, (list, tuple)) else [cp] * legs
+    if len(cps) != legs:
+        raise ValueError("cp needs one value per leg")
+    rw = WALK["revisit"] if revisit_weight is None else revisit_weight
+    grids: dict[int, tuple] = {}
+    for c in set(cps):
+        zone_map, cell_class, spread_map, cd = _zone_grid(data, c)
+        grids[c] = (zone_map, cell_class, spread_map, cd, c)
+    # states: flashes used so far -> (pri, sec, route, flash cells, cells walked per leg)
+    states = {0: (0.0, 0.0, [points[0]], [], [])}
+    for i, (a, b) in enumerate(zip(points, points[1:])):
+        nxt: dict[int, tuple] = {}
+        for f0, (pri, sec, route, flashed, lens) in states.items():
+            seen = (revisit | (set(route) if avoid_revisits else set())) - {(0, 0), a, b}
+            res = _leg_search(grids[cps[i]], a, b, f0, mode=mode, budget=flash_budget,
+                              scout_mode=scout_mode, banned=banned, seen=seen, rw=rw)
+            for f, (lp, ls, cells, lf) in res.items():
+                cand = (pri + lp, sec + ls, route + cells, flashed + lf, lens + [len(cells)])
+                if f not in nxt or cand[:2] < nxt[f][:2]:
+                    nxt[f] = cand
+        if not nxt:
+            return None
+        states = nxt
+    f, (_, _, route, flashed, lens) = min(states.items(), key=lambda kv: (kv[1][0], kv[1][1], kv[0]))
+    # Exposure: walkability of each zone entered, with the CP of its leg.
+    risk, k = 0.0, 1
+    for c, n in zip(cps, lens):
+        zone_map, _, spread_map, cd, _ = grids[c]
+        for cell in route[k:k + n]:
+            risk += _cell_risk(zone_map.get(cell), cd, coords=cell, spread_map=spread_map,
+                               group_cp=c, scout_mode=scout_mode, mode="safest")
+        k += n
+    return {"route": route, "ap": len(route) - 1, "flashes": f, "flash_cells": set(flashed),
+            "risk": risk}
+
+
 def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int = 2,
                  banned: frozenset = frozenset(), revisit: frozenset = frozenset(),
                  avoid_revisits: bool = False,
                  revisit_weight: float | None = None) -> list[tuple[int, int]] | None:
-    """Safest path through `points` in order (Dijkstra on moves + walkability), as the list
-    of zones walked, start included. `banned` zones are never entered; `revisit` zones (and,
-    with avoid_revisits, the zones earlier legs walked) cost WALK["revisit"] to enter again,
-    or `revisit_weight` (a tiny one = fewest zones walked again among the shortest routes).
-    None if a leg has no path."""
-    rw = WALK["revisit"] if revisit_weight is None else revisit_weight
-    zone_map, _, spread_map, cd = _zone_grid(data, group_cp)
-    route = [points[0]]
-    for (x1, y1), (x2, y2) in zip(points, points[1:]):
-        seen = (revisit | (set(route) if avoid_revisits else set())) - {(0, 0), (x1, y1), (x2, y2)}
-        margin = 3
-        bx = (min(x1, x2) - margin, max(x1, x2) + margin)
-        by = (min(y1, y2) - margin, max(y1, y2) + margin)
-        heap = [(0.0, 0, x1, y1)]
-        prev: dict[tuple[int, int], tuple[int, int] | None] = {(x1, y1): None}
-        best: dict[tuple[int, int], tuple[float, int]] = {(x1, y1): (0.0, 0)}
-        while heap:
-            risk, ap, x, y = heapq.heappop(heap)
-            if (x, y) == (x2, y2):
-                break
-            if best.get((x, y), (float("inf"), 0)) < (risk, ap) or ap >= MAX_PATH_AP:
-                continue
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                n = (x + dx, y + dy)
-                if n not in zone_map and not (bx[0] <= n[0] <= bx[1] and by[0] <= n[1] <= by[1]):
-                    continue
-                if n in banned:
-                    continue
-                step = (walkability(zone_map.get(n), cd, coords=n, spread_map=spread_map,
-                                    group_cp=group_cp) + _AP_COST + (rw if n in seen else 0.0))
-                cand = (risk + step, ap + 1)
-                if cand < best.get(n, (float("inf"), 0)):
-                    best[n] = cand
-                    prev[n] = (x, y)
-                    heapq.heappush(heap, (cand[0], cand[1], n[0], n[1]))
-        if (x2, y2) not in prev:
-            return None
-        leg, cur = [], (x2, y2)
-        while cur != (x1, y1):
-            leg.append(cur)
-            cur = prev[cur]
-        route.extend(reversed(leg))
-    return route
-
-
-def _route_exposure(data: dict, route: list[tuple[int, int]], group_cp: int) -> float:
-    """Summed safest-mode risk of the zones entered along `route`."""
-    zone_map, _, spread_map, cd = _zone_grid(data, group_cp)
-    return sum(_cell_risk(zone_map.get(c), cd, coords=c, spread_map=spread_map,
-                          group_cp=group_cp, mode="safest") for c in route[1:])
+    """The safest route through `points` (search_route, mode "safest"): the zones walked,
+    start included, or None if a leg has no path."""
+    res = search_route(data, points, cp=group_cp, banned=banned, revisit=revisit,
+                       avoid_revisits=avoid_revisits, revisit_weight=revisit_weight)
+    return res["route"] if res else None
 
 
 def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> dict | None:
@@ -288,11 +364,12 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> di
     walked = frozenset(out[1:-1]) - {start}
     best = None
     for end in ends:
-        route = safest_route(data, [dest, end], group_cp, revisit=walked)
-        if route is None:
+        res = search_route(data, [dest, end], cp=group_cp, revisit=walked)
+        if res is None:
             continue
+        route = res["route"]
         reused = [c for c in route[1:] if c in walked]
-        key = (len(route) - 1 + WALK["revisit"] * len(reused), _route_exposure(data, route, group_cp),
+        key = (len(route) - 1 + WALK["revisit"] * len(reused), res["risk"],
                -(abs(end[0]) + abs(end[1])))
         if best is None or key < best[0]:
             best = (key, route, end, reused)
@@ -375,8 +452,9 @@ def find_safe_path(
     thirst_counter: int = 0,
     cp_breakdown: list[str] | None = None,
     show_items: bool = False,
+    waypoints: list[tuple[int, int]] | None = None,
 ) -> str:
-    """Find paths between two map coordinates using CP-aware Dijkstra.
+    """Find paths between two map coordinates (through waypoints, if any) using CP-aware Dijkstra.
 
     Returns up to two paths:
       - Safest: minimises zombie exposure, avoids traps entirely.
@@ -388,6 +466,7 @@ def find_safe_path(
         escape_items: Flash-grenade-equivalent items carried (each neutralises one trap).
         scout_mode: Scout with Camouflage Vest — traps become passable at detection risk.
         cp_breakdown: Lines explaining where group_cp came from (party CP log).
+        waypoints: Zones to pass through, in order, between the two points.
     """
     if data.get("error"):
         return f"Error: {data['error']}"
@@ -396,124 +475,26 @@ def find_safe_path(
     current_day = meta.get("day", "?")
     town = meta.get("town_name", "?")
 
-    # -- Shared pre-computation (used by both Dijkstra runs) --
+    # -- Shared pre-computation (formatting) and the two searches --
     zone_map, cell_class, spread_map, cd = _zone_grid(data, group_cp)
     ap_limit = MAX_PATH_AP
-
-    # Bounding box + margin for unknown-cell traversal
-    margin = 3
-    box_min_x, box_max_x = min(x1, x2) - margin, max(x1, x2) + margin
-    box_min_y, box_max_y = min(y1, y2) - margin, max(y1, y2) + margin
-
-    def _in_box(nx: int, ny: int) -> bool:
-        return box_min_x <= nx <= box_max_x and box_min_y <= ny <= box_max_y
-
-    # -- Dijkstra runner --
-    def _run_dijkstra(
-        mode: str,
-        flash_budget: int = 0,
-    ) -> tuple[float, int, list[tuple[int, int]], int, set[tuple[int, int]]] | None:
-        """Returns (cost, ap, path, flashes_used, flash_cells) or None."""
-        # State: (primary_cost, secondary_cost, x, y, path, flashes_used)
-        heap: list[tuple[float, float, int, int, list[tuple[int, int]], int]] = []
-        heapq.heappush(heap, (0.0, 0.0, x1, y1, [(x1, y1)], 0))
-        # Visited: (x, y, flashes_used) -> (best_primary, best_secondary)
-        visited: dict[tuple[int, int, int], tuple[float, float]] = {}
-
-        best: tuple[float, float, list[tuple[int, int]], int] | None = None
-
-        while heap:
-            pri, sec, x, y, path, flashes = heapq.heappop(heap)
-
-            if (x, y) == (x2, y2):
-                if best is None or (pri, sec) < (best[0], best[1]):
-                    best = (pri, sec, path, flashes)
-                continue
-
-            vkey = (x, y, flashes)
-            if vkey in visited:
-                prev_pri, prev_sec = visited[vkey]
-                if pri >= prev_pri and sec >= prev_sec:
-                    continue
-            visited[vkey] = (pri, sec)
-
-            ap_so_far = int(sec) if mode == "safest" else int(pri)
-            if ap_so_far >= ap_limit:
-                continue
-
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                nx, ny = x + dx, y + dy
-                next_zone = zone_map.get((nx, ny))
-                if next_zone is None and not _in_box(nx, ny):
-                    continue
-
-                cc = cell_class.get((nx, ny), {"tag": "UNKNOWN"})
-                is_trap = cc["tag"] in ("TRAPPED", "TRAP_RISK")
-
-                # Determine cost and whether a flash is consumed
-                new_flashes = flashes
-                if mode == "shortest":
-                    if is_trap and not scout_mode:
-                        if flashes < flash_budget:
-                            new_flashes = flashes + 1
-                            step_pri = 1.0  # AP cost
-                            step_sec = 0.0  # no extra risk (flash clears it)
-                        else:
-                            continue  # impassable without flash or scout
-                    else:
-                        risk = _cell_risk(next_zone, cd, coords=(nx, ny), spread_map=spread_map,
-                                          group_cp=group_cp, scout_mode=scout_mode, mode="shortest")
-                        if risk == float("inf"):
-                            continue
-                        step_pri = 1.0   # AP
-                        step_sec = risk  # risk as tiebreaker
-                    next_pri = pri + step_pri
-                    next_sec = sec + step_sec
-                else:  # safest
-                    risk = _cell_risk(next_zone, cd, coords=(nx, ny), spread_map=spread_map,
-                                      group_cp=group_cp, scout_mode=scout_mode, mode="safest")
-                    step_pri = risk + _AP_COST  # risk, each move weighed against it
-                    step_sec = 1.0              # AP
-                    next_pri = pri + step_pri
-                    next_sec = sec + step_sec
-
-                new_ap = int(next_sec) if mode == "safest" else int(next_pri)
-                if new_ap > ap_limit:
-                    continue
-
-                heapq.heappush(heap, (next_pri, next_sec, nx, ny, path + [(nx, ny)], new_flashes))
-
-        if best is None:
-            return None
-        pri, sec, path, flashes = best
-        # Determine which cells consumed a flash (shortest mode only)
-        flash_cells: set[tuple[int, int]] = set()
-        if flash_budget > 0 and flashes > 0:
-            # Walk the path and identify trap cells (first N traps = flash cells)
-            count = 0
-            for px, py in path:
-                if count >= flashes:
-                    break
-                cc = cell_class.get((px, py), {"tag": "UNKNOWN"})
-                if cc["tag"] in ("TRAPPED", "TRAP_RISK"):
-                    flash_cells.add((px, py))
-                    count += 1
-        total_risk = sec if mode == "safest" else pri  # secondary is AP for safest
-        total_ap = int(sec) if mode == "safest" else int(pri)
-        total_risk_val = pri - sec * _AP_COST if mode == "safest" else sec
-        return (total_risk_val, total_ap, path, flashes, flash_cells)
-
-    # -- Run both Dijkstra passes --
-    safest = _run_dijkstra("safest")
-    shortest = _run_dijkstra("shortest", flash_budget=escape_items) if escape_items > 0 or scout_mode else None
+    points = [(x1, y1)] + list(waypoints or []) + [(x2, y2)]
+    wp_set = set(waypoints or [])
+    # Several legs: zones an earlier leg walked cost a little to walk again (one dig a day).
+    avoid = len(points) >= 3
+    safest = search_route(data, points, cp=group_cp, scout_mode=scout_mode, avoid_revisits=avoid)
+    shortest = (search_route(data, points, cp=group_cp, mode="shortest", flash_budget=escape_items,
+                             scout_mode=scout_mode)
+                if escape_items > 0 or scout_mode else None)
 
     # If shortest would be identical to safest, skip it
     if shortest is not None and safest is not None:
-        if shortest[2] == safest[2]:
+        if shortest["route"] == safest["route"]:
             shortest = None
 
     # -- Format output --
-    lines = [f"## Pathfinding [{x1}|{y1}] → [{x2}|{y2}] — {town} Day {current_day}", data_updated(meta)]
+    chain = " → ".join(f"[{x}|{y}]" for x, y in points)
+    lines = [f"## Pathfinding {chain} — {town} Day {current_day}", data_updated(meta)]
     params = [f"Group CP: {group_cp}"]
     if scout_mode:
         params.append("Scout: Yes")
@@ -526,7 +507,7 @@ def find_safe_path(
 
     # Summary
     if safest is None and shortest is None:
-        lines.append(f"No path found within {ap_limit} AP.")
+        lines.append(f"No path found within {ap_limit} AP" + (" per leg." if waypoints else "."))
         return "\n".join(lines)
 
     def _zombies_on(path: list[tuple[int, int]]) -> str:
@@ -542,11 +523,11 @@ def find_safe_path(
 
     lines.append("### Summary")
     if safest is not None:
-        s_risk, s_ap, s_path, _, _ = safest
+        s_ap, s_path = safest["ap"], safest["route"]
         trap_count = sum(1 for p in s_path if cell_class.get(p, {}).get("tag") in ("TRAPPED", "TRAP_RISK"))
         lines.append(f"Safest: {s_ap} AP, {trap_count} trap zones; {_zombies_on(s_path)}")
     if shortest is not None:
-        sh_risk, sh_ap, sh_path, sh_flashes, _ = shortest
+        sh_ap, sh_path, sh_flashes = shortest["ap"], shortest["route"], shortest["flashes"]
         lines.append(f"Shortest: {sh_ap} AP, {sh_flashes} flash items used; {_zombies_on(sh_path)}")
     elif safest is not None:
         lines.append("Shortest path is identical to safest.")
@@ -615,9 +596,9 @@ def find_safe_path(
         stale = _staleness_tag(z.get("updated_day"), cd) if z and not z.get("danger_today") else ""
 
         ruin = z.get("ruin") if z else None
-        ruin_str = ""
+        ruin_str = " [WAYPOINT]" if (px, py) in wp_set else ""
         if ruin:
-            ruin_str = f" | {ruin['name']}" + (" [BLUEPRINT]" if ruin.get("blueprint_available") else "")
+            ruin_str += f" | {ruin['name']}" + (" [BLUEPRINT]" if ruin.get("blueprint_available") else "")
         if z and z.get("dried"):
             ruin_str += " | depleted"
         elif z and z.get("scav_level"):
@@ -654,9 +635,9 @@ def find_safe_path(
 
     def _render_path(
         label: str,
-        result: tuple,
+        result: dict,
     ) -> None:
-        risk, ap, path, flashes, flash_cells = result
+        path, flashes, flash_cells = result["route"], result["flashes"], result["flash_cells"]
         lines.append(f"### {label}")
         counter = [0]  # mutable counter for flash numbering
         for i, (px, py) in enumerate(path):
@@ -664,9 +645,9 @@ def find_safe_path(
         lines.append("")
 
     first = safest if safest is not None else shortest
-    back = loop_return(data, list(first[2]), group_cp) if round_trip and first is not None else None
+    back = loop_return(data, list(first["route"]), group_cp) if round_trip and first is not None else None
     if step_table and first is not None:
-        route = list(first[2])
+        route = list(first["route"])
         if back is not None:
             route += back["route"][1:]
         lines.extend(format_step_table(route, start_ap, start_ep, thirst_counter))
@@ -685,7 +666,7 @@ def find_safe_path(
         _render_path("Shortest Path", shortest)
 
     if round_trip and first is not None:
-        lines.extend(_render_back(back, first[2]))
+        lines.extend(_render_back(back, first["route"]))
     return "\n".join(lines)
 
 
