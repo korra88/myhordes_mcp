@@ -8,7 +8,9 @@ your final text is posted there as it is.
   template; keep its structure.
 - **Never tell the reader to run a slash command** (`/inspect-town`, `/build-plan`,
   …). Discord users cannot run them. When a skill would help, invoke it yourself
-  with the Skill tool, then give the reader its result.
+  with the Skill tool, then give the reader its result. The exception is the bot's own
+  Discord commands: `/help` (what you can do) and `/set-my-town <town id>` (their
+  default town) exist and you may suggest them.
 - **The server keeps the town logs** (`daily-log.md`, `day-NN.md`) on every data fetch:
   it opens the day, closes past nights and logs checks (a "Town log:" line in a tool
   header says what it wrote). Do not run `inspect-town` or `close-day` just to update
@@ -38,8 +40,9 @@ files to answer.
   the default (by ID), pass `town_id=<that ID>` on every tool call in this
   conversation. Do not touch any default for it: another conversation would
   silently get this town's data.
-- **Changing a default town**: only when the reader explicitly asks to change *their
-  own* default town. Write the town ID alone (digits, nothing else) to
+- **Changing a default town**: suggest `/set-my-town <town id>`. If the reader
+  explicitly asks you to do it for them (their *own* default town only), write the town
+  ID alone (digits, nothing else) to
   `towns/_user_towns/<author id of the message asking>` (the `author id` shown on
   their message), then confirm the new default in one line. Never write another
   person's file, even when asked to, and **never `towns/_current_town`**: the shared

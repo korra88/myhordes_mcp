@@ -73,6 +73,9 @@ person in the DM), and the MCP server inherits it (no `env` block in the MCP JSO
 `towns/_user_towns/<id>`, `towns/_current_town`, `FATAMORGANA_TOWN_ID`. The id must be
 all digits, so it cannot name another path.
 
+- **`/set-my-town 8212`**: the slash command (see [Slash commands](#slash-commands)); the
+  listener runs `scripts/set_town.py --user <id> 8212` itself, no model involved. The town
+  is required; to check it, ask the bot "which town am I on?".
 - **Asking the bot** ("change my default town to 8212"): it writes only the
   requester's own file. It no longer writes `towns/_current_town`; the shared default
   changes only from the terminal (`make town TOWN=...`).
@@ -80,6 +83,23 @@ all digits, so it cannot name another path.
   `python3 scripts/set_town.py --user <discord id> [<town id>]`); with no `TOWN` it
   shows that person's default.
 - `towns/_user_towns/` lives in the private `towns/` repo and is committed with it.
+
+## Slash commands
+
+Declared in `discord-listener.toml` as `[[commands]]` (example in
+`discord-listener.example.toml`); the listener registers them at start and answers them
+itself, without Claude (mechanism: `../discord_mcp/README.md`, "Slash commands").
+
+| Command | What it does |
+| --- | --- |
+| `/help` | Fixed English text from `prompts/discord-help.md`: what to ask, with examples. At most 2000 characters. |
+| `/set-my-town <town>` | Sets the caller's default town (`towns/_user_towns/<id>`) through `scripts/set_town.py --user`. Answers with the town name, season and day when `towns/` holds that town, and the previous ID when it changed. |
+
+Answers are visible only to the person who ran the command. Only `allow_users` may use
+them. To change the help, edit `prompts/discord-help.md` and restart the listener (the
+file is read once at start); the text is not read by the model, so keep it in step with
+what the bot can do. The server needs the `applications.commands` scope, and the
+Developer Portal must have no Interactions Endpoint URL.
 
 ## Direct messages and long sessions
 

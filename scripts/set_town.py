@@ -3,7 +3,8 @@ set_town.py — Show or set the default town (towns/_current_town), or one
 Discord user's own default (towns/_user_towns/<discord id>).
 
 The MCP server re-reads these files on every call, so switching town needs no
-restart. With no town ID, prints the current default. Standard library only, so
+restart. With no town ID, prints the current default. With `--user` the output is written for
+the Discord user (no file paths, no ids). Standard library only, so
 it runs without the project's venv (e.g. from a bot command).
 
 Usage:
@@ -28,15 +29,38 @@ TOWN_ID = re.compile(r"^\d{1,7}$")
 DISCORD_ID = re.compile(r"^\d{1,25}$", re.ASCII)
 
 
-def town_folder(town_id: int) -> str | None:
-    """Name of the towns/ folder archived for this town ID, if any."""
+def find_town(town_id: int) -> tuple[str, dict] | None:
+    """The towns/ folder archived for this town ID and its cache/_meta.json, if any."""
     for meta in TOWNS_DIR.glob("*/cache/_meta.json"):
         try:
-            if json.loads(meta.read_text()).get("town_id") == town_id:
-                return meta.parent.parent.name
-        except (OSError, ValueError):
+            data = json.loads(meta.read_text())
+            if data.get("town_id") == town_id:
+                return meta.parent.parent.name, data
+        except (OSError, ValueError, AttributeError):
             continue
     return None
+
+
+def town_folder(town_id: int) -> str | None:
+    """Name of the towns/ folder archived for this town ID, if any."""
+    found = find_town(town_id)
+    return found[0] if found else None
+
+
+def user_message(town_id: int, previous: str | None) -> str:
+    """What a Discord user is told after setting their town: no paths, no ids
+    but the town's own."""
+    found = find_town(town_id)
+    meta = found[1] if found else {}
+    if meta.get("town_name"):
+        text = (f"Your default town is now {town_id}: {meta['town_name']} "
+                f"(season {meta.get('season')}, day {meta.get('current_day')}).")
+    else:
+        text = (f"Your default town is now {town_id}. I have no data on it yet; "
+                "it is read on your first question.")
+    if previous and TOWN_ID.match(previous) and int(previous) != town_id:
+        text += f" It was {int(previous)}."
+    return text
 
 
 def describe(town_id: int) -> str:
@@ -66,16 +90,26 @@ def show(path: Path = CURRENT_TOWN_FILE, who: str = "") -> int:
 
 def set_town(arg: str, path: Path = CURRENT_TOWN_FILE, who: str = "") -> int:
     if not TOWN_ID.match(arg):
-        print(f"Not a town ID: {arg!r} (expected 1-7 digits, the Fata Morgana town ID).")
+        if who:
+            print(f"Not a town ID: {arg!r} (expected the Fata Morgana town ID, digits only).")
+        else:
+            print(f"Not a town ID: {arg!r} (expected 1-7 digits, the Fata Morgana town ID).")
         return 2
     town_id = int(arg)
+    try:
+        previous = path.read_text().strip()
+    except OSError:
+        previous = None
     path.parent.mkdir(parents=True, exist_ok=True)
     # Atomic: the server may read the file while it is being replaced.
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f"._{path.name}.")
     with os.fdopen(fd, "w") as f:
         f.write(f"{town_id}\n")
     os.replace(tmp, path)
-    print(f"Default town{f' for user {who}' if who else ''} set to {describe(town_id)}")
+    if who:
+        print(user_message(town_id, previous))
+    else:
+        print(f"Default town set to {describe(town_id)}")
     return 0
 
 
