@@ -7,7 +7,7 @@ from mcp.server.fastmcp import FastMCP
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from myhordes_mcp import fata, gesthordes  # noqa: E402
-from myhordes_mcp.fata import supplies  # noqa: E402
+from myhordes_mcp.fata import pickups as pick_mod, supplies  # noqa: E402
 from myhordes_mcp.fata.pathing import loop_return, route_risks, safest_route  # noqa: E402
 from myhordes_mcp.knowledgebase import curated, wiki  # noqa: E402
 from myhordes_mcp.utils.clock import data_updated  # noqa: E402
@@ -528,11 +528,14 @@ async def plan_expedition_supplies(
     drunk_or_hungover: bool = False,
     wounded: bool = False,
     available: str = "",
-    free_slots: int = 0,
+    slots: int = 5,
+    pickups: str = "",
+    trolley: bool = False,
+    guardian: bool = False,
     step_table: bool = False,
     group_cp: int = -1,
     party: str = "",
-    second_wind: int = -1,
+    second_wind: int = 0,
     town_id: int = 0,
 ) -> str:
     """
@@ -561,9 +564,16 @@ async def plan_expedition_supplies(
     route.
 
     Defaults: 6 AP, no scout, no shoes, no bike, no Scout's Lair, nothing drunk or eaten
-    yet, carrying water and one 7 AP food. Every extra must be declared by the player.
-    When the player didn't say, state these assumptions in your answer (one line) so they
-    can correct them. If the plan needs drugs or alcohol it reports them as "extra needed"
+    yet, carrying water and one 7 AP food, 5 free rucksack slots. Every extra must be
+    declared by the player. When the player didn't say, state these assumptions in your
+    answer (one line) so they can correct them.
+
+    Goals on the way (a blueprint, defensive objects, any item): put the zone in BOTH
+    `waypoints` and `pickups` — the route only goes where waypoints say, and the pickups
+    are what makes the plan check the rucksack (supplies still to use + items picked up
+    must fit the slots; supplies are never dropped to make room) and heavy items.
+    Find the zones first (get_zone_details); do not guess slots or heavy items yourself.
+    If the plan needs drugs or alcohol it reports them as "extra needed"
     (one 6 AP extra = steroids or alcohol, either; two extras or a Twinoid are named).
 
     Args:
@@ -584,15 +594,26 @@ async def plan_expedition_supplies(
                    (names: water, food6, food7, alcohol, steroid, twinoid, coffee). Empty =
                    up to 3 water and one 7 AP food, plus extras (one drug, one alcohol)
                    only when needed; it reports the minimum to carry.
-        free_slots: Free rucksack slots for consumables; 0 = no limit (the plan reports how
-                    many it needs).
+        slots: Free rucksack slots at departure (default 5 = base 4 + Enduring level 1,
+               which heroes have). The player says their own ("I have 7 slots"): bags,
+               trolley and Utility Belt are theirs to add up. Must be at least 1.
+        pickups: Items to bring back, each at one of the waypoints: "14,2: blueprint;
+                 -3,8: 2 defense". After the colon: an item name (part of it), `defense`
+                 (defensive object or part) or `heavy`, with an optional count. Matched
+                 against the zone's ground items (heavy / defense as Fata tags them); an
+                 item Fata did not see there is kept as light, with a warning.
+        trolley: A Shopping Trolley is carried (it is the one heavy item, like the bike).
+        guardian: A Guardian may carry a 2nd heavy item with the shield lowered: the plan
+                  warns, and the group CP is 2 lower on every leg after that pickup.
+                  Without it, 2 heavy items (bike, trolley, heavy pickups) are refused.
         step_table: Add the full move-by-move table (long: only when asked for it).
         group_cp / party: For route safety, as in find_expedition_path.
-        second_wind: The player's Second Wind hero skill level (0-3; -1 = none or keep it
-                     for something else). Level 0/1/2/3 = +3/+3/+4/+4 AP (up to max) and
-                     +1/+3/+4/+6 EP. The plan uses it only when it helps, and warns that it
-                     is the day's one heroic action (no Heroic Return that day). Pass it
-                     when the player said or the bot memory holds their level.
+        second_wind: The player's Enduring level as they say it, 1-4 (4 = Master); 0 = none
+                     or keep the heroic action for something else (default). Level
+                     1/2/3/4 = +3/+3/+4/+4 AP (up to max) and +1/+3/+4/+6 EP. The plan uses
+                     it only when it helps, and warns that it is the day's one heroic
+                     action (no Heroic Return that day). Pass it when the player said or
+                     the bot memory holds their level.
         town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
@@ -603,6 +624,7 @@ async def plan_expedition_supplies(
         return points
     if len(points) < 2:
         return "Error: give at least one waypoint."
+    wanted = set(points[1:])
     if round_trip:
         points.append(points[0])
     # "0,0; 14,2; 0,0" with the default start and round_trip would repeat the town.
@@ -616,11 +638,23 @@ async def plan_expedition_supplies(
     if isinstance(items, str):
         return f"Error: {items}"
     sw_ap = sw_ep = 0
-    if second_wind >= 0:
-        if second_wind not in supplies.SECOND_WIND:
-            return "Error: second_wind is the skill level, 0 to 3 (-1 = none)."
-        sw_ap, sw_ep = supplies.SECOND_WIND[second_wind]
+    if second_wind:
+        if second_wind - 1 not in supplies.SECOND_WIND:
+            return "Error: second_wind is the Enduring level, 1 to 4 (0 = none)."
+        sw_ap, sw_ep = supplies.SECOND_WIND[second_wind - 1]
         items["secondwind"] = 1
+    if slots < 1:
+        return "Error: slots is the number of free rucksack slots at departure, at least 1."
+    entries = pick_mod.parse(pickups)
+    if isinstance(entries, str):
+        return entries
+    zones = _parse_zones([e[0] for e in entries])
+    if isinstance(zones, str):
+        return zones
+    for (x, y), (_, what, _) in zip(zones, entries):
+        if (x, y) not in wanted:
+            return (f"Error: pickup '{what}' at [{x}|{y}]: that zone is not one of the waypoints. "
+                    "Add it to waypoints too (the route only goes where the waypoints say).")
 
     data = await fata.fetch_town_data(tid)
     if data.get("error"):
@@ -630,14 +664,22 @@ async def plan_expedition_supplies(
         group_cp = 2
         if party:
             group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
+    picks = pick_mod.resolve(data, [(z, w, n) for z, (_, w, n) in zip(zones, entries)])
+    for p in picks:
+        p.wp = points.index(p.zone, 1)
+    heavy = pick_mod.heavy_check(picks, bike=bike, trolley=trolley, guardian=guardian)
+    if isinstance(heavy, str):
+        return heavy
+    # Per-leg CP: a Guardian carrying a 2nd heavy item has the shield lowered (-2 CP).
+    cps = pick_mod.leg_cps(group_cp, len(points) - 1, heavy["drop_from"])
     # Legs after the first avoid zones already walked: their one dig of the day is used.
     avoid = len(points) >= 3
     back = None
     if avoid and points[-1] == points[0]:
         # Round trip: the way back is a loop ending on the best Observation Platform
         # teleport zone, as find_expedition_path.
-        out = safest_route(data, points[:-1], group_cp, avoid_revisits=True)
-        back = loop_return(data, out, group_cp) if out else None
+        out = safest_route(data, points[:-1], cps[:-1], avoid_revisits=True)
+        back = loop_return(data, out, cps[-1]) if out else None
     if back is not None:
         route = out + back["route"][1:]
         note = ""
@@ -649,32 +691,36 @@ async def plan_expedition_supplies(
         else:
             route, end_ap, note = supplies.end_requirements(data, route, points[-1])
     else:
-        route = safest_route(data, points, group_cp, avoid_revisits=avoid)
+        route = safest_route(data, points, cps, avoid_revisits=avoid)
         if route is None:
             return "Error: no route found between the given zones (40 AP cap per leg)."
         route, end_ap, note = supplies.end_requirements(data, route, points[-1])
-    risks = route_risks(data, route, points, group_cp, avoid_revisits=avoid)
+    risks = route_risks(data, route, points, cps, avoid_revisits=avoid)
     st = supplies.Start(
         ap=start_ap, ep=None if start_ep < 0 else start_ep, counter=thirst_counter, thirst=level,
         drank=already_drank, ate=already_ate, drugged=drug_taken_today,
         no_alcohol=drunk_or_hungover, wounded=wounded, scout=scout, shoes=shoes, bike=bike,
         sw_ap=sw_ap, sw_ep=sw_ep,
     )
-    result = supplies.plan(route, st, items, end_ap=end_ap, slots=free_slots)
+    fitted = pick_mod.fit(route, points, picks, slots,
+                          lambda n: supplies.plan(route, st, items, end_ap=end_ap, slots=n))
+    result = fitted["result"]
     if avoid:
         # Avoiding zones already walked is worth it only when it costs no more supplies
         # (compare death, AP short, thirst and items carried) than the shortest routes;
         # among those, the one walking the fewest zones again.
-        alt_route = safest_route(data, points, group_cp, avoid_revisits=True, revisit_weight=0.01)
+        alt_route = safest_route(data, points, cps, avoid_revisits=True, revisit_weight=0.01)
         if alt_route is not None:
             alt_route, alt_end, alt_note = supplies.end_requirements(data, alt_route, points[-1])
-            alt = supplies.plan(alt_route, st, items, end_ap=alt_end, slots=free_slots)
+            alt_fit = pick_mod.fit(alt_route, points, picks, slots,
+                                   lambda n: supplies.plan(alt_route, st, items, end_ap=alt_end, slots=n))
+            alt = alt_fit["result"]
             if alt["cost"][:6] < result["cost"][:6]:
                 extra = (len(route) - 1) - (len(alt_route) - 1)
                 why = ("not feasible with these supplies" if result["cost"][0] or result["cost"][1]
                        else "needs more supplies")
-                route, end_ap, result, note = alt_route, alt_end, alt, alt_note
-                risks = route_risks(data, route, points, group_cp, avoid_revisits=True)
+                route, end_ap, result, note, fitted = alt_route, alt_end, alt, alt_note, alt_fit
+                risks = route_risks(data, route, points, cps, avoid_revisits=True)
                 note = (f"Avoiding zones already walked would be {extra} AP longer and {why}. "
                         f"{note}").strip()
         again = _walked_again(route)
@@ -682,27 +728,53 @@ async def plan_expedition_supplies(
             note = (f"Walks again (already dug today): {', '.join(f'[{x}|{y}]' for x, y in again)}. "
                     f"{note}").strip()
     path = " → ".join(f"[{x}|{y}]" for x, y in points)
-    notes = [data_updated(data["meta"]), note, f"Route safety computed for {group_cp} CP." + (" " + "; ".join(breakdown) if breakdown else "")]
+    cp_label = None
+    if heavy["drop_from"] is None:
+        cp_text = f"Route safety computed for {group_cp} CP."
+    else:
+        low = max(0, group_cp - pick_mod.GUARDIAN_CP_LOSS)
+        cause = heavy["at_pickup"]
+        where = (f"from the start ([{points[0][0]}|{points[0][1]}])" if cause is None
+                 else f"after the pickup at [{cause.zone[0]}|{cause.zone[1]}]")
+        cp_text = (f"Route safety computed for {group_cp} CP, then {low} CP {where} "
+                   f"(2nd heavy item: the Guardian lowers the shield).")
+        cp_label = f"{group_cp} CP, {low} CP {where}"
+    notes = [data_updated(data["meta"]), note, cp_text + (" " + "; ".join(breakdown) if breakdown else "")]
     if not available.strip():
         notes.append("Assumed: water and one 7 AP food; drugs/alcohol only as extras if needed.")
+    if slots == 5:
+        notes.append("Assumed: 5 free slots.")
     if result["cost"][0] or result["cost"][1]:
         # Not feasible: what would make it work (default items, no slot limit)?
         more = {**items, **{k: max(items.get(k, 0), n) for k, n in supplies.DEFAULT_AVAILABLE.items()}}
         alt = supplies.plan(route, st, more, end_ap=end_ap)
         if not (alt["cost"][0] or alt["cost"][1]):
             need = ", ".join(f"{n} × {supplies.ITEMS[k].label}" for k, n in alt["used"].items())
-            notes.append(f"Feasible with: {need} ({sum(alt['used'].values())} slots).")
+            notes.append(f"Feasible with: {need} ({sum(alt['used'].values())} slots)"
+                         + (f", you have {slots}." if sum(alt['used'].values()) > slots else "."))
         else:
             notes.append("Not feasible even with the default set of items: shorten the route.")
     options = None
     if not available.strip() and any(k in supplies.EXTRAS for k in result["used"]) \
             and not (result["cost"][0] or result["cost"][1]):
-        options = supplies.extra_options(route, st, items, end_ap=end_ap, slots=free_slots,
+        options = supplies.extra_options(route, st, items, end_ap=end_ap, slots=fitted["departure_slots"],
                                          stock=fata.expedition_extras(data["bank"]))
+    pick_verdict, pick_notes, extra_warn = "", None, [p.warning for p in picks if p.warning]
+    if picks:
+        if fitted["rows"]:
+            pick_verdict = pick_mod.verdict(fitted, slots, heavy)
+            pick_notes = pick_mod.pickup_lines(fitted, slots)
+        else:
+            pick_verdict = "Pickups not checked: the supplies plan is not feasible."
+        if heavy["drop_from"] is not None:
+            extra_warn.append("2 heavy items: the Guardian must lower the shield (-2 CP for the group "
+                              "until the night raises it).")
     return supplies.format_plan(route, st, result, title=f"Supplies plan {path}", notes=notes,
-                                slots=free_slots, end_ap=end_ap, step_table=step_table,
+                                slots=slots, end_ap=end_ap, step_table=step_table,
                                 teleport="teleport" in note, generic_extras=not available.strip(),
-                                risks=risks, cp=group_cp, waypoints=points[1:-1], options=options)
+                                risks=risks, cp=group_cp, waypoints=points[1:-1], options=options,
+                                pick_verdict=pick_verdict, pick_notes=pick_notes,
+                                extra_warn=extra_warn, cp_label=cp_label)
 
 
 @mcp.tool()

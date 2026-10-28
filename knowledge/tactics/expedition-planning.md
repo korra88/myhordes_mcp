@@ -66,7 +66,7 @@ Used at 0 AP they give the most.
 | Twinoid 500mg | → 8 | Drug |
 | Alcohol | → 6 | Drunk; not when drunk or hungover (hungover the next day) |
 | Bloody Hot Coffee | +4, up to max | +1 EP; no daily limit |
-| Second Wind (hero skill) | +3/+3/+4/+4 AP (level 0/1/2/3), up to max | +1/+3/+4/+6 EP, even above max; the day's heroic action |
+| Second Wind (hero skill) | +3/+3/+4/+4 AP (Enduring level 1/2/3/4), up to max | +1/+3/+4/+6 EP, even above max; the day's heroic action |
 
 - Max AP 6, **5 when wounded** (7 AP food then gives 6).
 - Second drug the same day → **addict** (permanent; an addict not drugged at night dies).

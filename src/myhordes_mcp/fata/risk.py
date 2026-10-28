@@ -276,6 +276,11 @@ DEFENSE_PARTS = {"Sheet Metal (parts)", "Crate Lid", "Bag of Cement", "Flatpacke
                  "Car Door (incomplete)"}
 
 
+def is_defense(item: dict) -> bool:
+    """A defensive object (Fata category Armor) or a part that assembles into one."""
+    return item.get("category") == "Armor" or item["name"] in DEFENSE_PARTS
+
+
 def _item_tags(item: dict) -> str:
     """' (heavy, defense)' — what limits carrying it and what it is worth to the bank."""
     tags = ["heavy"] if item.get("heavy") else []

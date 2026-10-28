@@ -124,6 +124,8 @@ the summary; the knowledge base has the numbers.
 
 For an expedition, call `find_expedition_path` then `plan_expedition_supplies`. When the
 player has Second Wind (they say so, or the bot memory holds their level), pass
-`second_wind=<level>`: it is the day's one heroic action, shared with Heroic Return.
+`second_wind=<Enduring level 1-4>`: it is the day's one heroic action, shared with Heroic
+Return. Items to bring back (blueprint, defensive objects) go in `waypoints` and `pickups`;
+the plan checks rucksack `slots` (default 5, or what the player says) and heavy items.
 Give the plan as the tool's numbered **Itinerary**, in its order (walks and what to use
 where, together): do not split it into a route and a separate list of uses.

@@ -24,6 +24,9 @@ How to move one rule:
 | EP: paid first leaving a 3+ km zone, refill only shoes/bike part | `fata/supplies.py` | `plan_expedition_supplies` |
 | Manhattan move cost, rounded-Euclidean km | `fata/risk.py:km`, `fata/pathing.py` | route tools |
 | Observation Platform teleport range, Labyrinth entry cost | `fata/risk.py:teleport_range`, `fata/changes.py:platform_discount` | supplies, `get_town_changes` |
+| Rucksack slots along a trip: `slots` free at departure (default 5 = 4 + Enduring 1); at each pickup, supplies still to use (a use at the pickup zone counts as made) + items picked so far ≤ slots, a picked item takes a slot heavy or not; supplies are never dropped (plan redone with fewer departure slots only if thirst/AP outcome stays the same, else not feasible + slots missing) | `fata/pickups.py` (`fit`, `timeline`) | `plan_expedition_supplies` (`slots`, `pickups`) |
+| Heavy items: one per citizen (bike, trolley and heavy pickups count; more is refused); Guardian (`guardian`) carries two, group CP -2 on every leg after the 2nd heavy pickup (per-leg CP in `search_route`, `route_risks`) | `fata/pickups.py` (`heavy_check`, `leg_cps`), `fata/pathing.py` | `plan_expedition_supplies` |
+| Second Wind by Enduring level 1-4 (skill levels 0-3 in code) | `fata/supplies.py` | `plan_expedition_supplies` (`second_wind`) |
 | Zone CP vs zombies, Trapped | `fata/risk.py`, `fata/cp.py` | `find_expedition_path`, `get_citizen_cp`, overview |
 | Zone / citizen data staleness (by day) | `fata/risk.py:_staleness_tag`, `_zone_freshness` | map, overview |
 | Snapshot age + stale label (1 h / 3 h) in every header | `utils/clock.py:data_updated`, `meta.live` set in `fata/client.py` | every Fata tool |

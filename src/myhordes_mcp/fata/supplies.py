@@ -17,8 +17,8 @@ player-facing version is in knowledge/tactics/expedition-planning.md.
 - Alcohol → max AP; not when already drunk or hungover (hungover the next day).
 - Bloody Hot Coffee: +4 AP up to max, +1 EP up to max EP, no daily limit.
 - Second Wind (hero skill, HeroSkillDataService 'super_enduring_N' + effect 'just_ap_sw'):
-  adds AP up to max (never above) and EP even above max; levels 0-3 give +3/+1, +3/+3,
-  +4/+4, +4/+6. It is the day's one heroic action (status tg_hero, cleared at night),
+  adds AP up to max (never above) and EP even above max; skill levels 0-3 (what players call
+  Enduring 1-4, Master = 4) give +3/+1, +3/+3, +4/+4, +4/+6. It is the day's one heroic action (status tg_hero, cleared at night),
   shared with Heroic Return and the other hero actions. Not an item: no slot.
 - AP items raise AP to a level, they never add: AP left when using one is wasted.
 - They also refill EP up to the shoes (1) + bike (2) part, never the scout's 2;
@@ -54,7 +54,7 @@ ITEMS = {
     "coffee": Item("coffee", "Bloody Hot Coffee", "coffee", 4),
     "secondwind": Item("secondwind", "Second Wind (hero action)", "hero", 0),
 }
-SECOND_WIND = {0: (3, 1), 1: (3, 3), 2: (4, 4), 3: (4, 6)}  # level → (AP, EP)
+SECOND_WIND = {0: (3, 1), 1: (3, 3), 2: (4, 4), 3: (4, 6)}  # skill level 0-3 (Enduring 1-4) → (AP, EP)
 ORDER = tuple(ITEMS)
 
 # When the player doesn't say what they have: water and one 7 AP food are assumed; drugs and
@@ -385,14 +385,14 @@ def _risk_what(r: dict, cp: int) -> str:
     return f"~{r['zombies']} zombies estimated{old} vs {cp} CP: may block"
 
 
-def format_risks(risks: list[dict], cp: int, items: int, slots: int) -> list[str]:
+def format_risks(risks: list[dict], cp: int, items: int, slots: int, cp_label: str | None = None) -> list[str]:
     """'Route risks' section: each risky zone, the way around it, or the weapons needed."""
     if not risks:
         return []
     free = (f"{max(0, slots - items)}/{slots} slots free after supplies" if slots
             else f"supplies already take {items} slot(s)")
     blocking = [r for r in risks if r["tag"] != "UNKNOWN"]
-    lines = ["", f"**Route risks** ({cp} CP)"
+    lines = ["", f"**Route risks** ({cp_label or f'{cp} CP'})"
              + (" — cannot pass safely unless you re-route or carry weapons" if blocking else "")]
     for r in risks:
         z = _zones_label(r)
@@ -411,7 +411,7 @@ def format_risks(risks: list[dict], cp: int, items: int, slots: int) -> list[str
             weapons = f"carry a weapon or two just in case ({free})"
         else:
             weapons = ""
-        lines.append(f"- ⚠ {z}, {moves}: {_risk_what(r, cp)} → {around}" + (f"; or {weapons}" if weapons else ""))
+        lines.append(f"- ⚠ {z}, {moves}: {_risk_what(r, r.get('cp', cp))} → {around}" + (f"; or {weapons}" if weapons else ""))
     return lines
 
 
@@ -445,13 +445,16 @@ def _turns(path: list[tuple[int, int]]) -> list[tuple[int, int]]:
 
 def itinerary(steps: list[dict], route: list[tuple[int, int]], ending: str,
               names: dict[str, str] | None = None, risky: dict | None = None,
-              waypoints: list[tuple[int, int]] | None = None) -> list[str]:
+              waypoints: list[tuple[int, int]] | None = None,
+              pick_notes: dict[int, str] | None = None) -> list[str]:
     """One numbered list in walking order: each walk (turning points only, moves, what is
     left) and, between walks, what to use where. A walk ends where something happens:
-    an item is used, a waypoint is reached, thirst changes, a risky zone starts."""
+    an item is used, a waypoint is reached, thirst changes, a risky zone starts.
+    pick_notes: {route move: text}, one line after the walk that reaches a pickup."""
     names = names or {k: it.label for k, it in ITEMS.items()}
     risky = risky or {}
     reached = waypoint_moves(steps, waypoints or [])
+    pick_notes = pick_notes or {}
     out: list[str] = []
     walk: list[dict] = []
     pos = route[0]
@@ -492,8 +495,10 @@ def itinerary(steps: list[dict], route: list[tuple[int, int]], ending: str,
             prev_th = s["thirst"]
             if s["move"] in reached:
                 events.append(f"**waypoint {fmt(s['zone'])} reached**")
-            if events:
+            if events or s["move"] in pick_notes:
                 flush(events)
+            if s["move"] in pick_notes:
+                out.append(pick_notes[s["move"]])
         else:
             flush([])
             out.append(f"At {fmt(s['zone'])}: **dies of dehydration**")
@@ -509,9 +514,13 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
                 title: str, notes: list[str], slots: int = 0, end_ap: int = 0,
                 step_table: bool = False, teleport: bool = False, generic_extras: bool = False,
                 risks: list[dict] | None = None, cp: int = 2,
-                waypoints: list[tuple[int, int]] | None = None, options: list[str] | None = None) -> str:
+                waypoints: list[tuple[int, int]] | None = None, options: list[str] | None = None,
+                pick_verdict: str = "", pick_notes: dict[int, str] | None = None,
+                extra_warn: list[str] | None = None, cp_label: str | None = None) -> str:
     """generic_extras: the player didn't list their items, so drugs/alcohol are extras to find.
-    waypoints: zones to flag when reached. options: other ways to cover the extras."""
+    waypoints: zones to flag when reached. options: other ways to cover the extras.
+    pick_verdict / pick_notes / extra_warn: the pickups' feasibility line, their rucksack
+    lines by route move, and their warnings. cp_label: CP text for the risks header."""
     cost, steps, used = result["cost"], result["steps"], result["used"]
     names = labels(used, generic_extras)
     dead, short, end_dehyd, n_dehyd, end_thirsty, _, n_alc, n_drugs, _, waste = cost
@@ -562,8 +571,10 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
         verdict = (f"Arrives **{THIRST[th]}** with {final[1]} AP, {final[2]} EP left"
                    f" · {waste} AP wasted")
     lines.append(verdict)
+    if pick_verdict:
+        lines.append(pick_verdict)
 
-    warn = []
+    warn = list(extra_warn or [])
     if short or dead:
         pass
     elif end_dehyd:
@@ -597,14 +608,14 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
         lines.append("**Warnings**")
         lines += [f"- {w}" for w in warn]
     risks = risks or []
-    lines += format_risks(risks, cp, n_items, slots)
-    risky = {z: (i, _risk_what(r, cp)) for i, r in enumerate(risks) for z in (r.get("zones") or [r["zone"]])}
+    lines += format_risks(risks, cp, n_items, slots, cp_label)
+    risky = {z: (i, _risk_what(r, r.get("cp", cp))) for i, r in enumerate(risks) for z in (r.get("zones") or [r["zone"]])}
 
     if not step_table:
         lines += ["", "**Itinerary** (in walking order; every move: step_table=True)"]
         ending = ("**stuck, out of points**" if short else "**dead**" if dead
                   else "then **teleport home**" if teleport else "**arrival**")
-        lines += itinerary(steps, route, ending, names, risky, waypoints)
+        lines += itinerary(steps, route, ending, names, risky, waypoints, pick_notes)
         return "\n".join(lines)
     reached = waypoint_moves(steps, waypoints or [])
 
@@ -614,6 +625,7 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
         if s["kind"] == "move":
             flag = " ⚠" if s["zone"] in risky else ""
             flag += " · waypoint" if s["move"] in reached else ""
+            flag += " · pickup" if s["move"] in (pick_notes or {}) else ""
             lines.append(f"| {s['move']} | {z} | {km(*s['zone'])} | move ({s['paid']}){flag} | {s['ap']} | {s['ep']} "
                          f"| {s['counter']} | {THIRST[s['thirst']]} |")
         elif s["kind"] == "use":

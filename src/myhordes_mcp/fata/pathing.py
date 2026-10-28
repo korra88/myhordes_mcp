@@ -326,12 +326,12 @@ def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[in
             "risk": risk}
 
 
-def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int = 2,
+def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int | list[int] = 2,
                  banned: frozenset = frozenset(), revisit: frozenset = frozenset(),
                  avoid_revisits: bool = False,
                  revisit_weight: float | None = None) -> list[tuple[int, int]] | None:
     """The safest route through `points` (search_route, mode "safest"): the zones walked,
-    start included, or None if a leg has no path."""
+    start included, or None if a leg has no path. group_cp: int, or one value per leg."""
     res = search_route(data, points, cp=group_cp, banned=banned, revisit=revisit,
                        avoid_revisits=avoid_revisits, revisit_weight=revisit_weight)
     return res["route"] if res else None
@@ -382,25 +382,49 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> di
             "reused": reused, "retrace_ap": len(out) - 1}
 
 
+def reach_indices(route: list[tuple[int, int]], points: list[tuple[int, int]]) -> list[int | None]:
+    """Index in `route` where each of `points` is reached, in order (None = not on the route,
+    e.g. cut off by a teleport). points[0] is index 0."""
+    out: list[int | None] = [0]
+    pos = 0
+    for p in points[1:]:
+        nxt = next((i for i in range(pos + 1, len(route)) if route[i] == p), None)
+        out.append(nxt)
+        if nxt is not None:
+            pos = nxt
+    return out
+
+
 RISKY_TAGS = ("TRAPPED", "TRAP_RISK", "UNKNOWN")
 
 
 def route_risks(data: dict, route: list[tuple[int, int]], points: list[tuple[int, int]],
-                group_cp: int = 2, avoid_revisits: bool = False) -> list[dict]:
+                group_cp: int | list[int] = 2, avoid_revisits: bool = False) -> list[dict]:
     """Stretches of `route` where the group may get blocked: zombies above its CP (seen
     today = TRAPPED, estimated from old data or spread = TRAP_RISK), or no data at all
     (UNKNOWN; consecutive unknown zones form one stretch).
 
     Each: zones, the moves that enter them, the zombie estimate, the kills needed to get
     control back (zombies - CP), and the extra AP of the safest route that avoids the
-    stretch (None = no way around within the 40 AP cap per leg, or a waypoint)."""
-    _, cell_class, _, _ = _zone_grid(data, group_cp)
-    base = safest_route(data, points, group_cp, avoid_revisits=avoid_revisits)
+    stretch (None = no way around within the 40 AP cap per leg, or a waypoint).
+    group_cp: an int, or one value per leg of `points` (CP drops after a Guardian lowers
+    the shield); each risk carries the "cp" of the leg that enters it."""
+    legs = len(points) - 1
+    cps = list(group_cp) if isinstance(group_cp, (list, tuple)) else [group_cp] * legs
+    classes = {c: _zone_grid(data, c)[1] for c in set(cps)}
+    reached = reach_indices(route, points)
+    base = safest_route(data, points, cps, avoid_revisits=avoid_revisits)
+
+    def leg_cp(move: int) -> int:
+        """CP of the leg whose walk enters route[move]."""
+        done = sum(1 for r in reached[1:] if r is not None and r < move)
+        return cps[min(done, legs - 1)]
 
     groups: list[dict] = []
     prev_move = None
     for move, cell in enumerate(route[1:], start=1):
-        cc = cell_class.get(cell, {"tag": "UNKNOWN", "zombies": None, "age": -1})
+        cp = leg_cp(move)
+        cc = classes[cp].get(cell, {"tag": "UNKNOWN", "zombies": None, "age": -1})
         if cell == (0, 0) or cc["tag"] not in RISKY_TAGS:
             prev_move = None
             continue
@@ -412,8 +436,8 @@ def route_risks(data: dict, route: list[tuple[int, int]], points: list[tuple[int
         else:
             z = cc.get("zombies")
             groups.append({"zones": [cell], "moves": [move], "tag": cc["tag"], "zombies": z,
-                           "age": cc.get("age", -1),
-                           "kills": max(0, z - group_cp) if z is not None else None})
+                           "age": cc.get("age", -1), "cp": cp,
+                           "kills": max(0, z - cp) if z is not None else None})
         prev_move = move
 
     # The way back often crosses the same zones: one entry per set of zones.
@@ -422,6 +446,9 @@ def route_risks(data: dict, route: list[tuple[int, int]], points: list[tuple[int
         same = next((m for m in merged if set(m["zones"]) == set(g["zones"])), None)
         if same:
             same["moves"] += g["moves"]
+            if g["cp"] < same["cp"]:  # entered again with fewer CP: that is the worse case
+                same["cp"] = g["cp"]
+                same["kills"] = max(0, same["zombies"] - g["cp"]) if same["zombies"] is not None else None
         else:
             merged.append(g)
 
@@ -430,7 +457,7 @@ def route_risks(data: dict, route: list[tuple[int, int]], points: list[tuple[int
         g["detour_ap"] = None
         g["waypoint"] = bool(set(g["zones"]) & set(points))
         if base is not None and not g["waypoint"]:
-            alt = safest_route(data, points, group_cp, banned=frozenset(g["zones"]),
+            alt = safest_route(data, points, cps, banned=frozenset(g["zones"]),
                                avoid_revisits=avoid_revisits)
             if alt is not None:
                 g["detour_ap"] = len(alt) - len(base)
