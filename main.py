@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from myhordes_mcp import fata, gesthordes  # noqa: E402
 from myhordes_mcp.fata import pickups as pick_mod, supplies  # noqa: E402
-from myhordes_mcp.fata.pathing import loop_return, route_risks, safest_route  # noqa: E402
+from myhordes_mcp.fata.pathing import dig_weight, loop_return, route_risks, safest_route  # noqa: E402
 from myhordes_mcp.knowledgebase import curated, wiki  # noqa: E402
 from myhordes_mcp.utils.clock import data_updated  # noqa: E402
 from myhordes_mcp.utils.config import CURRENT_TOWN_FILE, FATAMORGANA_TOWN_ID, resolve_town_id  # noqa: E402
@@ -416,6 +416,7 @@ async def find_expedition_path(
     thirst_counter: int = 0,
     show_items: bool = False,
     waypoints: str = "",
+    dig: bool = False,
     day: int = 0,
     town_id: int = 0,
 ) -> str:
@@ -449,23 +450,26 @@ async def find_expedition_path(
         show_items: Set True to list the ground items on each step (only when
                     the user wants to pick things up on the way).
         waypoints: Zones the route must pass through, in order, town-relative, e.g.
-                   "-7,5" or "-7,5; -3,8". Legs after the first avoid zones already
-                   walked (a zone can be dug once a day) and depleted ones (nothing
-                   to dig); at equal AP every leg prefers zones not depleted. Flash
-                   items are shared by all legs. Omit for a direct route.
+                   "-7,5" or "-7,5; -3,8". At equal AP every leg prefers zones still
+                   to dig (not walked yet on this trip, not depleted); with `dig`
+                   later legs may cost more AP for them. Flash items are shared by
+                   all legs. Omit for a direct route.
         step_table: Set True when planning an actual trip. Adds a step-by-step
                     table for the first path: AP or EP paid per move (EP is used
                     first when leaving a zone 3+ km from town), AP/EP left, thirst
                     counter and status (Thirsty at 11, Dehydrated at 22, death at
                     33). No consumables are applied: for where to drink, eat
                     and take drugs, and what to carry, use plan_expedition_supplies.
-        round_trip: Also plan the way back: over zones still to dig when that is
-                    worth the AP (the way out is dug, depleted zones have nothing;
-                    over depleted zones it just retraces the shortest way), and, when the
+        round_trip: Also plan the way back: fewest AP, over zones still to dig at
+                    equal AP (or, with `dig`, when they are worth the AP), and, when the
                     trip starts in town and the Observation Platform is level
                     3+, ending on the teleport zone cheapest to reach (off row 0 /
                     column 0, e.g. [2|1] at level 4). Gives the round-trip AP and
                     the AP saved. With step_table, the table covers both ways.
+        dig: Set True only when the player wants to dig / scavenge items on the way
+             ("I want to dig", "scavenging trip"): later legs and the way back may then
+             take up to 1 more AP per zone still to dig. Default False = fewest AP
+             (zones still to dig only at equal AP).
         start_ap: AP at departure (default 6).
         start_ep: EP at departure (Scout 2, shoes +1, bike +2; default 0).
         thirst_counter: Thirst at departure. Not thirsty: zones already walked since
@@ -502,6 +506,7 @@ async def find_expedition_path(
         start_ep=start_ep,
         thirst_counter=thirst_counter,
         waypoints=wps,
+        dig=dig,
     )
 
 
@@ -541,6 +546,7 @@ async def plan_expedition_supplies(
     group_cp: int = -1,
     party: str = "",
     second_wind: int = 0,
+    dig: bool = False,
     town_id: int = 0,
 ) -> str:
     """
@@ -553,9 +559,8 @@ async def plan_expedition_supplies(
     EP is spent first when leaving a zone 3+ km from town.
 
     The route is the safest path (as find_expedition_path) from `start` through the
-    waypoints, back to `start` if round_trip. Legs after the first avoid zones already
-    walked (a zone can be dug once a day) and depleted ones unless that needs more
-    supplies; at equal AP routes prefer zones not depleted; a round trip
+    waypoints, back to `start` if round_trip: fewest AP, over zones still to dig at equal
+    AP (with `dig`, up to 1 more AP each unless that needs more supplies); a round trip
     from town with the Observation Platform level 3+ ends on the best teleport zone. The
     output names the zones walked again. Accounts for the Labyrinth's 1 AP.
     The plan minimises, in order: death, running out of AP, ending Dehydrated, ending
@@ -620,6 +625,10 @@ async def plan_expedition_supplies(
                      it only when it helps, and warns that it is the day's one heroic
                      action (no Heroic Return that day). Pass it when the player said or
                      the bot memory holds their level.
+        dig: Set True only when the player wants to dig / scavenge items on the way
+             ("I want to dig", "scavenging trip"): later legs and the way back may then
+             take up to 1 more AP per zone still to dig. Default False = fewest AP
+             (zones still to dig only at equal AP).
         town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
     tid = resolve_town_id(town_id)
@@ -680,12 +689,13 @@ async def plan_expedition_supplies(
     cps = pick_mod.leg_cps(group_cp, len(points) - 1, heavy["drop_from"])
     # Legs after the first avoid zones already walked: their one dig of the day is used.
     avoid = len(points) >= 3
+    rw = dig_weight(dig)
     back = None
     if avoid and points[-1] == points[0]:
         # Round trip: the way back is a loop ending on the best Observation Platform
         # teleport zone, as find_expedition_path.
-        out = safest_route(data, points[:-1], cps[:-1], avoid_revisits=True)
-        back = loop_return(data, out, cps[-1]) if out else None
+        out = safest_route(data, points[:-1], cps[:-1], avoid_revisits=True, revisit_weight=rw)
+        back = loop_return(data, out, cps[-1], dig=dig) if out else None
     if back is not None:
         route = out + back["route"][1:]
         note = ""
@@ -697,11 +707,11 @@ async def plan_expedition_supplies(
         else:
             route, end_ap, note = supplies.end_requirements(data, route, points[-1])
     else:
-        route = safest_route(data, points, cps, avoid_revisits=avoid)
+        route = safest_route(data, points, cps, avoid_revisits=avoid, revisit_weight=rw)
         if route is None:
             return "Error: no route found between the given zones (40 AP cap per leg)."
         route, end_ap, note = supplies.end_requirements(data, route, points[-1])
-    risks = route_risks(data, route, points, cps, avoid_revisits=avoid)
+    risks = route_risks(data, route, points, cps, avoid_revisits=avoid, revisit_weight=rw)
     st = supplies.Start(
         ap=start_ap, ep=None if start_ep < 0 else start_ep, counter=thirst_counter, thirst=level,
         drank=already_drank, ate=already_ate, drugged=drug_taken_today,
@@ -711,11 +721,11 @@ async def plan_expedition_supplies(
     fitted = pick_mod.fit(route, points, picks, slots,
                           lambda n: supplies.plan(route, st, items, end_ap=end_ap, slots=n))
     result = fitted["result"]
-    if avoid:
-        # Avoiding zones already walked is worth it only when it costs no more supplies
+    if avoid and dig:
+        # Going over zones still to dig is worth it only when it costs no more supplies
         # (compare death, AP short, thirst and items carried) than the shortest routes;
         # among those, the one walking the fewest zones again.
-        alt_route = safest_route(data, points, cps, avoid_revisits=True, revisit_weight=0.01)
+        alt_route = safest_route(data, points, cps, avoid_revisits=True, revisit_weight=dig_weight(False))
         if alt_route is not None:
             alt_route, alt_end, alt_note = supplies.end_requirements(data, alt_route, points[-1])
             alt_fit = pick_mod.fit(alt_route, points, picks, slots,
@@ -726,9 +736,11 @@ async def plan_expedition_supplies(
                 why = ("not feasible with these supplies" if result["cost"][0] or result["cost"][1]
                        else "needs more supplies")
                 route, end_ap, result, note, fitted = alt_route, alt_end, alt, alt_note, alt_fit
-                risks = route_risks(data, route, points, cps, avoid_revisits=True)
-                note = (f"Avoiding zones already walked would be {extra} AP longer and {why}. "
+                risks = route_risks(data, route, points, cps, avoid_revisits=True,
+                                    revisit_weight=dig_weight(False))
+                note = (f"Going over zones still to dig would be {extra} AP longer and {why}. "
                         f"{note}").strip()
+    if avoid:
         again = _walked_again(route)
         if again:
             note = (f"Walks again (already dug today): {', '.join(f'[{x}|{y}]' for x, y in again)}. "
