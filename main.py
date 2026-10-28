@@ -392,7 +392,7 @@ async def find_expedition_path(
     y1: int,
     x2: int,
     y2: int,
-    group_cp: int = 0,
+    group_cp: int = -1,
     party: str = "",
     escape_items: int = 0,
     scout_mode: bool = False,
@@ -418,9 +418,10 @@ async def find_expedition_path(
         y1: Y coordinate of the starting point.
         x2: X coordinate of the destination.
         y2: Y coordinate of the destination.
-        group_cp: Total Control Points of the expedition party. Leave 0 to
+        group_cp: Total Control Points of the expedition party. Omit (-1) to
                   compute it from `party` (or 2 = solo citizen without party).
-                  Set it only when the user states the party's CP.
+                  Set it only when the user states the party's CP. 0 is valid:
+                  a Terrorised citizen alone has 0 CP (any zombie traps them).
                   Zones with zombies > group_cp are flagged as trap risk.
         party: Comma-separated citizen names of the expedition party, e.g.
                "Alice, Bob". Their CP comes from the town's CP log (last value
@@ -456,7 +457,7 @@ async def find_expedition_path(
         return tid
     data = await fata.fetch_town_data(tid, day=day or None)
     breakdown = None
-    if not group_cp:
+    if group_cp < 0:
         group_cp = 2
         if party and not data.get("error"):
             group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
@@ -505,7 +506,7 @@ async def plan_expedition_supplies(
     available: str = "",
     free_slots: int = 0,
     step_table: bool = False,
-    group_cp: int = 0,
+    group_cp: int = -1,
     party: str = "",
     second_wind: int = -1,
     town_id: int = 0,
@@ -606,7 +607,7 @@ async def plan_expedition_supplies(
     if data.get("error"):
         return f"Error: {data['error']}"
     breakdown = None
-    if not group_cp:
+    if group_cp < 0:
         group_cp = 2
         if party:
             group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
