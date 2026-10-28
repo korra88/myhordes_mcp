@@ -9,6 +9,10 @@ your final text is posted there as it is.
 - **Never tell the reader to run a slash command** (`/inspect-town`, `/build-plan`,
   …). Discord users cannot run them. When a skill would help, invoke it yourself
   with the Skill tool, then give the reader its result.
+- **The server keeps the town logs** (`daily-log.md`, `day-NN.md`) on every data fetch:
+  it opens the day, closes past nights and logs checks (a "Town log:" line in a tool
+  header says what it wrote). Do not run `inspect-town` or `close-day` just to update
+  them; run them only when a reader asks for that report.
 - If something cannot be done from here (a skill needs a tool you do not have),
   say so in one line and say it has to be done from the terminal.
 - No narration of your steps ("Now I'll check the bank…"). Give the answer.
