@@ -54,7 +54,7 @@ def user_message(town_id: int, previous: str | None) -> str:
     meta = found[1] if found else {}
     if meta.get("town_name"):
         text = (f"Your default town is now {town_id}: {meta['town_name']} "
-                f"(season {meta.get('season')}, day {meta.get('current_day')}).")
+                f"(season {meta.get('season')}, day {meta.get('current_day')} when last read).")
     else:
         text = (f"Your default town is now {town_id}. I have no data on it yet; "
                 "it is read on your first question.")
