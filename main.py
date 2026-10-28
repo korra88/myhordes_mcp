@@ -450,16 +450,18 @@ async def find_expedition_path(
                     the user wants to pick things up on the way).
         waypoints: Zones the route must pass through, in order, town-relative, e.g.
                    "-7,5" or "-7,5; -3,8". Legs after the first avoid zones already
-                   walked (a zone can be dug once a day). Flash items are shared by
-                   all legs. Omit for a direct route.
+                   walked (a zone can be dug once a day) and depleted ones (nothing
+                   to dig); at equal AP every leg prefers zones not depleted. Flash
+                   items are shared by all legs. Omit for a direct route.
         step_table: Set True when planning an actual trip. Adds a step-by-step
                     table for the first path: AP or EP paid per move (EP is used
                     first when leaving a zone 3+ km from town), AP/EP left, thirst
                     counter and status (Thirsty at 11, Dehydrated at 22, death at
                     33). No consumables are applied: for where to drink, eat
                     and take drugs, and what to carry, use plan_expedition_supplies.
-        round_trip: Also plan the way back, as a loop: over zones the way out
-                    does not use (a zone can be dug once a day), and, when the
+        round_trip: Also plan the way back: over zones still to dig when that is
+                    worth the AP (the way out is dug, depleted zones have nothing;
+                    over depleted zones it just retraces the shortest way), and, when the
                     trip starts in town and the Observation Platform is level
                     3+, ending on the teleport zone cheapest to reach (off row 0 /
                     column 0, e.g. [2|1] at level 4). Gives the round-trip AP and
@@ -552,7 +554,8 @@ async def plan_expedition_supplies(
 
     The route is the safest path (as find_expedition_path) from `start` through the
     waypoints, back to `start` if round_trip. Legs after the first avoid zones already
-    walked (a zone can be dug once a day) unless that needs more supplies; a round trip
+    walked (a zone can be dug once a day) and depleted ones unless that needs more
+    supplies; at equal AP routes prefer zones not depleted; a round trip
     from town with the Observation Platform level 3+ ends on the best teleport zone. The
     output names the zones walked again. Accounts for the Labyrinth's 1 AP.
     The plan minimises, in order: death, running out of AP, ending Dehydrated, ending

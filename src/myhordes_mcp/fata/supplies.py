@@ -125,8 +125,10 @@ class Start:
 # dead, moves short, dehydrated at the end, times dehydrated, thirsty at the end,
 # items, alcohol, drugs (alcohol is the last resort, after one drug), premium items
 # (7 AP food, Twinoid: kept for when they are needed), AP wasted (only a tiebreak between
-# feasible plans: keeping a Twinoid beats an AP lost while arriving with AP to spare)
-ZERO = (0,) * 10
+# feasible plans: keeping a Twinoid beats an AP lost while arriving with AP to spare),
+# AP left at arrival, negated (EP are worth nothing in town: Second Wind or coffee goes
+# where its EP still pay for moves)
+ZERO = (0,) * 11
 PREMIUM = {"food7": 1, "twinoid": 2}  # a Twinoid is rarer than a 7 AP food
 
 
@@ -204,7 +206,7 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
         # Second Wind costs less than an item (no slot) but is kept when not needed: it is
         # the day's heroic action (Heroic Return, ...).
         cost = (0, 0, 0, 0, 0, 0.5 if it.kind == "hero" else 1, it.kind == "alcohol", it.kind == "drug",
-                PREMIUM.get(k, 0), waste)
+                PREMIUM.get(k, 0), waste, 0)
         return (i, ap, ep, cnt, th, drank, ate, drugged, drunk, used), cost
 
     def move(state):
@@ -230,19 +232,19 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
         options = []
         if i == last:
             if ap >= end_ap:
-                options.append(((0, 0, th == 2, 0, th == 1, 0, 0, 0, 0, 0), "end"))
+                options.append(((0, 0, th == 2, 0, th == 1, 0, 0, 0, 0, 0, -ap), "end"))
             else:
-                options.append(((0, end_ap - ap, th == 2, 0, th == 1, 0, 0, 0, 0, 0), "stuck"))
+                options.append(((0, end_ap - ap, th == 2, 0, th == 1, 0, 0, 0, 0, 0, 0), "stuck"))
         else:
             m = move(state)
             if m is not None:
                 nxt, dehyd = m
                 if nxt[4] >= 3:
-                    options.append(((1, 0, 0, 0, 0, 0, 0, 0, 0, 0), "move"))
+                    options.append(((1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), "move"))
                 else:
-                    options.append((_add(best(nxt)[0], (0, 0, 0, dehyd, 0, 0, 0, 0, 0, 0)), "move"))
+                    options.append((_add(best(nxt)[0], (0, 0, 0, dehyd, 0, 0, 0, 0, 0, 0, 0)), "move"))
             else:
-                options.append(((0, last - i + end_ap, th == 2, 0, th == 1, 0, 0, 0, 0, 0), "stuck"))
+                options.append(((0, last - i + end_ap, th == 2, 0, th == 1, 0, 0, 0, 0, 0, 0), "stuck"))
         for k in ORDER:
             r = use(state, k)
             if r is not None:
@@ -523,7 +525,7 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
     lines by route move, and their warnings. cp_label: CP text for the risks header."""
     cost, steps, used = result["cost"], result["steps"], result["used"]
     names = labels(used, generic_extras)
-    dead, short, end_dehyd, n_dehyd, end_thirsty, _, n_alc, n_drugs, _, waste = cost
+    dead, short, end_dehyd, n_dehyd, end_thirsty, _, n_alc, n_drugs, _, waste, _ = cost
     n_items = carried(used)
     hero = used.get("secondwind")
     used = {k: n for k, n in used.items() if k != "secondwind"}

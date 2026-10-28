@@ -35,6 +35,8 @@ WALK = {
     "trap_risk": 20.0,        # zombies above CP estimated (old count, spread, danger band)
     "unknown": 8.0,           # never explored
     "revisit": 1.0,           # already walked on this trip: its one dig of the day is used
+    "dried": 0.01,            # depleted, nothing to dig: tiebreak among routes of equal AP
+                              # (legs after the first weigh it like "revisit": no dig either way)
     "scout_detection": 50.0,  # Scout with Camouflage Vest in a trap zone: x detection chance
 }
 # Zones known only by a danger band, without an estimate (0 / 1-2 / 3-5 / 6+ zombies).
@@ -207,10 +209,12 @@ def _zone_grid(data: dict, group_cp: int):
 
 def _leg_search(grid: tuple, a: tuple[int, int], b: tuple[int, int], f0: int, *, mode: str,
                 budget: int, scout_mode: bool, banned: frozenset, seen: set,
-                rw: float) -> dict[int, tuple]:
+                rw: float, dig_leg: bool = False) -> dict[int, tuple]:
     """One leg a -> b, starting with f0 flashes used. Returns {flashes used at b: (pri, sec,
     cells walked after a, flash cells)}, each the cheapest for that count (one entry when
-    budget is 0). Cost is the (pri, sec) tuple; AP is capped at MAX_PATH_AP per leg."""
+    budget is 0). Cost is the (pri, sec) tuple; AP is capped at MAX_PATH_AP per leg.
+    `seen` zones cost rw to enter; on a dig_leg so do depleted zones (no dig either way),
+    elsewhere they cost WALK["dried"]."""
     zone_map, cell_class, spread_map, cd, cp = grid
     margin = 3
     bx = (min(a[0], b[0]) - margin, max(a[0], b[0]) + margin)
@@ -238,7 +242,11 @@ def _leg_search(grid: tuple, a: tuple[int, int], b: tuple[int, int], f0: int, *,
                 continue
             if n in banned:
                 continue
-            extra = rw if n in seen else 0.0
+            dried = (zone_map.get(n) or {}).get("dried")
+            if n in seen or (dig_leg and dried):
+                extra = rw
+            else:
+                extra = WALK["dried"] if dried else 0.0
             nf = f
             if mode == "shortest":
                 # AP first, risk as tiebreak; a trap zone needs a flash (which clears it).
@@ -284,7 +292,8 @@ def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[in
     cp: group CP, an int or one value per leg. `banned` zones are never entered; `revisit`
     zones (and, with avoid_revisits, the zones earlier legs walked) cost WALK["revisit"] to
     enter again, or `revisit_weight` (a tiny one = fewest zones walked again among the
-    shortest routes).
+    shortest routes). On those legs (with `revisit`, or after the first with avoid_revisits)
+    depleted zones cost the same: they give no dig either. Elsewhere they are a tiebreak.
 
     Returns {route (start included), ap, flashes, flash_cells, risk} or None if a leg has
     no path. risk = summed walkability of the zones entered (not counting revisit costs).
@@ -305,7 +314,8 @@ def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[in
         for f0, (pri, sec, route, flashed, lens) in states.items():
             seen = (revisit | (set(route) if avoid_revisits else set())) - {(0, 0), a, b}
             res = _leg_search(grids[cps[i]], a, b, f0, mode=mode, budget=flash_budget,
-                              scout_mode=scout_mode, banned=banned, seen=seen, rw=rw)
+                              scout_mode=scout_mode, banned=banned, seen=seen, rw=rw,
+                              dig_leg=bool(revisit) or (avoid_revisits and i > 0))
             for f, (lp, ls, cells, lf) in res.items():
                 cand = (pri + lp, sec + ls, route + cells, flashed + lf, lens + [len(cells)])
                 if f not in nxt or cand[:2] < nxt[f][:2]:
@@ -340,15 +350,17 @@ def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int | list
 def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> dict | None:
     """The way back of a trip that walked `out` (start first, destination last).
 
-    A zone can be dug once a day, so the way back avoids the outbound zones when that
-    costs at most WALK["revisit"] moves per zone (they stay walkable). When the
+    A zone can be dug once a day, so the way back avoids the outbound zones and depleted
+    zones (no dig either) when that costs at most WALK["revisit"] moves per zone (they stay
+    walkable): a loop over depleted zones is not worth more AP than retracing. When the
     trip starts in town and the Observation Platform teleports (level 3+), the walk ends
     on the teleport zone that is cheapest to reach: walking costs |x|+|y| but the
     teleport works by km, so the best end is off row 0 / column 0 ([2|1] at level 4).
 
     The way back is the safest route (moves + walkability, as the way out). Returns
     {route, teleport_from, saved_ap, level, reused, retrace_ap} or None if no way back
-    exists. `reused` = outbound zones it walks again.
+    exists. `reused` = outbound zones it walks again; retrace_ap = AP to walk the way out
+    backwards (to the first teleport zone on it).
     """
     start, dest = out[0], out[-1]
     level = platform_level(data) if start == (0, 0) else None
@@ -362,6 +374,10 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> di
     else:
         ends = [start]
     walked = frozenset(out[1:-1]) - {start}
+    dried = {c for z in data.get("zones", []) if z.get("dried") and (c := _parse_coords(z))}
+    last = len(out) - 1
+    # Walking the way out backwards stops at the first zone the platform teleports from.
+    retrace = last - next((j for j in range(last - 1, 0, -1) if reach and km(*out[j]) <= reach), 0)
     best = None
     for end in ends:
         res = search_route(data, [dest, end], cp=group_cp, revisit=walked)
@@ -369,7 +385,8 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> di
             continue
         route = res["route"]
         reused = [c for c in route[1:] if c in walked]
-        key = (len(route) - 1 + WALK["revisit"] * len(reused), res["risk"],
+        no_dig = sum(1 for c in route[1:] if c in walked or c in dried)
+        key = (len(route) - 1 + WALK["revisit"] * no_dig, res["risk"],
                -(abs(end[0]) + abs(end[1])))
         if best is None or key < best[0]:
             best = (key, route, end, reused)
@@ -379,7 +396,7 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2) -> di
     tele = end if reach else None
     return {"route": route, "teleport_from": tele,
             "saved_ap": abs(end[0]) + abs(end[1]) if tele else 0, "level": level,
-            "reused": reused, "retrace_ap": len(out) - 1}
+            "reused": reused, "retrace_ap": retrace}
 
 
 def reach_indices(route: list[tuple[int, int]], points: list[tuple[int, int]]) -> list[int | None]:
@@ -651,7 +668,8 @@ def find_safe_path(
             how = f"walk {walk} AP" + (" (no platform teleport: level 3+ needed)"
                                        if out[0] == (0, 0) else "")
         out_ap = len(out) - 1
-        head = [f"### Way back (loop: other zones than the way out, which are already dug)",
+        head = [f"### Way back (over zones still to dig when that is worth the AP: the way out "
+                f"is already dug, depleted zones have nothing)",
                 f"Round trip {out_ap} + {walk} = {out_ap + walk} AP walked; {how}. "
                 f"Retracing the way out would cost {back['retrace_ap']} AP."]
         if back["reused"]:
