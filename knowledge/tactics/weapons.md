@@ -39,7 +39,12 @@ Killing map zombies does not lower the night attack (see the primer).
 | Swiss Army Knife | 1 | 15 | 50 | 0.3 | Broken |
 | Burnt out Torch | 1 | 10 | 75 | 0.1 | Broken |
 
-Broken melee weapons can be repaired (Kwik-Fix, Repair Kit, Technician).
+Broken melee weapons can be repaired (Kwik-Fix, Repair Kit, Technician). Repairing costs
+1 AP; a Repair Kit becomes a Repair Kit (damaged).
+
+A 2-kill weapon on a zone with 1 zombie kills that one: the second kill is lost
+(`ProcessZoneEffect`: kills = min(zombies in the zone, weapon kills)). Keep 2-kill weapons
+(Machete, Laser Pointer) for pairs and 1-kill weapons for the odd zombie.
 
 ## Water weapons (reload: Water Ration)
 
@@ -52,13 +57,16 @@ Broken melee weapons can be repaired (Kwik-Fix, Repair Kit, Technician).
 
 ## Battery weapons (reload: Battery)
 
+Reloading costs 0 AP and works in the desert. "Battery back" = the shot drops the battery
+again, ready to reload: Avg per battery counts those reloads.
+
 | Weapon | Kills | Kill % | Empties | Avg per battery | Battery back |
 |---|---|---|---|---|---|
 | Chainsaw (H) | 3 | 100 | 30% | 10 | — |
-| Burning Laser Pointer | 2 per charge, 4 charges | 100 | after 4 | 8 | — |
+| Burning Laser Pointer | 2 per charge | 100 | after its charges: a battery loads 4 (50%), 3 (25%) or 2 (25%) | 6.5 (worst 4) | — |
+| Battery Launcher Mk. II | 1 | 100 | always | 5 (worst 1) | 80% |
+| Devastator | 2 | 100 | always | 4 (worst 2) | 50% |
 | Electric Whisk | 1 | 100 | 40% | 2.5 | — |
-| Devastator | 2 | 100 | always | 2 | 50% |
-| Battery Launcher Mk. II | 1 | 100 | always | 1 | 80% |
 | Battery Launcher 1-ITF | 1 | 90 | always | 0.9 | never (Crushed Battery) |
 | Taser | 1 | 30 | 70% | 0.4 | — |
 
@@ -79,7 +87,10 @@ Mobile Phone 1–2 (leaves parts).
 
 ## Planning a kill run (zoo trimming)
 
-- Count the zombies to kill per zone (`get_zone_details`) and the weapons in the bank
+- Kill **every** zombie in each zone of the run: one left alive spreads to the clean zones
+  around it that night, before Zombie Despair (see opti-town-meta.md, Spawn rules).
+- Count the zombies to kill per zone (`get_zone_details`), split each zone into pairs (for
+  2-kill weapons) and an odd one (for 1-kill weapons), and check the weapons in the bank
   (`get_bank_inventory`, Strong/Weak weapons): plan on **Avg**, not on best case.
 - Grenades for crowded zones, Machete / Lawnmower / Chainsaw for long runs, water guns
   for sure kills.

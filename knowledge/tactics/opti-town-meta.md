@@ -95,9 +95,18 @@ Town with 25,000 attack estimate + 50 visible map zombies = normal.
 
 ### Spawn rules (nightly, after attack)
 
+Checked in the game code (`MapMaker::zombieSpawnGovernorMH`, `spreadCycleMH`). Zombies never walk: a
+zone grows, or a neighbour spawns new ones. Neighbours = 8 zones around (diagonals from day 2).
+
+- Zone with zombies → +1 (90%), +0 (5%), +2 (5%).
+- Empty zone next to a zone holding more zombies → spawns 1–2 (or none).
 - Empty zone, no infected neighbors → stays empty.
-- Empty zone, some infected neighbors → spawns 0–4 zombies (more infected adj. = higher count).
-- Already infected zone → spawns 1–2 additional.
+
+Order each night: respawn check (on the total left after the day's kills) → one spread cycle →
+Zombie Despair. Despair = ⌊(zombies killed in the zone that day − 1) ÷ 2⌋ more die: 2 kills → 0,
+3 → 1, 5 → 2, 7 → 3. A zone with despair does not grow itself that night, but **the spread reads
+the counts before despair**: zombies left alive still seed the neighbours, then die. So a zone is
+clean only when every zombie is killed: one left = its empty neighbours can get 1–2 each.
 
 ### Global Respawn trap
 
@@ -119,7 +128,7 @@ Zookeepers or citizens accidentally kill too many → threshold breach → all c
 2. Never kill inside zoo — infected zones self-sustain, grow, act as reservoir.
 3. Empty zones with empty neighbors don't spawn — clean zones stay clean.
 4. Zookeepers patrol boundary daily — kill only leakers before they infect clean zones.
-5. Zombie Despair: ~2 killed in zone → 1 more dies overnight. Kill 2/3 of boundary leakers, despair finishes rest.
+5. Kill every leaker in a zone: Zombie Despair comes after the spread (see Spawn rules), so a zombie left alive infects the clean neighbours before it dies.
 6. Keep total above respawn threshold — zoo sustains naturally. Danger = over-killing at boundary.
 
 Not casual tactic. Opti-tier coordination required.
