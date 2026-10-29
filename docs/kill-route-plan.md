@@ -1,8 +1,9 @@
 # Piano: rotte di uccisione zombie (`plan_kill_route`)
 
 Stato: **approvato dall'utente 2026-10-29** (design + stima + regola "pulizia totale" + soglia =
-solo avviso). Fasi 1–5 = v1, da implementare. Fase 6 (generazione automatica rotte) = v2, solo
-schizzo: **non implementarla senza nuova revisione dell'utente**.
+solo avviso). Fasi 1–5 = v1, **fatte e in produzione 2026-10-29** (d431876, Pi aggiornato). Fase 6
+(generazione automatica rotte) = v2, solo schizzo: **non implementarla senza nuova revisione
+dell'utente**.
 
 Leggi prima: `CLAUDE.md` (vincoli: read-only, nessun polling, output testuale condensato),
 `docs/mechanics-in-code.md` (regole di gioco in Python, non in prosa), `knowledge/tactics/weapons.md`
