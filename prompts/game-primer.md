@@ -125,6 +125,10 @@ The search matches words, so use specific terms (a file name returns the whole f
 home items → carrying; digging → digging; killing zombies → weapons. The rules above are
 the summary; the knowledge base has the numbers.
 
+For a kill run (cleaning the zoo, a SpecialAgent route, kills along a route), call
+`plan_kill_route`: it counts the zombies, picks the weapons and plans the supplies; do not
+count or pick weapons by hand.
+
 For an expedition, call `find_expedition_path` then `plan_expedition_supplies`. When the
 player has Second Wind (they say so, or the bot memory holds their level), pass
 `second_wind=<Enduring level 1-4>`: it is the day's one heroic action, shared with Heroic

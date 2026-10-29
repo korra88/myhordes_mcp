@@ -74,6 +74,7 @@ make advisor     # Claude Code with persona.md + knowledge/tactics/*.md + person
 | `get_scout_map` | Fata Morgana | Zombies seen today (danger) and older counts by day, plus tonight's global respawn check. |
 | `get_zone_details` | Fata Morgana | Desert overview (ground items grouped like the bank, ruins, who is outside); `item=` to locate an item; a box for zone detail; one zone for its reach from town. |
 | `plan_expedition_supplies` | Fata Morgana + game rules | What to carry and where to drink, eat or take a drug along a route: fewest slots, no wasted AP, home not thirsty; platform teleport and Labyrinth included. |
+| `plan_kill_route` | Fata Morgana + game rules | Kill run on a Fata route (`route="SpecialAgent3"`) or own waypoints: zombies per zone split into pairs and singles, weapon kit from the bank, supplies on that exact route, respawn warning; `zoo=True` lists the zombie clusters and their sides. |
 | `find_expedition_path` | Fata Morgana | CP-aware safest/shortest path (`party="A, B"` takes the party's CP from the CP log); `step_table=True` adds AP/EP and thirst counter per move. |
 | `get_attack_forecast` | Gest'Hordes | Theoretical attack curve, actual and estimated attacks, defence per day. |
 | `get_attack_distribution` | Gest'Hordes | Historical attack statistics across towns per day. |

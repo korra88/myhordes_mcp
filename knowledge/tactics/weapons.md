@@ -87,14 +87,16 @@ Mobile Phone 1–2 (leaves parts).
 
 ## Planning a kill run (zoo trimming)
 
-- Kill **every** zombie in each zone of the run: one left alive spreads to the clean zones
+Use `plan_kill_route` (a Fata route by name, own waypoints, or `zoo=True` for the clusters and
+their sides). It counts the zombies per zone, splits them into pairs and singles, picks the
+weapons from the bank on the **Avg** values above, and plans the supplies on the exact route.
+Do not count or pick weapons by hand. What it applies:
+
+- Kill **every** zombie of each zone on the run: one left alive spreads to the clean zones
   around it that night, before Zombie Despair (see opti-town-meta.md, Spawn rules).
-- Count the zombies to kill per zone (`get_zone_details`), split each zone into pairs (for
-  2-kill weapons) and an odd one (for 1-kill weapons), and check the weapons in the bank
-  (`get_bank_inventory`, Strong/Weak weapons): plan on **Avg**, not on best case.
-- Grenades for crowded zones, Machete / Lawnmower / Chainsaw for long runs, water guns
-  for sure kills.
+- A zone with n zombies = n ÷ 2 pairs (2-kill weapons) + n mod 2 single (1-kill weapon).
+- Grenades for crowded zones are not planned by the tool: mention them if the bank has them.
 - Using a defensive object (Concrete Blocks, Torch, Guard Dog, Dachshund) as a weapon
   can cost bank defense: say so.
 - Watch control points while killing: a zone with more zombie CP than citizen CP traps
-  you (`find_expedition_path`, `get_citizen_cp`).
+  you (the tool warns; `get_citizen_cp` for the party).

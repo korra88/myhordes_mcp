@@ -23,7 +23,8 @@ Shape (town 8212, day 7: 814 KB raw, 128 KB gzipped):
     town_citizens citizen_id, name, job, x/y, out, dead, survival_day, death_type,
                   last_update {day, time}
     item_data, construction_data, building_data   catalogues (names, costs)
-    town_routes, town_souls                       unused
+    town_routes   routes drawn on the Fata map, see _parse_routes
+    town_souls    unused
 
 Field meanings checked against the game with players in town 8212:
   human              CP of the citizens in the zone at the last zone update,
@@ -41,6 +42,10 @@ Field meanings checked against the game with players in town 8212:
   dried              zone depleted (sent on every zone since 2026-10-16; archived
                      days before that lack it: the scavenger radar stands in)
   building_dried     the ruin is depleted
+  town_routes[]      {name, route_day, ap, mode, color, creator (citizen id), editor,
+                     source, route [{x, y}, ...] (absolute corners; the first one is
+                     the town, straight segments between them), instructions
+                     null | {"<step>": text}} (step 1 = first zone after the town)
   km                 rounded Euclidean distance to town, matches risk.km()
                      (676/676 zones, town 8212, 2026-10-16)
 """
@@ -135,6 +140,7 @@ def build_result(town_id: int, raw: dict, estimation_history: dict | None = None
             "devastated": bool(ti.get("devast")),
             "hardcore": bool(ti.get("hard")),
             "map_zones": len(raw.get("town_maps") or []),  # town zone included
+            "map_bounds": _map_bounds(len(raw.get("town_maps") or []), rel),
         },
         "defense": _parse_defense(ti.get("defense") or {}),
         "water": {"well": ti.get("well_water"), "bank": _bank_water(ti.get("bank") or [])},
@@ -148,7 +154,18 @@ def build_result(town_id: int, raw: dict, estimation_history: dict | None = None
                                       hardcore=bool(ti.get("hard"))),
         "scout": _parse_scout(raw.get("town_maps") or [], rel, who),
         "zones": _parse_zones(raw.get("town_maps") or [], items, raw.get("building_data") or [], rel, who, day),
+        "routes": _parse_routes(raw.get("town_routes") or [], rel, who),
     }
+
+
+def _map_bounds(zones: int, rel) -> tuple[int, int, int, int] | None:
+    """(xmin, xmax, ymin, ymax), town-relative, of the square map (729 zones = 27 × 27)."""
+    size = int(zones ** 0.5 + 0.5)
+    if size < 2 or size * size != zones:
+        return None
+    xa, ya = rel(0, 0)
+    xb, yb = rel(size - 1, size - 1)
+    return min(xa, xb), max(xa, xb), min(ya, yb), max(ya, yb)
 
 
 def _parse_defense(d: dict) -> dict:
@@ -366,6 +383,49 @@ def _parse_scout(maps: list[dict], rel, who) -> list[dict]:
             "zombies": int(m.get("scout_zombies") or 0),
             "scouted_by": who(upd.get("user")) or "Unknown",
             "scouted_day": upd.get("day"),
+        })
+    return out
+
+
+def expand_route(corners: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Every zone walked between corners (the first one excluded), one move at a time:
+    straight segments (Fata's corners are axis-aligned); a diagonal pair walks x first,
+    then y, since a move changes one coordinate."""
+    path = []
+    x, y = corners[0]
+    for nx, ny in corners[1:]:
+        while x != nx:
+            x += (nx > x) - (nx < x)
+            path.append((x, y))
+        while y != ny:
+            y += (ny > y) - (ny < y)
+            path.append((x, y))
+    return path
+
+
+def _parse_routes(routes: list[dict], rel, who) -> list[dict]:
+    """Routes drawn on Fata's map. Per route: name, day, ap, creator, waypoints (relative
+    corners, the town first), path (every zone step by step, relative, the town at the start
+    left out) and instructions {step: text} (step 1 = path[0])."""
+    out = []
+    for r in routes:
+        corners = [(p["x"], p["y"]) for p in r.get("route") or [] if "x" in p and "y" in p]
+        if len(corners) < 2:
+            continue
+        ins = {}
+        for k, v in (r.get("instructions") or {}).items():
+            try:
+                ins[int(k)] = v
+            except (TypeError, ValueError):
+                continue
+        out.append({
+            "name": r.get("name") or "?",
+            "day": r.get("route_day"),
+            "ap": r.get("ap"),
+            "creator": who(r.get("creator")),
+            "waypoints": [rel(x, y) for x, y in corners],
+            "path": [rel(x, y) for x, y in expand_route(corners)],
+            "instructions": ins,
         })
     return out
 

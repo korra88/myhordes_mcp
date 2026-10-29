@@ -796,6 +796,83 @@ async def plan_expedition_supplies(
 
 
 @mcp.tool()
+async def plan_kill_route(
+    route: str = "",
+    waypoints: str = "",
+    zoo: bool = False,
+    kit: str = "",
+    party: str = "",
+    group_cp: int = -1,
+    start_ap: int = 6,
+    slots: int = 5,
+    available: str = "",
+    second_wind: int = 0,
+    day: int = 0,
+    town_id: int = 0,
+) -> str:
+    """
+    Plans a zombie kill run: how many zombies a route must kill (split into pairs and
+    singles), which weapons from the bank to take, and what to carry to get there and back.
+    Use it for "kill run", "clean the zoo / a side of the zoo", "kills along a route",
+    "SpecialAgent" routes (Fata routes drawn for killing). Every zone on the route is
+    cleaned COMPLETELY (one zombie left alive infects the clean zones around it tonight):
+    do not invent your own counts, weapons or kill totals, and do not call get_zone_details
+    for the zombie counts: this tool counts them (exact when counted today, else grown by
+    the nights since, else from the danger level; never-visited zones are listed to scout).
+
+    Modes:
+    - route="SpecialAgent3": a route drawn on Fata's map, by name (case-insensitive, exact
+      then prefix; several matches are listed). With `day` it is that day's route.
+    - waypoints="1,0; 1,13; 2,13; 2,0": your own route, straight segments from town.
+    - zoo=True, or no route at all: the zombie clusters (the likely zoo) and each side that
+      can be cleaned, plus the global-respawn check. No kit. Then ask the player which side
+      to clean, or which area / corridor.
+    Output: the zones with zombies (step, estimate, source, pairs, singles), the totals, the
+    kit from the bank (or a check of the `kit` given) with its slots, the supplies plan on
+    the exact route with the slots left, and warnings (respawn risk: only a warning,
+    zones with more zombies than the CP, the route's own notes). Report them as given.
+
+    Args:
+        route: Name of a Fata route (see Modes).
+        waypoints: Own route as town-relative corners, e.g. "1,0; 1,13; 2,13".
+        zoo: True for the clusters and sides instead of a route.
+        kit: What the player carries instead of the bank pick, e.g. "laser, machete, battery=2".
+             Names: laser (empty: loaded with the batteries), laser1-laser4 (charges),
+             machete, knife, launcher (empty), launcher_loaded, aqua / aqua1-aqua5 (shots),
+             pistol / pistol1-pistol3, battery, water (ammunition), repair. Only checked.
+        party: Comma-separated citizen names; their CP from the CP log (as find_expedition_path).
+        group_cp: Total CP of the party, only when the player states it. Omit (-1) to use
+                  `party`, else 2.
+        start_ap: AP at departure (default 6).
+        slots: Free rucksack slots at departure (default 5); the kit's slots are taken off.
+        available: Water / food / drugs the player has, e.g. "water=2, food7=1" (as
+                   plan_expedition_supplies). Empty = water and one 7 AP food assumed.
+        second_wind: Enduring level 1-4 of the player, 0 = none (as plan_expedition_supplies).
+        day: Specific day to inspect (a finished day is analysed from its maximum counts).
+             Use 0 or omit for the current day.
+        town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
+    """
+    tid = resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    wps = None
+    if waypoints.strip():
+        wps = _parse_zones(waypoints.split(";"))
+        if isinstance(wps, str):
+            return wps
+    data = await fata.fetch_town_data(tid, day=day or None)
+    breakdown = None
+    if group_cp < 0:
+        group_cp = 2
+        if party and not data.get("error"):
+            group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
+    return fata.plan_kill_route(
+        data, route=route, waypoints=wps, zoo=zoo, kit=kit, group_cp=group_cp, cp_breakdown=breakdown,
+        start_ap=start_ap, slots=slots, available=available, second_wind=second_wind,
+    )
+
+
+@mcp.tool()
 async def get_zone_details(
     day: int = 0,
     town_id: int = 0,

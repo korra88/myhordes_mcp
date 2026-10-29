@@ -82,7 +82,7 @@ def format_scout(data: dict) -> str:
     if older_count:
         n = sum(z["zombies"] for z in older_count)
         lines.append(f"### Older counts — {n} zombies in {len(older_count)} zones (by day of the count; "
-                     "+~1.75/night since)")
+                     "+1 per night on average, +2 at most, since)")
         lines += _by_day(older_count, lambda z: f"{z['coords']} {z['zombies']}")
         lines.append("")
     if older_danger:

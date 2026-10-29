@@ -13,6 +13,7 @@ from .blueprints import format_blueprint_order
 from .buildings import format_buildings
 from .client import fetch_town_data
 from .cp import format_cp_log, load_cp_log, party_cp
+from .kills import plan_kill_route
 from .pathing import find_safe_path
 from .planning import format_build_options, format_construction_history
 from .town import format_citizens, format_defense, format_town_overview
@@ -35,6 +36,7 @@ __all__ = [
     "format_zone_path",
     "format_zones",
     "find_safe_path",
+    "plan_kill_route",
     "get_town_changes",
     "format_dump_mapping",
     "format_night_report",

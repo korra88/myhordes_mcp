@@ -131,10 +131,24 @@ def _staleness_tag(last_update_day: int | None, current_day: int | None) -> str:
     return ""
 
 
-def _zombie_max_estimate(zombies: int, last_day: int | None, current_day: int | None) -> int | None:
-    """Return a pessimistic max zombie estimate for a stale zone.
+# Nightly growth (MapMaker::spreadCycleMH, day >= 2): a zone with zombies gets +1 (90%), +0 (5%)
+# or +2 (5%); an empty zone next to a zone with more zombies gets 1-2 (or none); an empty zone
+# without infected neighbours stays empty. The 8 surrounding zones are neighbours.
+# Average +1.0 per night, worst case +2. One place for every estimate (map, route risks, kills).
+GROWTH_AVG = 1.0
+GROWTH_MAX = 2
 
-    Assumes +1.75 zombies per night (weighted toward +2 per night).
+
+def zombie_growth(zombies: int, nights: int) -> tuple[int, float, int]:
+    """(min, avg, max) zombies in a zone counted with `zombies` (> 0) `nights` nights ago."""
+    n = max(0, nights)
+    return zombies, zombies + GROWTH_AVG * n, zombies + GROWTH_MAX * n
+
+
+def _zombie_max_estimate(zombies: int, last_day: int | None, current_day: int | None) -> int | None:
+    """Return a pessimistic max zombie estimate for a stale zone (+2 per night, the
+    game's worst case, see zombie_growth).
+
     Returns None if the zone is current or days elapsed is 0.
     """
     if last_day is None or current_day is None:
@@ -142,7 +156,10 @@ def _zombie_max_estimate(zombies: int, last_day: int | None, current_day: int | 
     age = current_day - last_day
     if age <= 0:
         return None
-    return int(zombies + age * 1.75)
+    return zombie_growth(zombies, age)[2]
+
+
+_NEIGHBOURS = tuple((dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy)
 
 
 def _build_spread_map(
@@ -152,7 +169,7 @@ def _build_spread_map(
     """BFS from all known zombie zones to compute minimum spread distance.
 
     For each cell in zone_map that currently has zombies (zm > 0), we BFS
-    outward in 4 directions. The result maps (x, y) -> (bfs_dist, source_zm)
+    outward in 8 directions (the game's neighbours). The result maps (x, y) -> (bfs_dist, source_zm)
     where bfs_dist is the minimum number of spread steps from any zombie source
     and source_zm is the (pessimistic) zombie count at that source.
 
@@ -185,7 +202,7 @@ def _build_spread_map(
 
     while queue:
         x, y, dist, source_zm = queue.popleft()
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        for dx, dy in _NEIGHBOURS:
             nx, ny = x + dx, y + dy
             if (nx, ny) not in zone_map:
                 continue  # only spread through explored cells
@@ -215,9 +232,9 @@ def _spread_risk_for_clear(
         # This cell itself has zombies — should not be called for clear zones
         return None
     if age >= bfs_dist:
-        # Worst case: 4 zombies spawned per spread step, capped at source count
+        # Worst case: the first night spawns 2 (1-2), then +2 per night, capped at source count
         nights_of_growth = age - bfs_dist  # nights the zone could have grown after first infection
-        est = min(4 + int(nights_of_growth * 1.75), source_zm)
+        est = min(GROWTH_MAX + GROWTH_MAX * nights_of_growth, source_zm)
         return bfs_dist, max(1, est)
     return None
 
@@ -226,7 +243,7 @@ def _zone_threat(zone: dict, current_day: int | None = None, spread_map: dict | 
     """Format zombie count or danger estimate for a zone.
 
     If an exact zombie count was reported (zm >= 0), show it.
-    For stale zones with zombies, appends a pessimistic max estimate (+1.75/night).
+    For stale zones with zombies, appends a pessimistic max estimate (+2/night).
     For stale clear zones, checks spread_map: if zombie neighbors could have
     reached this cell within the elapsed days, shows a spread risk warning.
     Otherwise fall back to the danger level from in-game map exploration.
@@ -427,16 +444,15 @@ def never_visited(data: dict) -> int | None:
     return max(0, total - len(data.get("zones", []))) if total else None
 
 
-def respawn_check(data: dict) -> list[str]:
-    """Tonight's global-respawn threshold against the zombies Fata can see. Fata never
-    sees the whole map (unvisited zones, counts from older days), so this states what
-    is counted and what is not, and gives a verdict only on what is seen."""
+def respawn_totals(data: dict) -> dict | None:
+    """Tonight's global-respawn threshold and the zombies Fata can see, or None on a past
+    day / without a day. Keys: day, per_day, threshold, known (= seen_n + stale_n), seen,
+    seen_n, stale, stale_n, span, never (None if unknown), uncounted, missing."""
     meta = data["meta"]
     day = meta.get("day")
     if not isinstance(day, int) or meta.get("live") is False:
-        return []
+        return None
     per_day = RESPAWN_PER_DAY.get(meta.get("game_type"), DEFAULT_RESPAWN_PER_DAY)
-    threshold = per_day * (day + 1)
     zones = data.get("zones", [])
 
     seen = [z for z in zones if zone_is_today(z, day)]
@@ -448,8 +464,21 @@ def respawn_check(data: dict) -> list[str]:
     days = sorted({z["updated_day"] for z in stale if z.get("updated_day") is not None})
     span = f"days {days[0]}–{days[-1]}" if len(days) > 1 else (f"day {days[0]}" if days else "earlier days")
     never = never_visited(data)
-    known = seen_n + stale_n
     missing = (f"{never} zones never visited, " if never is not None else "") + f"{len(uncounted)} without a count"
+    return {"day": day, "per_day": per_day, "threshold": per_day * (day + 1), "known": seen_n + stale_n,
+            "seen": seen, "seen_n": seen_n, "stale": stale, "stale_n": stale_n, "span": span,
+            "never": never, "uncounted": uncounted, "missing": missing}
+
+
+def respawn_check(data: dict) -> list[str]:
+    """Tonight's global-respawn threshold against the zombies Fata can see. Fata never
+    sees the whole map (unvisited zones, counts from older days), so this states what
+    is counted and what is not, and gives a verdict only on what is seen."""
+    t = respawn_totals(data)
+    if t is None:
+        return []
+    day, per_day, threshold, known = t["day"], t["per_day"], t["threshold"], t["known"]
+    seen_n, stale_n, span, missing = t["seen_n"], t["stale_n"], t["span"], t["missing"]
     if known >= threshold:
         verdict = (f"above the threshold on what Fata sees ({known} ≥ {threshold}): no global respawn "
                    "tonight, unless those older counts were killed since")
@@ -460,8 +489,8 @@ def respawn_check(data: dict) -> list[str]:
         f"### Global respawn check (tonight, end of day {day})",
         f"  Threshold: {threshold} zombies on the whole map ({per_day} × day {day + 1}). Fewer → the map "
         "regrows from its day-1 layout, on top of the zombies already there.",
-        f"  Fata counts {known}: {seen_n} in {len(seen)} zones seen today (danger lower bounds), "
-        f"{stale_n} in {len(stale)} zones counted on {span} (may have grown or been killed since). "
+        f"  Fata counts {known}: {seen_n} in {len(t['seen'])} zones seen today (danger lower bounds), "
+        f"{stale_n} in {len(t['stale'])} zones counted on {span} (may have grown or been killed since). "
         f"Not counted: {missing}.",
         f"  → {verdict}",
     ]
