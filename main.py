@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from myhordes_mcp import fata, gesthordes  # noqa: E402
 from myhordes_mcp.fata import pickups as pick_mod, supplies  # noqa: E402
 from myhordes_mcp.fata.geo import MAX_PATH_AP, fmt_xy  # noqa: E402
-from myhordes_mcp.fata.risk import CP_PER_CITIZEN  # noqa: E402
 from myhordes_mcp.fata.pathing import dig_weight, loop_return, route_risks, safest_route  # noqa: E402
 from myhordes_mcp.knowledgebase import curated, wiki  # noqa: E402
 from myhordes_mcp.utils.clock import data_updated  # noqa: E402
@@ -501,11 +500,7 @@ async def find_expedition_path(
         if isinstance(wps, str):
             return wps
     data = await fata.fetch_town_data(tid, day=day or None)
-    breakdown = None
-    if group_cp < 0:
-        group_cp = CP_PER_CITIZEN
-        if party and not data.get("error"):
-            group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
+    group_cp, breakdown = fata.resolve_group_cp(data, tid, group_cp, party)
     return fata.find_safe_path(
         data, x1, y1, x2, y2,
         group_cp=group_cp,
@@ -702,11 +697,7 @@ async def plan_expedition_supplies(
     data = await fata.fetch_town_data(tid)
     if data.get("error"):
         return f"Error: {data['error']}"
-    breakdown = None
-    if group_cp < 0:
-        group_cp = CP_PER_CITIZEN
-        if party:
-            group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
+    group_cp, breakdown = fata.resolve_group_cp(data, tid, group_cp, party)
     picks = pick_mod.resolve(data, [(z, w, n) for z, (_, w, n) in zip(zones, entries)])
     for p in picks:
         p.wp = points.index(p.zone, 1)
@@ -902,11 +893,7 @@ async def plan_kill_route(
     if err := _day_budget_error(start_ap):
         return err
     data = await fata.fetch_town_data(tid, day=day or None)
-    breakdown = None
-    if group_cp < 0:
-        group_cp = CP_PER_CITIZEN
-        if party and not data.get("error"):
-            group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
+    group_cp, breakdown = fata.resolve_group_cp(data, tid, group_cp, party)
     return fata.plan_kill_route(
         data, route=route, waypoints=wps, zoo=zoo, kit=kit, group_cp=group_cp, cp_breakdown=breakdown,
         start_ap=start_ap, slots=slots, available=available, second_wind=second_wind,

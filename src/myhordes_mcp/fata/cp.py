@@ -163,6 +163,17 @@ def citizen_key(name: str) -> str:
     return re.sub(r"^@", "", name.strip()).split(":")[0].strip().lower()
 
 
+def resolve_group_cp(data: dict, town_id: int, group_cp: int, party: str) -> tuple[int, list[str] | None]:
+    """The CP a route tool plans with: `group_cp` if given (>= 0), else the total of the
+    comma-separated `party` from the CP log, else the base CP of one citizen.
+    Returns (cp, breakdown lines or None)."""
+    if group_cp >= 0:
+        return group_cp, None
+    if party and not data.get("error"):
+        return party_cp(load_cp_log(town_id), data["citizens"], party.split(","))
+    return CP_PER_CITIZEN, None
+
+
 def party_cp(log: dict, citizens: list[dict], names: list[str], base: int = CP_PER_CITIZEN) -> tuple[int, list[str]]:
     """Total CP of a party by citizen names, from each one's last reading.
 

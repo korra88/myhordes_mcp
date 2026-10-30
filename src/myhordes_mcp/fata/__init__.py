@@ -12,7 +12,7 @@ from .bank import expedition_extras, format_bank, format_bank_summary
 from .blueprints import format_blueprint_order
 from .buildings import format_buildings
 from .client import fetch_town_data
-from .cp import format_cp_log, load_cp_log, party_cp
+from .cp import format_cp_log, load_cp_log, party_cp, resolve_group_cp
 from .kills import plan_kill_route
 from .pathing import find_safe_path
 from .planning import format_build_options, format_construction_history
@@ -24,6 +24,7 @@ __all__ = [
     "format_cp_log",
     "load_cp_log",
     "party_cp",
+    "resolve_group_cp",
     "expedition_extras",
     "format_bank",
     "format_bank_summary",
