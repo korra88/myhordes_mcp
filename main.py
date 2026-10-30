@@ -30,6 +30,16 @@ if not FATAMORGANA_TOWN_ID and not CURRENT_TOWN_FILE.exists():
 # Fata Morgana tools — live town data from community-maintained spy service
 # ---------------------------------------------------------------------------
 
+async def _town(town_id: int, day: int = 0) -> tuple[int, dict] | str:
+    """Resolve the town and fetch its data: (town ID, data), or the error text a tool
+    returns as is. Not a decorator: FastMCP reads the tool signatures. The data may still
+    carry an `error`; the formatters handle it."""
+    tid = resolve_town_id(town_id)
+    if isinstance(tid, str):
+        return tid
+    return tid, await fata.fetch_town_data(tid, day=day or None)
+
+
 @mcp.tool()
 async def get_bank_inventory(day: int = 0, town_id: int = 0, detail: str = "summary") -> str:
     """
@@ -47,10 +57,10 @@ async def get_bank_inventory(day: int = 0, town_id: int = 0, detail: str = "summ
         detail: 'summary' (default, almost always correct) or 'full'
                 (complete item list — only on explicit user request).
     """
-    tid = resolve_town_id(town_id)
-    if isinstance(tid, str):
-        return tid
-    data = await fata.fetch_town_data(tid, day=day or None)
+    got = await _town(town_id, day)
+    if isinstance(got, str):
+        return got
+    _, data = got
     if detail == "full":
         return fata.format_bank(data)
     return fata.format_bank_summary(data)
@@ -76,10 +86,10 @@ async def get_town_overview(day: int = 0, town_id: int = 0, detail: str = "compa
                 'full' — every citizen on its own line plus the complete bank
                 item list and death log; only on explicit user request.
     """
-    tid = resolve_town_id(town_id)
-    if isinstance(tid, str):
-        return tid
-    data = await fata.fetch_town_data(tid, day=day or None)
+    got = await _town(town_id, day)
+    if isinstance(got, str):
+        return got
+    tid, data = got
     # Enrich with season points from Gest'Hordes (current day only)
     season_points = None
     if not (day and day != data.get("meta", {}).get("day")):
@@ -101,10 +111,10 @@ async def get_citizen_positions(day: int = 0, town_id: int = 0) -> str:
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
-    tid = resolve_town_id(town_id)
-    if isinstance(tid, str):
-        return tid
-    data = await fata.fetch_town_data(tid, day=day or None)
+    got = await _town(town_id, day)
+    if isinstance(got, str):
+        return got
+    tid, data = got
     return fata.format_citizens(data, fata.load_cp_log(tid))
 
 
@@ -125,10 +135,10 @@ async def get_citizen_cp(town_id: int = 0) -> str:
     Args:
         town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
-    tid = resolve_town_id(town_id)
-    if isinstance(tid, str):
-        return tid
-    data = await fata.fetch_town_data(tid)
+    got = await _town(town_id)
+    if isinstance(got, str):
+        return got
+    tid, data = got
     if data.get("error"):
         return f"Error: {data['error']}"
     meta = data["meta"]
@@ -153,10 +163,10 @@ async def get_defense_status(day: int = 0, town_id: int = 0) -> str:
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
-    tid = resolve_town_id(town_id)
-    if isinstance(tid, str):
-        return tid
-    data = await fata.fetch_town_data(tid, day=day or None)
+    got = await _town(town_id, day)
+    if isinstance(got, str):
+        return got
+    _, data = got
     return fata.format_defense(data)
 
 
@@ -188,10 +198,10 @@ async def get_buildings(
             mode='available'. Use True for build planning when you need to check bank stock.
             Default False to keep output compact.
     """
-    tid = resolve_town_id(town_id)
-    if isinstance(tid, str):
-        return tid
-    data = await fata.fetch_town_data(tid, day=day or None)
+    got = await _town(town_id, day)
+    if isinstance(got, str):
+        return got
+    _, data = got
     return fata.format_buildings(data, mode=mode, include_private=include_private_town_buildings, include_resources=include_resources)
 
 
@@ -218,10 +228,10 @@ async def get_build_options(town_id: int = 0, include_resources: bool = False, i
             per group are shown and the rest named on one line; enable only when
             the user asks about one of those.
     """
-    tid = resolve_town_id(town_id)
-    if isinstance(tid, str):
-        return tid
-    data = await fata.fetch_town_data(tid)
+    got = await _town(town_id)
+    if isinstance(got, str):
+        return got
+    _, data = got
     return fata.format_build_options(data, include_resources=include_resources, include_all=include_all)
 
 
@@ -244,10 +254,10 @@ async def get_blueprint_order(town_id: int = 0) -> str:
     Args:
         town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
-    tid = resolve_town_id(town_id)
-    if isinstance(tid, str):
-        return tid
-    return fata.format_blueprint_order(await fata.fetch_town_data(tid))
+    got = await _town(town_id)
+    if isinstance(got, str):
+        return got
+    return fata.format_blueprint_order(got[1])
 
 
 @mcp.tool()
@@ -334,10 +344,10 @@ async def get_expedition_roster(listed: str = "", town_id: int = 0) -> str:
                 "@Name:12345" handles are accepted. Empty = no reconciliation.
         town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
-    tid = resolve_town_id(town_id)
-    if isinstance(tid, str):
-        return tid
-    return fata.format_roster(await fata.fetch_town_data(tid), listed)
+    got = await _town(town_id)
+    if isinstance(got, str):
+        return got
+    return fata.format_roster(got[1], listed)
 
 
 @mcp.tool()
@@ -355,10 +365,10 @@ async def map_bank_to_dump_sheet(sheet_items: str, town_id: int = 0) -> str:
                      order (keep blank rows as empty lines so positions line up).
         town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
-    tid = resolve_town_id(town_id)
-    if isinstance(tid, str):
-        return tid
-    return fata.format_dump_mapping(await fata.fetch_town_data(tid), sheet_items)
+    got = await _town(town_id)
+    if isinstance(got, str):
+        return got
+    return fata.format_dump_mapping(got[1], sheet_items)
 
 
 @mcp.tool()
@@ -381,10 +391,10 @@ async def get_scout_map(
         day: Specific day number to inspect. Use 0 or omit for the current day.
         town_id: Fata Morgana town/game ID. Omit for the default town (towns/_current_town, else .env).
     """
-    tid = resolve_town_id(town_id)
-    if isinstance(tid, str):
-        return tid
-    data = await fata.fetch_town_data(tid, day=day or None)
+    got = await _town(town_id, day)
+    if isinstance(got, str):
+        return got
+    _, data = got
     return fata.format_scout(data)
 
 
@@ -946,10 +956,10 @@ async def get_zone_details(
                 are shown separately. Typical range: 4–15.
         item: Part of an item name to locate on the map (case-insensitive).
     """
-    tid = resolve_town_id(town_id)
-    if isinstance(tid, str):
-        return tid
-    data = await fata.fetch_town_data(tid, day=day or None)
+    got = await _town(town_id, day)
+    if isinstance(got, str):
+        return got
+    _, data = got
 
     coords_provided = all(v is not None for v in (x1, y1, x2, y2))
     if coords_provided:
