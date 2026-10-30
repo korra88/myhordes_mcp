@@ -145,12 +145,11 @@ def walkability(
     *,
     group_cp: int = CP_PER_CITIZEN,
     scout_mode: bool = False,
-    revisit: bool = False,
 ) -> float:
     """Sum of the WALK weights that apply to entering this zone (0 = nothing to avoid)."""
     c = _classify_cell(zone, current_day, coords, spread_map, group_cp)
     tag, zombies = c["tag"], c["zombies"]
-    w = WALK["revisit"] if revisit else 0.0
+    w = 0.0
     if tag == "UNKNOWN":
         return w + WALK["unknown"]
     if zombies is None:

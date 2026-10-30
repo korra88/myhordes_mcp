@@ -583,13 +583,12 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
         lines.append(pick_verdict)
 
     warn = list(extra_warn or [])
-    if short or dead:
-        pass
-    elif end_dehyd:
+    ok = not (short or dead)
+    if ok and end_dehyd:
         warn.append("Arrives DEHYDRATED: needs 2 rations at arrival, or dies tonight.")
-    elif end_thirsty:
+    elif ok and end_thirsty:
         warn.append("Arrives Thirsty: needs a ration at arrival (not enough water, or no way to avoid it).")
-    if n_dehyd and not end_dehyd and not (short or dead):
+    if n_dehyd and not end_dehyd and ok:
         warn.append("Gets Dehydrated on the way: drink as soon as possible (one ration only makes Thirsty).")
     for s in steps:
         if s["kind"] == "use" and s["item"] == "water" and s["ap_before"] > 0 and s["waste"]:
