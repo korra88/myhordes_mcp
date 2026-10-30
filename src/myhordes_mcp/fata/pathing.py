@@ -1,6 +1,7 @@
 """CP-aware Dijkstra pathfinding for expeditions."""
 
 import heapq
+from dataclasses import dataclass, field
 
 from ..utils.clock import data_updated
 from .risk import (
@@ -194,9 +195,28 @@ def _cell_risk(
     return 1.0 + walkability(zone, current_day, coords, spread_map, group_cp=group_cp) * 0.001
 
 
-def _zone_grid(data: dict, group_cp: int):
-    """(zone_map, cell_class, spread_map, current_day) shared by the path searches.
-    Scout radar readings fill zones missing from the map data."""
+@dataclass(frozen=True)
+class ZoneGrid:
+    """The zones of one `data` snapshot, shared by the path searches: build it once per
+    call (`zone_grid(data)`), never cache it across calls. The zone class depends on the
+    group CP, so `cell_class(cp)` is computed once per CP and kept on the grid."""
+    zone_map: dict
+    spread_map: dict
+    day: int | None
+    bounds: tuple | None
+    _classes: dict = field(default_factory=dict, repr=False, compare=False)
+
+    def cell_class(self, cp: int) -> dict:
+        classes = self._classes.get(cp)
+        if classes is None:
+            classes = {c: _classify_cell(z, self.day, c, self.spread_map, cp)
+                       for c, z in self.zone_map.items()}
+            self._classes[cp] = classes
+        return classes
+
+
+def zone_grid(data: dict) -> ZoneGrid:
+    """Scout radar readings fill zones missing from the map data."""
     current_day = data["meta"].get("day")
     zone_map: dict[tuple[int, int], dict] = {}
     for z in data.get("zones", []):
@@ -209,12 +229,10 @@ def _zone_grid(data: dict, group_cp: int):
         if coords and coords not in map_coords:
             zone_map[coords] = {"coords": z["coords"], "zombies": z["zombies"], "danger": 0, "items": [], "ruin": None, "scouted_day": z.get("scouted_day")}
     cd = current_day if isinstance(current_day, int) else None
-    spread_map = _build_spread_map(zone_map, cd)
-    cell_class = {c: _classify_cell(z, cd, c, spread_map, group_cp) for c, z in zone_map.items()}
-    return zone_map, cell_class, spread_map, cd
+    return ZoneGrid(zone_map, _build_spread_map(zone_map, cd), cd, data["meta"].get("map_bounds"))
 
 
-def _leg_search(grid: tuple, a: tuple[int, int], b: tuple[int, int], f0: int, *, mode: str,
+def _leg_search(grid: ZoneGrid, cp: int, a: tuple[int, int], b: tuple[int, int], f0: int, *, mode: str,
                 budget: int, scout_mode: bool, banned: frozenset, seen: set,
                 rw: float, dig_leg: bool = False) -> dict[int, tuple]:
     """One leg a -> b, starting with f0 flashes used. Returns {flashes used at b: (pri, sec,
@@ -222,7 +240,7 @@ def _leg_search(grid: tuple, a: tuple[int, int], b: tuple[int, int], f0: int, *,
     budget is 0). Cost is the (pri, sec) tuple; AP is capped at MAX_PATH_AP per leg.
     `seen` zones cost rw to enter; on a dig_leg so do depleted zones (no dig either way),
     elsewhere they cost WALK["dried"]."""
-    zone_map, cell_class, spread_map, cd, cp, bounds = grid
+    zone_map, spread_map, cd, bounds = grid.zone_map, grid.spread_map, grid.day, grid.bounds
     margin = 3
     bx = (min(a[0], b[0]) - margin, max(a[0], b[0]) + margin)
     by = (min(a[1], b[1]) - margin, max(a[1], b[1]) + margin)
@@ -259,7 +277,7 @@ def _leg_search(grid: tuple, a: tuple[int, int], b: tuple[int, int], f0: int, *,
             nf = f
             if mode == "shortest":
                 # AP first, risk as tiebreak; a trap zone needs a flash (which clears it).
-                if cell_class.get(n, {}).get("tag") in ("TRAPPED", "TRAP_RISK") and not scout_mode:
+                if grid.cell_class(cp).get(n, {}).get("tag") in ("TRAPPED", "TRAP_RISK") and not scout_mode:
                     if f >= budget:
                         continue
                     nf, step = f + 1, (1.0, extra)
@@ -292,7 +310,8 @@ def _leg_search(grid: tuple, a: tuple[int, int], b: tuple[int, int], f0: int, *,
 def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[int] = 2,
                  mode: str = "safest", flash_budget: int = 0, scout_mode: bool = False,
                  banned: frozenset = frozenset(), revisit: frozenset = frozenset(),
-                 avoid_revisits: bool = False, revisit_weight: float | None = None) -> dict | None:
+                 avoid_revisits: bool = False, revisit_weight: float | None = None,
+                 grid: ZoneGrid | None = None) -> dict | None:
     """The one route search: through `points` (start, waypoints..., end) in order.
 
     mode "safest":   cost = walkability + _AP_COST per move, AP as tiebreak.
@@ -306,23 +325,21 @@ def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[in
 
     Returns {route (start included), ap, flashes, flash_cells, risk} or None if a leg has
     no path. risk = summed walkability of the zones entered (not counting revisit costs).
+    grid: a ZoneGrid of `data` to reuse (built here when omitted).
     """
     legs = len(points) - 1
     cps = list(cp) if isinstance(cp, (list, tuple)) else [cp] * legs
     if len(cps) != legs:
         raise ValueError("cp needs one value per leg")
     rw = WALK["revisit"] if revisit_weight is None else revisit_weight
-    grids: dict[int, tuple] = {}
-    for c in set(cps):
-        zone_map, cell_class, spread_map, cd = _zone_grid(data, c)
-        grids[c] = (zone_map, cell_class, spread_map, cd, c, data["meta"].get("map_bounds"))
+    grid = grid or zone_grid(data)
     # states: flashes used so far -> (pri, sec, route, flash cells, cells walked per leg)
     states = {0: (0.0, 0.0, [points[0]], [], [])}
     for i, (a, b) in enumerate(zip(points, points[1:])):
         nxt: dict[int, tuple] = {}
         for f0, (pri, sec, route, flashed, lens) in states.items():
             seen = (revisit | (set(route) if avoid_revisits else set())) - {(0, 0), a, b}
-            res = _leg_search(grids[cps[i]], a, b, f0, mode=mode, budget=flash_budget,
+            res = _leg_search(grid, cps[i], a, b, f0, mode=mode, budget=flash_budget,
                               scout_mode=scout_mode, banned=banned, seen=seen, rw=rw,
                               dig_leg=bool(revisit) or (avoid_revisits and i > 0))
             for f, (lp, ls, cells, lf) in res.items():
@@ -336,9 +353,8 @@ def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[in
     # Exposure: walkability of each zone entered, with the CP of its leg.
     risk, k = 0.0, 1
     for c, n in zip(cps, lens):
-        zone_map, _, spread_map, cd, _, _ = grids[c]
         for cell in route[k:k + n]:
-            risk += _cell_risk(zone_map.get(cell), cd, coords=cell, spread_map=spread_map,
+            risk += _cell_risk(grid.zone_map.get(cell), grid.day, coords=cell, spread_map=grid.spread_map,
                                group_cp=c, scout_mode=scout_mode, mode="safest")
         k += n
     return {"route": route, "ap": len(route) - 1, "flashes": f, "flash_cells": set(flashed),
@@ -391,8 +407,10 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2,
     retrace = last - next((j for j in range(last - 1, 0, -1) if reach and km(*out[j]) <= reach), 0)
     rw = dig_weight(dig)
     best = None
+    grid = zone_grid(data)
     for end in ends:
-        res = search_route(data, [dest, end], cp=group_cp, revisit=walked, revisit_weight=rw)
+        res = search_route(data, [dest, end], cp=group_cp, revisit=walked, revisit_weight=rw,
+                           grid=grid)
         if res is None:
             continue
         route = res["route"]
@@ -442,7 +460,8 @@ def route_risks(data: dict, route: list[tuple[int, int]], points: list[tuple[int
     revisit_weight: as the route was searched (search_route)."""
     legs = len(points) - 1
     cps = list(group_cp) if isinstance(group_cp, (list, tuple)) else [group_cp] * legs
-    classes = {c: _zone_grid(data, c)[1] for c in set(cps)}
+    grid = zone_grid(data)
+    classes = {c: grid.cell_class(c) for c in set(cps)}
     reached = reach_indices(route, points)
     base = safest_route(data, points, cps, avoid_revisits=avoid_revisits, revisit_weight=revisit_weight)
 
@@ -537,16 +556,18 @@ def find_safe_path(
     town = meta.get("town_name", "?")
 
     # -- Shared pre-computation (formatting) and the two searches --
-    zone_map, cell_class, spread_map, cd = _zone_grid(data, group_cp)
+    grid = zone_grid(data)
+    zone_map, spread_map, cd = grid.zone_map, grid.spread_map, grid.day
+    cell_class = grid.cell_class(group_cp)
     ap_limit = MAX_PATH_AP
     points = [(x1, y1)] + list(waypoints or []) + [(x2, y2)]
     wp_set = set(waypoints or [])
     # Several legs: zones an earlier leg walked cost a little to walk again (one dig a day).
     avoid = len(points) >= 3
     safest = search_route(data, points, cp=group_cp, scout_mode=scout_mode, avoid_revisits=avoid,
-                          revisit_weight=dig_weight(dig))
+                          revisit_weight=dig_weight(dig), grid=grid)
     shortest = (search_route(data, points, cp=group_cp, mode="shortest", flash_budget=escape_items,
-                             scout_mode=scout_mode)
+                             scout_mode=scout_mode, grid=grid)
                 if escape_items > 0 or scout_mode else None)
 
     # If shortest would be identical to safest, skip it
