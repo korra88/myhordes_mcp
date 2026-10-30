@@ -4,6 +4,7 @@ Deterministic facts for the close-day skill: deaths with cause and last
 position, defense vs the attack, alive before/after.
 """
 
+from ..gesthordes.format import at_day, atk_series
 from .geo import TOWN, fmt_xy
 from .planning import alive_by_day
 
@@ -12,11 +13,8 @@ TOWN_COORDS = fmt_xy(TOWN)
 
 def _gh_deaths(gh: dict | None, day: int) -> int | None:
     """Gest'Hordes death count for the night of `day`, to cross-check Fata's cadavers."""
-    if not gh or "error" in gh:
-        return None
     # morts_reels puts day N at index N-1 (checked against Fata cadavers on towns 8212 and 7493).
-    deaths = gh.get("data", {}).get("stats", {}).get("atk", {}).get("morts_reels", [])
-    return deaths[day - 1] if 1 <= day <= len(deaths) else None
+    return at_day(atk_series(gh), "morts_reels", day, -1)
 
 
 def night_report(data: dict, day: int, gh: dict | None = None, day_data: dict | None = None) -> dict:

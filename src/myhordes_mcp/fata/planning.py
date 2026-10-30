@@ -5,6 +5,7 @@ model reasons over a ranked list instead of doing arithmetic.
 """
 
 from .bank import _CLEAN_WATER, _sum_items, defense_count, totals
+from ..gesthordes.format import at_day, atk_series, has_error
 from .buildings import (WATER_FILTERS, has_blueprint, is_buildable, upgrades_by_day,
                         visible)
 from ..utils.clock import data_updated
@@ -245,22 +246,6 @@ def format_build_options(data: dict, include_resources: bool = False, include_al
 # Construction history
 # ---------------------------------------------------------------------------
 
-def _gh_series(gh: dict | None) -> dict:
-    """Per-day series from Gest'Hordes stats (lists indexed by day)."""
-    if not gh or "error" in gh:
-        return {}
-    atk = gh.get("data", {}).get("stats", {}).get("atk", {})
-    return {
-        "attack": atk.get("attaque_jour", []),
-        "est_min": atk.get("min_estim", []),
-        "est_max": atk.get("max_estim", []),
-    }
-
-
-def _at(lst: list, i: int):
-    return lst[i] if 0 <= i < len(lst) else None
-
-
 def deaths_by_day(data: dict) -> dict[int, int]:
     """Deaths per game day (a death's day is the day whose attack/end it happened on)."""
     out: dict[int, int] = {}
@@ -297,17 +282,17 @@ def construction_history(data: dict, gh: dict | None = None) -> list[dict]:
     night_deaths = deaths_by_day(data)
     alive = alive_by_day(data)
 
-    series = _gh_series(gh)
+    atk = atk_series(gh)
     rows = []
     first = min([*builds, *upgrades, current]) if (builds or upgrades) else current
     for day in range(max(1, first), current + 1):
         paid = sorted(builds.get(day, []), key=lambda b: b["name"].lower())
         ap = sum(b["ap_cost"] for b in paid)
         budget = alive[day] * AP_PER_CITIZEN if alive[day] is not None else None
-        attack = _at(series.get("attack", []), day)
+        attack = at_day(atk, "attaque_jour", day)
         if attack is None:  # Fata's newspaper: the attack that ended this day
             attack = (data.get("attacks") or {}).get(day, {}).get("zombies")
-        est = (_at(series.get("est_min", []), day), _at(series.get("est_max", []), day))
+        est = (at_day(atk, "min_estim", day), at_day(atk, "max_estim", day))
         rows.append({
             "day": day,
             "builds": [(b["name"], b["ap_cost"], b["defense"]) for b in paid],
@@ -362,7 +347,7 @@ def format_construction_history(data: dict, gh: dict | None = None) -> str:
         lines.append("Free vote upgrades (not counted in AP): " + " · ".join(per_day))
     if rows and rows[-1]["alive"] is None:
         lines.append("Alive/budget unknown: Fata has no citizen or death data left for this town (finished?).")
-    if (not gh or "error" in (gh or {})) and not data.get("attacks"):
+    if (not gh or has_error(gh)) and not data.get("attacks"):
         lines.append("")
         lines.append("Attack column empty: Gest'Hordes data unavailable.")
     return "\n".join(lines)

@@ -1,6 +1,36 @@
 """Gest'Hordes formatters: attack forecast/distribution and season-point extraction."""
 
 
+def has_error(data: dict) -> bool:
+    """Gest'Hordes results carry an `error` key only when the fetch failed."""
+    return "error" in data
+
+
+def atk_series(gh: dict | None) -> dict:
+    """The `atk` block of the stats (per-day lists), {} for no data or an error."""
+    if not gh or has_error(gh):
+        return {}
+    return gh.get("data", {}).get("stats", {}).get("atk", {})
+
+
+def at_day(atk: dict, key: str, day: int, offset: int = 0) -> int | None:
+    """Value of series `key` for `day`; offset -1 for the 0-based ones (morts_reels puts
+    day N at index N-1). None outside the list."""
+    series = atk.get(key, [])
+    i = day + offset
+    return series[i] if 0 <= i < len(series) else None
+
+
+def _ville(data: dict) -> tuple[dict, dict]:
+    """(stats, ville) blocks of a stats result."""
+    stats = data.get("data", {}).get("stats", {})
+    return stats, data.get("data", {}).get("general", {}).get("ville", {})
+
+
+def _cell(v) -> str:
+    return str(v) if v is not None else "—"
+
+
 def extract_season_points(data: dict) -> int | None:
     """Extract the current season point total from Gest'Hordes stats."""
     try:
@@ -12,12 +42,10 @@ def extract_season_points(data: dict) -> int | None:
 def format_attack_forecast(data: dict) -> str:
     """Format the attack forecast from Gest'Hordes stats. Defense is left out: the
     tools take it from Fata only (get_defense_status, get_night_report)."""
-    if "error" in data:
+    if has_error(data):
         return f"Error fetching Gest'Hordes stats: {data['error']}"
 
-    stats = data.get("data", {}).get("stats", {})
-    general = data.get("data", {}).get("general", {})
-    ville = general.get("ville", {})
+    stats, ville = _ville(data)
 
     current_day = stats.get("current_ville_jour", 0)
     max_day = stats.get("max_jour", 35)
@@ -66,12 +94,12 @@ def format_attack_forecast(data: dict) -> str:
 
         lines.append(
             f"D{d:<4} "
-            f"{(str(t_min) if t_min is not None else '—'):>7} "
-            f"{(str(t_max) if t_max is not None else '—'):>7}  "
-            f"{(str(actual) if actual is not None else '—'):>8}  "
-            f"{(str(gh_min) if gh_min is not None else '—'):>10}  "
-            f"{(str(gh_max) if gh_max is not None else '—'):>10}  "
-            f"{(str(died) if died is not None else '—')}"
+            f"{_cell(t_min):>7} "
+            f"{_cell(t_max):>7}  "
+            f"{_cell(actual):>8}  "
+            f"{_cell(gh_min):>10}  "
+            f"{_cell(gh_max):>10}  "
+            f"{_cell(died)}"
             f"{marker}"
         )
 
@@ -107,12 +135,10 @@ def format_attack_distribution(data: dict) -> str:
     Uses atk.atk — a list-of-lists of real attack values sampled across all towns
     per day — to compute median, 25th/75th percentiles, min, max, and sample count.
     """
-    if "error" in data:
+    if has_error(data):
         return f"Error fetching Gest'Hordes stats: {data['error']}"
 
-    stats = data.get("data", {}).get("stats", {})
-    general = data.get("data", {}).get("general", {})
-    ville = general.get("ville", {})
+    stats, ville = _ville(data)
 
     current_day = stats.get("current_ville_jour", 0)
     town_name = ville.get("nom", "Unknown town")
@@ -161,8 +187,8 @@ def format_attack_distribution(data: dict) -> str:
             lines.append(
                 f"D{d:<4} {n:>5}  "
                 f"{s[0]:>6}  {p25:>6}  {med:>7}  {p75:>6}  {s[-1]:>6}  "
-                f"{(str(t_min) if t_min is not None else '—'):>9}  "
-                f"{(str(t_max) if t_max is not None else '—'):>9}"
+                f"{_cell(t_min):>9}  "
+                f"{_cell(t_max):>9}"
                 f"{marker}"
             )
         elif t_min is not None:
