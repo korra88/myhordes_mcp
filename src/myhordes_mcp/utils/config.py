@@ -87,6 +87,19 @@ def _listener_user_id() -> str | None:
     return user if user.isascii() and user.isdigit() and len(user) <= 25 else None
 
 
+def _read_town_file(path, label: str) -> int | str | None:
+    """The town ID in a file; None if missing or empty, an error text if it holds anything else."""
+    try:
+        text = path.read_text().strip()
+    except OSError:
+        return None
+    if not text:
+        return None
+    if text.isascii() and text.isdigit():
+        return int(text)
+    return f"Error: {label} must contain only a town ID, found {text!r}."
+
+
 def resolve_town_id(town_id: int = 0) -> int | str:
     """Return a valid town ID (int) or an error message (str).
 
@@ -98,22 +111,12 @@ def resolve_town_id(town_id: int = 0) -> int | str:
         return int(town_id)
     user = _listener_user_id()
     if user:
-        try:
-            mine = (USER_TOWNS_DIR / user).read_text().strip()
-        except OSError:
-            mine = ""
-        if mine:
-            if mine.isascii() and mine.isdigit():
-                return int(mine)
-            return f"Error: {USER_TOWNS_DIR.name}/{user} must contain only a town ID, found {mine!r}."
-    try:
-        current = CURRENT_TOWN_FILE.read_text().strip()
-    except OSError:
-        current = ""
-    if current:
-        if current.isascii() and current.isdigit():
-            return int(current)
-        return f"Error: {CURRENT_TOWN_FILE.name} must contain only a town ID, found {current!r}."
+        mine = _read_town_file(USER_TOWNS_DIR / user, f"{USER_TOWNS_DIR.name}/{user}")
+        if mine is not None:
+            return mine
+    current = _read_town_file(CURRENT_TOWN_FILE, CURRENT_TOWN_FILE.name)
+    if current is not None:
+        return current
     if FATAMORGANA_TOWN_ID:
         return int(FATAMORGANA_TOWN_ID)
     return ("Error: No town ID provided, no towns/_user_towns/<your id> or towns/_current_town "
