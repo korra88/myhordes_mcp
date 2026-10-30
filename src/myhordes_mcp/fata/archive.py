@@ -32,21 +32,28 @@ def _find_town_dir(town_id: int) -> Path | None:
     for entry in TOWNS_DIR.iterdir():
         if not entry.is_dir() or entry.name.startswith("_"):
             continue
-        # Check if this dir has cached data with a matching town_id
-        meta_file = entry / "cache" / "_meta.json"
-        if meta_file.exists():
-            try:
-                meta = json.loads(meta_file.read_text())
-                if meta.get("town_id") == town_id:
-                    return entry
-            except (json.JSONDecodeError, OSError):
-                continue
+        meta = read_meta(entry)
+        if meta and meta.get("town_id") == town_id:
+            return entry
     return None
+
+
+def cache_path(town_dir: Path) -> Path:
+    """The cache/ subdirectory of a town dir (may not exist yet)."""
+    return town_dir / "cache"
+
+
+def read_meta(town_dir: Path) -> dict | None:
+    """cache/_meta.json of a town dir, None if missing or unreadable."""
+    try:
+        return json.loads((cache_path(town_dir) / "_meta.json").read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def _ensure_cache_dir(town_dir: Path) -> Path:
     """Create and return the cache/ subdirectory under a town dir."""
-    cache_dir = town_dir / "cache"
+    cache_dir = cache_path(town_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
@@ -78,14 +85,8 @@ def get_current_day(town_id: int) -> int | None:
     town_dir = _find_town_dir(town_id)
     if town_dir is None:
         return None
-    meta_file = town_dir / "cache" / "_meta.json"
-    if not meta_file.exists():
-        return None
-    try:
-        meta = json.loads(meta_file.read_text())
-        return meta.get("current_day")
-    except (json.JSONDecodeError, OSError):
-        return None
+    meta = read_meta(town_dir)
+    return meta.get("current_day") if meta else None
 
 
 def load_day_json(town_id: int, day: int) -> dict | None:
@@ -93,7 +94,7 @@ def load_day_json(town_id: int, day: int) -> dict | None:
     town_dir = _find_town_dir(town_id)
     if town_dir is None:
         return None
-    json_file = town_dir / "cache" / f"day-{day:02d}.json"
+    json_file = cache_path(town_dir) / f"day-{day:02d}.json"
     if not json_file.exists():
         return None
     try:
@@ -146,7 +147,7 @@ def load_towndata(town_id: int, day: int, *, final_only: bool = False) -> dict |
     if tdir is None:
         return None
     for live in ((False,) if final_only else (False, True)):
-        path = _towndata_file(tdir / "cache", day, live)
+        path = _towndata_file(cache_path(tdir), day, live)
         if path.exists():
             try:
                 with gzip.open(path, "rt", encoding="utf-8") as f:
@@ -194,9 +195,9 @@ def estimation_history(town_id: int, before_day: int) -> dict:
     cache/estimations.json. Built once from the archive when missing: legacy
     spy pages (the latest one has the full history) and older /towndata files."""
     tdir = _find_town_dir(town_id)
-    if tdir is None or not (tdir / "cache").is_dir():
+    if tdir is None or not cache_path(tdir).is_dir():
         return {}
-    cache_dir = tdir / "cache"
+    cache_dir = cache_path(tdir)
     data = _load_estimations(cache_dir)
     changed = False
 
@@ -242,7 +243,7 @@ def _snapshot_dir(town_id: int, day: int) -> Path | None:
     town_dir = _find_town_dir(town_id)
     if town_dir is None:
         return None
-    return town_dir / "cache" / "snapshots" / f"day-{day:02d}"
+    return cache_path(town_dir) / "snapshots" / f"day-{day:02d}"
 
 
 def save_snapshot(town_id: int, day: int, snap: dict) -> bool:
@@ -272,20 +273,24 @@ def load_snapshots(town_id: int, day: int) -> list[dict]:
     return snaps
 
 
-def get_changes_marker(town_id: int) -> dict | None:
-    town_dir = _find_town_dir(town_id)
-    f = town_dir / "cache" / "_changes_marker.json" if town_dir else None
-    if f is None or not f.exists():
-        return None
+def get_marker(town_dir: Path, name: str) -> dict | None:
+    """A {day, taken_at} marker file of the cache (name: e.g. "_changes_marker.json")."""
     try:
-        return json.loads(f.read_text())
+        return json.loads((cache_path(town_dir) / name).read_text())
     except (json.JSONDecodeError, OSError):
         return None
 
 
+def set_marker(town_dir: Path, name: str, day: int, taken_at: int) -> None:
+    (_ensure_cache_dir(town_dir) / name).write_text(json.dumps({"day": day, "taken_at": taken_at}))
+
+
+def get_changes_marker(town_id: int) -> dict | None:
+    town_dir = _find_town_dir(town_id)
+    return get_marker(town_dir, "_changes_marker.json") if town_dir else None
+
+
 def set_changes_marker(town_id: int, day: int, taken_at: int) -> None:
     town_dir = _find_town_dir(town_id)
-    if town_dir is None:
-        return
-    f = _ensure_cache_dir(town_dir) / "_changes_marker.json"
-    f.write_text(json.dumps({"day": day, "taken_at": taken_at}))
+    if town_dir is not None:
+        set_marker(town_dir, "_changes_marker.json", day, taken_at)

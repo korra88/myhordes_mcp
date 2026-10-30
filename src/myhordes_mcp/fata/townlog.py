@@ -11,7 +11,6 @@ Every write checks first, so a second run (or a second server process) adds noth
 """
 
 import fcntl
-import json
 import logging
 import re
 import time
@@ -27,6 +26,7 @@ log = logging.getLogger(__name__)
 
 TEMPLATES = PROJECT_ROOT / "templates" / "town"
 TABLE_HEADER = "| Day | Alive | Defense | Attack est. | Outcome |\n|---|---|---|---|---|"
+MARKER = "_townlog_marker.json"
 NO_CHANGES = "No changes since the reference snapshot."
 
 
@@ -40,7 +40,7 @@ def update_town_log(town_id: int, result: dict, load_day) -> list[str]:
     day = result["meta"].get("day")
     if tdir is None or not day:
         return []
-    cache = tdir / "cache"
+    cache = archive.cache_path(tdir)
     cache.mkdir(parents=True, exist_ok=True)
     with open(cache / ".townlog.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)  # other server processes may run at once
@@ -59,10 +59,7 @@ def update_town_log(town_id: int, result: dict, load_day) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def _season(tdir: Path) -> str:
-    try:
-        season = json.loads((tdir / "cache" / "_meta.json").read_text()).get("season")
-    except (OSError, json.JSONDecodeError):
-        season = None
+    season = (archive.read_meta(tdir) or {}).get("season")
     if season:
         return str(season)
     m = re.match(r"s(\d+)-", tdir.name)
@@ -236,11 +233,7 @@ def _check_entry(tdir: Path, town_id: int, day: int, result: dict) -> list[str]:
     if not snaps:
         return []
     latest = snaps[-1]
-    marker_file = tdir / "cache" / "_townlog_marker.json"
-    try:
-        marker = json.loads(marker_file.read_text())
-    except (OSError, json.JSONDecodeError):
-        marker = None
+    marker = archive.get_marker(tdir, MARKER)
     if marker and marker.get("day") == day:
         # Checked on every fetch, not only when a snapshot is saved: the last changes
         # before a quiet spell are logged by the next fetch once the interval is over.
@@ -260,7 +253,7 @@ def _check_entry(tdir: Path, town_id: int, day: int, result: dict) -> list[str]:
     f = tdir / f"day-{day:02d}.md"
     with open(f, "a", encoding="utf-8") as fh:
         fh.write(f"\n### {title}\n" + "\n".join(body).strip("\n") + "\n")
-    marker_file.write_text(json.dumps({"day": day, "taken_at": latest["taken_at"]}))
+    archive.set_marker(tdir, MARKER, day, latest["taken_at"])
     try:
         rel = f.relative_to(PROJECT_ROOT)
     except ValueError:
