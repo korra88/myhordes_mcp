@@ -22,7 +22,7 @@ import re
 import time
 
 from . import archive
-from .risk import MAX_CP_PER_CITIZEN, zone_cp
+from .risk import CP_PER_CITIZEN, MAX_CP_PER_CITIZEN, zone_cp
 
 CP_FILE = "citizens-cp.json"
 MAX_READINGS = 30   # per citizen
@@ -163,7 +163,7 @@ def citizen_key(name: str) -> str:
     return re.sub(r"^@", "", name.strip()).split(":")[0].strip().lower()
 
 
-def party_cp(log: dict, citizens: list[dict], names: list[str], base: int = 2) -> tuple[int, list[str]]:
+def party_cp(log: dict, citizens: list[dict], names: list[str], base: int = CP_PER_CITIZEN) -> tuple[int, list[str]]:
     """Total CP of a party by citizen names, from each one's last reading.
 
     Unknown citizens count `base` (2, no bonus). Returns (total, breakdown lines)."""
@@ -209,6 +209,6 @@ def format_cp_log(log: dict, citizens: list[dict]) -> list[str]:
         rows.append(f"  {c['name']} ({c['job']}) {last['cp']}/{best['cp']}{terror} — d{last['day']} {last['coords']}{src}{maxday}")
     lines = ["Last/Max CP — day and zone of the last reading:"] + rows
     if unread:
-        lines.append(f"Never read alone on a zone (assume 2): {', '.join(unread)}")
+        lines.append(f"Never read alone on a zone (assume {CP_PER_CITIZEN}): {', '.join(unread)}")
     return lines
 

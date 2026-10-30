@@ -13,7 +13,7 @@ from ..utils.config import PLAYER_NAME
 from . import archive
 from .client import fetch_town_data
 from .geo import moves, xy
-from .risk import format_trapped, night_alerts, trapped_citizens
+from .risk import format_trapped, platform_return_saving, night_alerts, trapped_citizens
 
 # Items inspect-town tracks for deposits and withdrawals.
 CRITICAL_ITEMS = [
@@ -27,14 +27,6 @@ OTHER_BANK_LINES = 8
 
 def _xy(coords: str) -> tuple[int, int]:
     return xy(coords) or (0, 0)
-
-
-def platform_discount(level: int | None) -> int:
-    """AP saved on the way home by the Observation Platform teleport
-    (knowledge/tactics/game-mechanics.md, "Return to town")."""
-    if level is None:
-        return 0
-    return 3 if level >= 4 else 2 if level >= 3 else 0
 
 
 def _move_cost(a: dict, b: dict, discount: int) -> int:
@@ -55,7 +47,7 @@ def day_movement(snaps: list[dict]) -> dict[str, dict]:
     """Per citizen: AP spent moving today across consecutive snapshots."""
     out: dict[str, dict] = {}
     for prev, cur in zip(snaps, snaps[1:]):
-        discount = platform_discount(cur.get("platform_level"))
+        discount = platform_return_saving(cur.get("platform_level"))
         for cid, b in cur["citizens"].items():
             a = prev["citizens"].get(cid)
             if a is None:
@@ -99,7 +91,7 @@ def format_town_changes(data: dict, snaps: list[dict], ref: dict | None, ref_lab
     lines += [state, ""]
 
     if ref is not None and ref is not cur:
-        discount = platform_discount(cur.get("platform_level"))
+        discount = platform_return_saving(cur.get("platform_level"))
         moves = []
         for cid, b in sorted(cur["citizens"].items(), key=lambda kv: kv[1]["name"].lower()):
             a = ref["citizens"].get(cid)
@@ -149,7 +141,7 @@ def format_town_changes(data: dict, snaps: list[dict], ref: dict | None, ref_lab
     walk = day_movement(snaps)
     if walk:
         lines.append(f"### AP spent moving today (lower bound from {len(snaps)} snapshots; "
-                     f"platform return discount {platform_discount(cur.get('platform_level'))} AP)")
+                     f"platform return discount {platform_return_saving(cur.get('platform_level'))} AP)")
         for cid, w in sorted(walk.items(), key=lambda kv: -kv[1]["ap"]):
             where = cur["citizens"].get(cid)
             pos = "in town" if where and where["inside"] else (where["coords"] if where else "gone")

@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from ..utils.clock import age_text, data_datetime, now
-from .geo import NEIGHBOURS8, km, moves, xy
+from .geo import EP_MIN_KM, NEIGHBOURS8, km, moves, xy
 
 # Evening alerts. By day an open gate, citizens far out and defense below the
 # estimate are all normal; they become alarms as the attack (23:59, game time)
@@ -351,12 +351,18 @@ def teleport_range(level: int | None) -> int:
     return 2 if level >= 4 else 1 if level >= 3 else 0
 
 
+def platform_return_saving(level: int | None) -> int:
+    """AP saved on the way home by the teleport (knowledge/tactics/game-mechanics.md,
+    "Return to town"): the walk from the edge of the range, one move more than its km."""
+    reach = teleport_range(level)
+    return reach + 1 if reach else 0
+
+
 # km reach of the hero skills (HeroSkillDataService; wiki Heroic Return / Rescue):
 # Heroic Return, Reclusive R1–R4, self-teleport home, works with the gate closed;
 # Rescue, University U1–U3, cast from town on a citizen outside.
 HEROIC_RETURN_KM = {1: 9, 2: 11, 3: 13, 4: 15}
 RESCUE_KM = {1: 1, 2: 2, 3: 3}
-EP_FROM_KM = 3  # moves leaving a zone at 3+ km pay EP first (supplies.EP_MIN_KM)
 
 
 def _skill_needed(table: dict[int, int], dist: int, prefix: str) -> str:
@@ -383,8 +389,8 @@ def zone_reach(data: dict, x: int, y: int) -> list[str]:
         tele = f"yes (level {level} reaches {reach} km; {gate}; not a move, no thirst)"
     else:
         tele = f"no ({dist} km, level {level} reaches {reach} km)"
-    ep = ("yes: moves leaving this zone pay EP first" if dist >= EP_FROM_KM
-          else f"no: under {EP_FROM_KM} km, moves from here cost AP")
+    ep = ("yes: moves leaving this zone pay EP first" if dist >= EP_MIN_KM
+          else f"no: under {EP_MIN_KM} km, moves from here cost AP")
     heroic = _skill_needed(HEROIC_RETURN_KM, dist, "R")
     if not heroic.startswith("out of range"):
         heroic += "; works with the gate closed"

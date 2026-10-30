@@ -5,6 +5,10 @@ from typing import NamedTuple
 
 Cell = tuple[int, int]
 
+TOWN: Cell = (0, 0)
+EP_MIN_KM = 3      # moves leaving a zone 3+ km (km()) from town pay EP first
+MAX_PATH_AP = 40   # route searches stop after this many moves per leg
+
 _COORDS = re.compile(r"\[(-?\d+)\|(-?\d+)\]")
 
 # The 8 zones around one (zombie spread) and the 4 a citizen can step to.

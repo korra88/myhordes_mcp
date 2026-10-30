@@ -4,9 +4,10 @@ Deterministic facts for the close-day skill: deaths with cause and last
 position, defense vs the attack, alive before/after.
 """
 
+from .geo import TOWN, fmt_xy
 from .planning import alive_by_day
 
-TOWN_COORDS = "[0|0]"
+TOWN_COORDS = fmt_xy(TOWN)
 
 
 def _gh_deaths(gh: dict | None, day: int) -> int | None:

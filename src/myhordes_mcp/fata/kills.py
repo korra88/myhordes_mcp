@@ -32,8 +32,8 @@ import re
 from dataclasses import dataclass
 
 from .pathing import loop_return
-from .geo import NEIGHBOURS8, Cell, fmt_xy, in_bounds, map_bounds, xy, zone_map
-from .risk import (DANGER_TOP, GROWTH_AVG, GROWTH_MAX, danger_band, never_visited,
+from .geo import MAX_PATH_AP, NEIGHBOURS8, Cell, fmt_xy, in_bounds, map_bounds, xy, zone_map
+from .risk import (CP_PER_CITIZEN, DANGER_TOP, GROWTH_AVG, GROWTH_MAX, danger_band, never_visited,
                    respawn_check, respawn_totals, zombie_growth, zone_is_today)
 from .towndata import expand_route
 from . import supplies
@@ -687,7 +687,7 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
         back = loop_return(data, out, group_cp)
         if back is None:
             route = out
-            notes.append("No way home found from the last zone (40 AP cap): supplies cover the way out only.")
+            notes.append(f"No way home found from the last zone ({MAX_PATH_AP} AP cap): supplies cover the way out only.")
         else:
             route = out + back["route"][1:]
             if back["teleport_from"]:
@@ -746,7 +746,7 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
 
 
 def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None = None, zoo: bool = False,
-                    kit: str = "", group_cp: int = 2, cp_breakdown: list[str] | None = None,
+                    kit: str = "", group_cp: int = CP_PER_CITIZEN, cp_breakdown: list[str] | None = None,
                     start_ap: int = 6, slots: int = 5, available: str = "", second_wind: int = 0) -> str:
     """The whole answer of the plan_kill_route tool, from a parsed /towndata result."""
     if data.get("error"):
@@ -825,8 +825,8 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
                      "kill with them before using your last AP.")
     if cp_breakdown:
         warns.append("Party CP: " + "; ".join(cp_breakdown))
-    if group_cp == 2 and not cp_breakdown:
-        warns.append("Assumed 2 CP (solo citizen): pass party= or group_cp= for the group.")
+    if group_cp == CP_PER_CITIZEN and not cp_breakdown:
+        warns.append(f"Assumed {CP_PER_CITIZEN} CP (solo citizen): pass party= or group_cp= for the group.")
     if warns:
         lines += ["", "**Warnings**"] + [f"- {w}" for w in warns]
     plan = _supplies_block(data, path, start_ap=start_ap, slots=slots, kit=kslots, available=available,

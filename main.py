@@ -8,7 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from myhordes_mcp import fata, gesthordes  # noqa: E402
 from myhordes_mcp.fata import pickups as pick_mod, supplies  # noqa: E402
-from myhordes_mcp.fata.geo import fmt_xy  # noqa: E402
+from myhordes_mcp.fata.geo import MAX_PATH_AP, fmt_xy  # noqa: E402
+from myhordes_mcp.fata.risk import CP_PER_CITIZEN  # noqa: E402
 from myhordes_mcp.fata.pathing import dig_weight, loop_return, route_risks, safest_route  # noqa: E402
 from myhordes_mcp.knowledgebase import curated, wiki  # noqa: E402
 from myhordes_mcp.utils.clock import data_updated  # noqa: E402
@@ -492,7 +493,7 @@ async def find_expedition_path(
     data = await fata.fetch_town_data(tid, day=day or None)
     breakdown = None
     if group_cp < 0:
-        group_cp = 2
+        group_cp = CP_PER_CITIZEN
         if party and not data.get("error"):
             group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
     return fata.find_safe_path(
@@ -693,7 +694,7 @@ async def plan_expedition_supplies(
         return f"Error: {data['error']}"
     breakdown = None
     if group_cp < 0:
-        group_cp = 2
+        group_cp = CP_PER_CITIZEN
         if party:
             group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
     picks = pick_mod.resolve(data, [(z, w, n) for z, (_, w, n) in zip(zones, entries)])
@@ -726,7 +727,7 @@ async def plan_expedition_supplies(
     else:
         route = safest_route(data, points, cps, avoid_revisits=avoid, revisit_weight=rw)
         if route is None:
-            return "Error: no route found between the given zones (40 AP cap per leg)."
+            return f"Error: no route found between the given zones ({MAX_PATH_AP} AP cap per leg)."
         route, end_ap, note = supplies.end_requirements(data, route, points[-1])
     risks = route_risks(data, route, points, cps, avoid_revisits=avoid, revisit_weight=rw)
     st = supplies.Start(
@@ -893,7 +894,7 @@ async def plan_kill_route(
     data = await fata.fetch_town_data(tid, day=day or None)
     breakdown = None
     if group_cp < 0:
-        group_cp = 2
+        group_cp = CP_PER_CITIZEN
         if party and not data.get("error"):
             group_cp, breakdown = fata.party_cp(fata.load_cp_log(tid), data["citizens"], party.split(","))
     return fata.plan_kill_route(

@@ -196,7 +196,7 @@ def format_build_options(data: dict, include_resources: bool = False, include_al
     lines.append(f"  Defense {p['defense']} vs tonight {est_txt}"
                  + (f" → buffer {buf:+d}" + (" ⚠ NEGATIVE" if buf < 0 else "") if buf is not None else ""))
     ratio = p["water_ratio"]
-    wflag = " ⚠ below 2.0 — water builds first" if ratio is not None and ratio < WATER_RATIO_CRITICAL else ""
+    wflag = f" ⚠ below {WATER_RATIO_CRITICAL} — water builds first" if ratio is not None and ratio < WATER_RATIO_CRITICAL else ""
     lines.append(f"  Water: {p['water_bank']} clean in bank for {p['alive']} alive = {ratio}/citizen{wflag} · well {p['water_well']}")
     lines.append(f"  AP: town ≈ {p['town_ap']}/day ({AP_PER_CITIZEN}×alive); construction share "
                  f"{CONSTRUCTION_SHARE:.0%} ≈ {p['construction_ap']} AP · plan caps: soft {AP_SOFT_CAP}, hard {AP_HARD_CAP}")

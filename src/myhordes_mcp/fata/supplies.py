@@ -30,10 +30,9 @@ player-facing version is in knowledge/tactics/expedition-planning.md.
 from dataclasses import dataclass
 from functools import lru_cache
 
-from .geo import fmt_xy, km
-from .risk import teleport_range
+from .geo import EP_MIN_KM, MAX_PATH_AP, TOWN, fmt_xy, km
+from .risk import CP_PER_CITIZEN, platform_level, teleport_range
 
-EP_MIN_KM = 3
 THIRST_STEP = 10  # the counter goes up a level when it passes this
 
 
@@ -315,15 +314,21 @@ def extra_options(route: list[tuple[int, int]], start: Start, available: dict[st
 THIRST = {0: "OK", 1: "Thirsty", 2: "Dehydrated"}
 
 
+def thirst_state(counter: int) -> str:
+    """State after `counter` moves without water (the counter never resets in a step table):
+    a level every THIRST_STEP + 1 moves, dead at the third."""
+    level = counter // (THIRST_STEP + 1)
+    return THIRST[level] if level in THIRST else "DEAD"
+
+
 def end_requirements(data: dict, route: list[tuple[int, int]], end: tuple[int, int]) -> tuple[list, int, str]:
     """Shorten a route home by the Observation Platform teleport; AP needed to enter.
 
     Returns (route, end_ap, note)."""
     if end != (0, 0) or len(route) < 2:
         return route, 0, ""
-    built = {b["name"].lower(): b for b in data.get("buildings", []) if b.get("built")}
-    platform = built.get("observation platform")
-    reach = teleport_range((platform.get("level") or 0) if platform else None)
+    level = platform_level(data)
+    reach = teleport_range(level)
     if reach:
         # Last leg only: from the last zone farther than the teleport range.
         cut = len(route) - 1
@@ -332,10 +337,10 @@ def end_requirements(data: dict, route: list[tuple[int, int]], end: tuple[int, i
         if cut < len(route) - 1:
             z = route[cut]
             return (route[:cut + 1], 0,
-                    f"Observation Platform level {platform.get('level')}: teleport home from "
+                    f"Observation Platform level {level}: teleport home from "
                     f"{fmt_xy(z)} ({len(route) - 1 - cut} moves saved; needs the gate open).")
-    if "labyrinth" in built:
-        return route, 1, "Labyrinth built: entering town from [0|0] costs 1 AP."
+    if any(b["name"].lower() == "labyrinth" for b in data.get("buildings", []) if b.get("built")):
+        return route, 1, f"Labyrinth built: entering town from {fmt_xy(TOWN)} costs 1 AP."
     return route, 0, ""
 
 
@@ -403,7 +408,7 @@ def format_risks(risks: list[dict], cp: int, items: int, slots: int, cp_label: s
         if r.get("waypoint"):
             around = "it is a waypoint of the trip"
         elif r["detour_ap"] is None:
-            around = "no way around within 40 AP"
+            around = f"no way around within {MAX_PATH_AP} AP"
         elif r["detour_ap"] <= 0:
             around = "a way around costs no extra AP but is riskier elsewhere"
         else:
@@ -516,7 +521,7 @@ def itinerary(steps: list[dict], route: list[tuple[int, int]], ending: str,
 def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
                 title: str, notes: list[str], slots: int = 0, end_ap: int = 0,
                 step_table: bool = False, teleport: bool = False, generic_extras: bool = False,
-                risks: list[dict] | None = None, cp: int = 2,
+                risks: list[dict] | None = None, cp: int = CP_PER_CITIZEN,
                 waypoints: list[tuple[int, int]] | None = None, options: list[str] | None = None,
                 pick_verdict: str = "", pick_notes: dict[int, str] | None = None,
                 extra_warn: list[str] | None = None, cp_label: str | None = None) -> str:

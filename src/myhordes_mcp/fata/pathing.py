@@ -4,8 +4,10 @@ import heapq
 from dataclasses import dataclass, field
 
 from ..utils.clock import data_updated
-from .geo import (NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km, map_bounds, moves, zone_map)
+from .geo import (EP_MIN_KM, MAX_PATH_AP, NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km,
+                  map_bounds, moves, zone_map)
 from .risk import (
+    CP_PER_CITIZEN,
     DANGER_LEVELS,
     DANGER_TOP,
     _build_spread_map,
@@ -17,9 +19,7 @@ from .risk import (
     platform_level,
     teleport_range,
 )
-
-
-MAX_PATH_AP = 40
+from .supplies import THIRST_STEP, thirst_state
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +143,7 @@ def walkability(
     coords: tuple[int, int] | None = None,
     spread_map: dict | None = None,
     *,
-    group_cp: int = 2,
+    group_cp: int = CP_PER_CITIZEN,
     scout_mode: bool = False,
     revisit: bool = False,
 ) -> float:
@@ -174,7 +174,7 @@ def _cell_risk(
     coords: tuple[int, int] | None = None,
     spread_map: dict | None = None,
     *,
-    group_cp: int = 2,
+    group_cp: int = CP_PER_CITIZEN,
     scout_mode: bool = False,
     mode: str = "safest",
 ) -> float:
@@ -299,7 +299,12 @@ def _leg_search(grid: ZoneGrid, cp: int, a: tuple[int, int], b: tuple[int, int],
     return out
 
 
-def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[int] = 2,
+def _per_leg(cp: int | list[int], legs: int) -> list[int]:
+    """One CP value per leg from an int or a per-leg list."""
+    return list(cp) if isinstance(cp, (list, tuple)) else [cp] * legs
+
+
+def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[int] = CP_PER_CITIZEN,
                  mode: str = "safest", flash_budget: int = 0, scout_mode: bool = False,
                  banned: frozenset = frozenset(), revisit: frozenset = frozenset(),
                  avoid_revisits: bool = False, revisit_weight: float | None = None,
@@ -320,7 +325,7 @@ def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[in
     grid: a ZoneGrid of `data` to reuse (built here when omitted).
     """
     legs = len(points) - 1
-    cps = list(cp) if isinstance(cp, (list, tuple)) else [cp] * legs
+    cps = _per_leg(cp, legs)
     if len(cps) != legs:
         raise ValueError("cp needs one value per leg")
     rw = WALK["revisit"] if revisit_weight is None else revisit_weight
@@ -353,7 +358,7 @@ def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[in
             "risk": risk}
 
 
-def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int | list[int] = 2,
+def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int | list[int] = CP_PER_CITIZEN,
                  banned: frozenset = frozenset(), revisit: frozenset = frozenset(),
                  avoid_revisits: bool = False,
                  revisit_weight: float | None = None) -> list[tuple[int, int]] | None:
@@ -364,7 +369,7 @@ def safest_route(data: dict, points: list[tuple[int, int]], group_cp: int | list
     return res["route"] if res else None
 
 
-def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2,
+def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = CP_PER_CITIZEN,
                 dig: bool = False) -> dict | None:
     """The way back of a trip that walked `out` (start first, destination last).
 
@@ -438,7 +443,7 @@ RISKY_TAGS = ("TRAPPED", "TRAP_RISK", "UNKNOWN")
 
 
 def route_risks(data: dict, route: list[tuple[int, int]], points: list[tuple[int, int]],
-                group_cp: int | list[int] = 2, avoid_revisits: bool = False,
+                group_cp: int | list[int] = CP_PER_CITIZEN, avoid_revisits: bool = False,
                 revisit_weight: float | None = None) -> list[dict]:
     """Stretches of `route` where the group may get blocked: zombies above its CP (seen
     today = TRAPPED, estimated from old data or spread = TRAP_RISK), or no data at all
@@ -451,7 +456,7 @@ def route_risks(data: dict, route: list[tuple[int, int]], points: list[tuple[int
     the shield); each risk carries the "cp" of the leg that enters it. avoid_revisits /
     revisit_weight: as the route was searched (search_route)."""
     legs = len(points) - 1
-    cps = list(group_cp) if isinstance(group_cp, (list, tuple)) else [group_cp] * legs
+    cps = _per_leg(group_cp, legs)
     grid = zone_grid(data)
     classes = {c: grid.cell_class(c) for c in set(cps)}
     reached = reach_indices(route, points)
@@ -511,7 +516,7 @@ def find_safe_path(
     x1: int, y1: int,
     x2: int, y2: int,
     *,
-    group_cp: int = 2,
+    group_cp: int = CP_PER_CITIZEN,
     escape_items: int = 0,
     scout_mode: bool = False,
     step_table: bool = False,
@@ -753,20 +758,6 @@ def find_safe_path(
 # (knowledge/tactics/expedition-planning.md)
 # ---------------------------------------------------------------------------
 
-EP_MIN_KM = 3            # EP pays for moves leaving a zone 3+ km (geo.km) from town
-THIRSTY_AT, DEHYDRATED_AT, DEATH_AT = 11, 22, 33
-
-
-def _thirst(counter: int) -> str:
-    if counter >= DEATH_AT:
-        return "DEAD"
-    if counter >= DEHYDRATED_AT:
-        return "Dehydrated"
-    if counter >= THIRSTY_AT:
-        return "Thirsty"
-    return "OK"
-
-
 def step_rows(route: list[tuple[int, int]], start_ap: int = 6, start_ep: int = 0,
               thirst_counter: int = 0) -> list[dict]:
     """Walk a route cell by cell. No consumables are applied: when AP runs out
@@ -782,7 +773,7 @@ def step_rows(route: list[tuple[int, int]], start_ap: int = 6, start_ep: int = 0
         counter += 1
         rows.append({
             "zone": (x1, y1), "km": km(x1, y1), "paid": "EP" if use_ep else "AP",
-            "ap": ap, "ep": ep, "counter": counter, "thirst": _thirst(counter),
+            "ap": ap, "ep": ep, "counter": counter, "thirst": thirst_state(counter),
             "empty": not use_ep and ap < 0,
         })
     return rows
@@ -811,8 +802,8 @@ def format_step_table(route: list[tuple[int, int]], start_ap: int = 6, start_ep:
         short = -min(r["ap"] for r in rows)
         summary.append(f"AP runs out before step {first_empty}: {short} more AP needed "
                        "(consume food/water/drugs at exactly 0 AP to waste nothing)")
-    for limit, label in ((THIRSTY_AT, "Thirsty"), (DEHYDRATED_AT, "Dehydrated — dies at midnight"),
-                         (DEATH_AT, "death")):
+    for level, label in ((1, "Thirsty"), (2, "Dehydrated — dies at midnight"), (3, "death")):
+        limit = level * (THIRST_STEP + 1)
         hit = next((i for i, r in enumerate(rows, 1) if r["counter"] >= limit), None)
         if hit:
             summary.append(f"counter reaches {limit} at step {hit} → {label} unless water resets it before")
