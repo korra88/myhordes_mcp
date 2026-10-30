@@ -11,6 +11,7 @@ from .risk import (
     _zone_status,
     _zone_threat,
     fmt_items,
+    is_stale,
     never_visited,
     respawn_check,
     zone_is_today,
@@ -93,8 +94,7 @@ def format_scout(data: dict) -> str:
 
         def _est_day(z: dict) -> str:
             d = z.get("scouted_day")
-            old = d is not None and isinstance(current_day, int) and current_day - d >= 1
-            return f"d{d}, stale" if old else f"d{d}"
+            return f"d{d}, stale" if is_stale(d, current_day) else f"d{d}"
 
         for z in sorted((z for z in scout_only if z["zombies"] > 0), key=lambda z: -z["zombies"]):
             lines.append(f"  {z['coords']}: ~{z['zombies']} ({_est_day(z)})")
@@ -315,7 +315,7 @@ def format_zone_path(
             if day is not None and today:
                 when = f" (zombies today, items d{day})"
             elif day is not None:
-                stale = ", STALE" if (isinstance(current_day, int) and current_day - day >= 1) else ""
+                stale = ", STALE" if is_stale(day, current_day) else ""
                 when = f" (updated d{day}{stale})"
             cells = sorted(groups[key], key=lambda t: (t[0], t[1]["coords"]))
             coords = ", ".join(f"{z['coords']} {ap}AP" for ap, z in cells)

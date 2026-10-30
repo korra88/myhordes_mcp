@@ -14,6 +14,7 @@ from .risk import (
     _spread_risk_for_clear,
     _staleness_tag,
     _zombie_max_estimate,
+    age_days,
     danger_band,
     fmt_items,
     platform_level,
@@ -111,7 +112,7 @@ def _classify_cell(
         return {"tag": tag, "zombies": est, "fresh": False, "age": -1}
 
     last_day = zone.get("updated_day") or zone.get("scouted_day")
-    age = (current_day - last_day) if (current_day and last_day) else 0
+    age = age_days(last_day, current_day) or 0
     fresh = age == 0
 
     if zm == 0:
@@ -621,7 +622,7 @@ def find_safe_path(
         zm = z.get("zombies", -1)
         if zm >= 0:
             last_day = z.get("updated_day") or z.get("scouted_day")
-            age = (cd - last_day) if (cd and last_day) else 0
+            age = age_days(last_day, cd) or 0
             if zm == 0:
                 spread = _spread_risk_for_clear((px, py), age, spread_map) if age > 0 else None
                 if spread is not None:

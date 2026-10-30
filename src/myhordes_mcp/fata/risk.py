@@ -121,12 +121,22 @@ DANGER_LEVELS = {
 }
 
 
+def age_days(day, current) -> int | None:
+    """Days between a reading's day and the current one (None if either is not a day)."""
+    if isinstance(day, int) and isinstance(current, int):
+        return current - day
+    return None
+
+
+def is_stale(day, current) -> bool:
+    """A reading from an earlier day than the current one."""
+    age = age_days(day, current)
+    return age is not None and age >= 1
+
+
 def _staleness_tag(last_update_day: int | None, current_day: int | None) -> str:
     """Return a staleness warning if position data is old, empty string otherwise."""
-    if last_update_day is None or current_day is None:
-        return ""
-    age = current_day - last_update_day
-    if age >= 1:
+    if is_stale(last_update_day, current_day):
         return f" [STALE: day {last_update_day}]"
     return ""
 
@@ -151,10 +161,8 @@ def _zombie_max_estimate(zombies: int, last_day: int | None, current_day: int | 
 
     Returns None if the zone is current or days elapsed is 0.
     """
-    if last_day is None or current_day is None:
-        return None
-    age = current_day - last_day
-    if age <= 0:
+    age = age_days(last_day, current_day)
+    if age is None or age <= 0:
         return None
     return zombie_growth(zombies, age)[2]
 
@@ -254,7 +262,7 @@ def _zone_threat(zone: dict, current_day: int | None = None, spread_map: dict | 
     zm = zone.get("zombies", 0)
     if zm is not None and zm >= 0:
         last_day = zone.get("updated_day")
-        age = (current_day - last_day) if (current_day and last_day) else 0
+        age = age_days(last_day, current_day) or 0
         if zm == 0:
             # Check spread risk: could a zombie zone have reached this cell?
             if spread_map is not None and coords is not None and age > 0:
@@ -283,8 +291,7 @@ def _zone_freshness(zone: dict, current_day: int | None) -> str:
         return ""
     if zone.get("danger_today"):
         return f" (zombies today, items d{updated_day})"
-    stale = current_day is not None and current_day - updated_day >= 1
-    return f" (updated d{updated_day}" + (", STALE)" if stale else ")")
+    return f" (updated d{updated_day}" + (", STALE)" if is_stale(updated_day, current_day) else ")")
 
 
 # Heavy parts that assemble into a defensive object; Fata files them under Miscellaneous.
