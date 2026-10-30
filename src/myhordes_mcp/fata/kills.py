@@ -309,7 +309,7 @@ for _i in range(1, 4):
 
 def parse_kit(text: str) -> dict[str, int] | str:
     """'laser, machete, battery=2' → kit {'laser:0': 1, 'machete:1': 1, 'battery': 2}, or an
-    error text. A bare laser / launcher / aqua / pistol is empty (needs its battery / water);
+    "Error: ..." text. A bare laser / launcher / aqua / pistol is empty (needs its battery / water);
     laser3, aqua4, pistol2 and launcher_loaded say what it holds."""
     kit: dict[str, int] = {}
     for part in text.replace(";", ",").split(","):
@@ -320,12 +320,12 @@ def parse_kit(text: str) -> dict[str, int] | str:
         name = name.strip().replace(" ", "_").replace("-", "")
         key = KIT_NAMES.get(name)
         if key is None:
-            return (f"unknown kit item '{part}' (use: laser, laser3, machete, knife, launcher, "
+            return (f"Error: unknown kit item '{part}' (use: laser, laser3, machete, knife, launcher, "
                     "launcher_loaded, aqua, aqua4, pistol, pistol2, battery, water, repair).")
         try:
             n = int(count) if count.strip() else 1
         except ValueError:
-            return f"bad count in '{part}'."
+            return f"Error: bad count in '{part}'."
         kit[key] = kit.get(key, 0) + n
     return kit
 
@@ -670,7 +670,7 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
     come off the departure AP, those carried are kept as AP to spare along the way."""
     items = supplies.parse_available(available)
     if isinstance(items, str):
-        return f"Error: {items}"
+        return items
     sw_ap = sw_ep = 0
     if second_wind:
         if second_wind - 1 not in supplies.SECOND_WIND:
@@ -761,7 +761,7 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
     if kit.strip():
         given = parse_kit(kit)
         if isinstance(given, str):
-            return f"Error: {given}"
+            return given
     meta = data["meta"]
     instructions: dict[int, str] = {}
     if route.strip():

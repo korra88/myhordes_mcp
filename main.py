@@ -672,7 +672,7 @@ async def plan_expedition_supplies(
         return "Error: thirst must be 'none', 'thirsty' or 'dehydrated'."
     items = supplies.parse_available(available)
     if isinstance(items, str):
-        return f"Error: {items}"
+        return items
     sw_ap = sw_ep = 0
     if second_wind:
         if second_wind - 1 not in supplies.SECOND_WIND:

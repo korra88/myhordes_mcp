@@ -73,7 +73,7 @@ ALIASES = {
 
 
 def parse_available(text: str) -> dict[str, int] | str:
-    """'water=2, food7=1, twinoid' → counts; an error message (str) if a name is unknown."""
+    """'water=2, food7=1, twinoid' → counts; an "Error: ..." text (str) if a name is unknown."""
     if not text.strip():
         return dict(DEFAULT_AVAILABLE)
     out: dict[str, int] = {}
@@ -84,11 +84,11 @@ def parse_available(text: str) -> dict[str, int] | str:
         name, _, n = part.replace(":", "=").partition("=")
         key = ALIASES.get(name.strip().lower())
         if key is None:
-            return f"Unknown item '{name.strip()}'. Use: {', '.join(ORDER)}."
+            return f"Error: Unknown item '{name.strip()}'. Use: {', '.join(ORDER)}."
         try:
             out[key] = out.get(key, 0) + (int(n) if n.strip() else 1)
         except ValueError:
-            return f"Bad count in '{part}'."
+            return f"Error: Bad count in '{part}'."
     return out
 
 
