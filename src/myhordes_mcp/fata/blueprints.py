@@ -17,7 +17,7 @@ So a normal blueprint can take a building out of a ruin's small pool, and a ruin
 whose remaining buildings all wait on a locked parent is wasted until that parent is in.
 """
 
-from ..utils.clock import data_updated
+from ..utils.fmt import header
 
 TIERS = {1: "common", 2: "uncommon", 3: "rare", 4: "very rare"}
 RUIN_LABEL = {"bunker": "Bunker", "hotel": "Hotel", "hospital": "Hospital"}
@@ -138,8 +138,7 @@ def format_blueprint_order(data: dict) -> str:
     meta = data["meta"]
     r = blueprint_order(data)
     plan = r["plan"]
-    lines = [f"## Blueprint reading order — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
-             data_updated(meta)]
+    lines = [header("Blueprint reading order", meta)]
     if r["ruins"]:
         lines.append("Explorable ruin on the map: " + ", ".join(
             f"Abandoned {RUIN_LABEL[k]} {' '.join(v['coords'])}" for k, v in r["ruins"].items()))

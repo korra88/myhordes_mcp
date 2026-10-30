@@ -37,6 +37,7 @@ from .risk import (CP_PER_CITIZEN, DANGER_TOP, GROWTH_AVG, GROWTH_MAX, danger_ba
                    respawn_check, respawn_totals, zombie_growth, zone_is_today)
 from .towndata import expand_route
 from . import supplies
+from ..utils.fmt import header
 from ..utils.clock import data_updated
 
 
@@ -611,7 +612,7 @@ def _side_line(d: str, zones: list[Cell], est: dict) -> str:
 def format_zoo(data: dict) -> str:
     clusters = zoo_clusters(data)
     meta = data["meta"]
-    lines = [f"## Zombie clusters — {meta.get('town_name', '?')} day {meta.get('day', '?')}", data_updated(meta)]
+    lines = [header("Zombie clusters", meta)]
     if not clusters:
         lines.append("No zone with zombies (or danger) in the zones Fata knows.")
     never = never_visited(data)
@@ -757,7 +758,7 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
         return "Error: the route has no step."
     a = analyse_route(data, path)
     tot = a["totals"]
-    lines = [f"## Kill route: {title} (day {meta.get('day', '?')}) — {head}", data_updated(meta)]
+    lines = [f"## Kill route: {title} (Day {meta.get('day', '?')}) — {head}", data_updated(meta)]
     if a["rows"]:
         lines += ["", "| Step | Zone | Zombies | Source | Pairs | Singles |", "|---|---|---|---|---|---|"]
         for row in a["rows"]:

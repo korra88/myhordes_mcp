@@ -1,5 +1,6 @@
 """Map formatters: scout data, ruins/ground items, zones in a bounding box."""
 
+from ..utils.fmt import header, heading
 from ..utils.clock import data_updated
 from .bank import summary_lines
 from .geo import fmt_xy, km, moves, xy, zone_map
@@ -59,8 +60,7 @@ def format_scout(data: dict) -> str:
     never = never_visited(data)
 
     lines = [
-        f"## Scout Map — {meta.get('town_name', '?')} Day {current_day}",
-        data_updated(meta),
+        header("Scout Map", meta),
         f"{len(zones)} zones visited" + (f", {never} never" if never is not None else "")
         + f" · today: {len(today)} zones seen ({today_clear} clear) · older: {len(older_count)} with zombies, "
         f"{older_clear} clear, {no_info} no data",
@@ -145,8 +145,7 @@ def format_zones(data: dict, item: str = "") -> str:
     outside = [c for c in data.get("citizens", []) if not c["inside_town"] and xy(c)]
 
     lines = [
-        f"## Desert overview — {meta.get('town_name', '?')} Day {current_day}",
-        data_updated(meta),
+        header("Desert overview", meta),
         f"{len(zones)} zones visited · {len(item_zones)} with ground items · {len(ruins)} ruins · "
         f"{len(outside)} citizens outside",
         "",
@@ -185,8 +184,7 @@ def _format_item_search(data: dict, item: str) -> str:
             hits.append((moves((x, y)), z, found))
     hits.sort(key=lambda h: (h[0], h[1]["coords"]))
     total = sum(i["count"] for _, _, f in hits for i in f)
-    lines = [f"## '{item}' on the ground — {meta.get('town_name', '?')} Day {current_day}",
-             data_updated(meta)]
+    lines = [header(f"'{item}' on the ground", meta)]
     if not hits:
         return "\n".join(lines + [f"No zone holds an item matching '{item}' (as last seen)."])
     lines.append(f"{total} in {len(hits)} zones, nearest first (as last seen in each zone):")
@@ -234,13 +232,11 @@ def format_zone_path(
             in_range.append((ap, z, rx, ry))
 
     current_day = meta.get("day")
-    town = meta.get("town_name", "?")
-    day = meta.get("day", "?")
 
     # Build full zone_map for spread simulation (all explored zones, not just bbox)
     spread_map = _build_spread_map(zone_map(data), current_day if isinstance(current_day, int) else None)
 
-    header_parts = [f"## Zone Path {fmt_xy((x1, y1))} → {fmt_xy((x2, y2))} — {town} Day {day}"]
+    header_parts = [heading(f"Zone Path {fmt_xy((x1, y1))} → {fmt_xy((x2, y2))}", meta)]
     if max_ap is not None:
         header_parts.append(f"AP budget: {max_ap}")
     lines = [" | ".join(header_parts), data_updated(meta), ""]

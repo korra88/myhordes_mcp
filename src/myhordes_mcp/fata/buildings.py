@@ -1,6 +1,6 @@
 """Building formatters: today's builds, history, available constructions."""
 
-from ..utils.clock import data_updated
+from ..utils.fmt import header
 from .blueprints import TIERS
 
 
@@ -148,14 +148,14 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
     available = [b for b in buildings if not b["built"]]
     total_def = sum(b["defense"] for b in built)
 
-    header = f"## Buildings — {meta.get('town_name', '?')} Day {current_day}\n{data_updated(meta)}"
+    head = header("Buildings", meta)
 
     if mode == "summary":
         today = [b for b in built if b.get("built_day") == current_day]
         # Also collect upgrades that happened today
         today_upgrades = upgrades_by_day(built).get(current_day, [])
 
-        lines = [header, f"{len(built)} built total — defense from buildings: {total_def}", ""]
+        lines = [head, f"{len(built)} built total — defense from buildings: {total_def}", ""]
         if not today and not today_upgrades:
             lines.append("No constructions today yet.")
         else:
@@ -167,7 +167,7 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
         return "\n".join(lines)
 
     if mode == "history":
-        lines = [header, f"{len(built)} built, {len(available)} not yet built", ""]
+        lines = [head, f"{len(built)} built, {len(available)} not yet built", ""]
         lines.extend(_build_history_lines(built))
         return "\n".join(lines)
 
@@ -183,7 +183,7 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
         no_bp = [b for b in prereq_ok if b.get("rarity", 0) == 0]
         bp_found = [b for b in prereq_ok if b.get("rarity", 0) > 0 and b.get("blueprint_found", False)]
         unlocked_count = len(no_bp) + len(bp_found)
-        lines = [header, f"{len(built)} built — {unlocked_count} unlocked, {len(prereq_locked)} locked (prereq) — defense from buildings: {total_def}", ""]
+        lines = [head, f"{len(built)} built — {unlocked_count} unlocked, {len(prereq_locked)} locked (prereq) — defense from buildings: {total_def}", ""]
         lines.append(f"### Unlocked — no blueprint needed ({len(no_bp)})")
         for b in no_bp:
             lines.append(_available_line(b, include_resources=include_resources))

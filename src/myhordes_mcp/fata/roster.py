@@ -9,7 +9,7 @@ import re
 
 from .cp import citizen_key
 from .geo import moves, xy
-from ..utils.clock import data_updated
+from ..utils.fmt import header
 
 # Forum icons per Fata job display name (towndata.JOB_NAMES values).
 CLASS_ICONS = {
@@ -81,8 +81,7 @@ def format_roster(data: dict, listed: str = "") -> str:
         return f"Error: {data['error']}"
     meta = data["meta"]
     r = roster(data, parse_listed(listed))
-    lines = [f"## Expedition roster — {meta.get('town_name')} Day {meta.get('day')}",
-             data_updated(meta, suffix=" · distance = Manhattan (AP from town)"), ""]
+    lines = [header("Expedition roster", meta, suffix=" · distance = Manhattan (AP from town)"), ""]
     n_out = len(r["outside"])
     if r["has_list"]:
         lines.append(f"Accounting: {len(r['on_list'])} listed + {len(r['scrappers'])} scrappers + "

@@ -5,6 +5,8 @@ position, defense vs the attack, alive before/after.
 """
 
 from ..gesthordes.format import at_day, atk_series
+from ..utils.clock import data_updated
+from ..utils.fmt import town_name
 from .geo import TOWN, fmt_xy
 from .planning import alive_by_day
 
@@ -53,7 +55,7 @@ def format_night_report(data: dict, day: int, gh: dict | None = None, day_data: 
     if not r["closed"]:
         return (f"Day {day} has not ended yet (town is on day {meta.get('day')}). "
                 "Night reports cover days whose attack already happened.")
-    lines = [f"## Night report — {meta.get('town_name')}, night of Day {day} → Day {day + 1}"]
+    lines = [f"## Night report — {town_name(meta)}, night of Day {day} → Day {day + 1}", data_updated(meta)]
     town_alive = (r["alive_after"] or 0) > 0
     lines.append(f"Result: {'SURVIVED' if town_alive else 'FAILED (no citizens left)' if r['alive_after'] == 0 else 'unknown'}")
     d, a = r["defense"], r["attack"]

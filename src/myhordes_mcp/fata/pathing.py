@@ -3,7 +3,7 @@
 import heapq
 from dataclasses import dataclass, field
 
-from ..utils.clock import data_updated
+from ..utils.fmt import header
 from .geo import (EP_MIN_KM, MAX_PATH_AP, NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km,
                   map_bounds, moves, zone_map)
 from .risk import (
@@ -549,8 +549,6 @@ def find_safe_path(
         return f"Error: {data['error']}"
 
     meta = data["meta"]
-    current_day = meta.get("day", "?")
-    town = meta.get("town_name", "?")
 
     # -- Shared pre-computation (formatting) and the two searches --
     grid = zone_grid(data)
@@ -574,7 +572,7 @@ def find_safe_path(
 
     # -- Format output --
     chain = " → ".join(fmt_xy(c) for c in points)
-    lines = [f"## Pathfinding {chain} — {town} Day {current_day}", data_updated(meta)]
+    lines = [header(f"Pathfinding {chain}", meta)]
     params = [f"Group CP: {group_cp}"]
     if scout_mode:
         params.append("Scout: Yes")

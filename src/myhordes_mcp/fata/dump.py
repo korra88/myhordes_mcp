@@ -12,7 +12,7 @@ see .claude/commands/update-garbage-dump-list.md):
 """
 
 import re
-from ..utils.clock import data_updated
+from ..utils.fmt import header
 from .bank import totals as bank_totals
 
 ALIASES = {
@@ -93,8 +93,7 @@ def format_dump_mapping(data: dict, sheet_items: str) -> str:
         return "No sheet item names given. Pass column B of the item rows, one per line, in row order."
     meta = data["meta"]
     m = map_dump_rows(data["bank"], items)
-    lines = [f"## Dump sheet mapping — bank of {meta.get('town_name')} Day {meta.get('day')}",
-             data_updated(meta, suffix=f" · {len(items)} sheet rows, broken items included"), ""]
+    lines = [header("Dump sheet mapping", meta, suffix=f" · {len(items)} sheet rows, broken items included"), ""]
     for i, (name, value, sources) in enumerate(m["rows"]):
         src = ""
         if len(sources) > 1 or (sources and sources[0].lower() != name.strip().lower()):

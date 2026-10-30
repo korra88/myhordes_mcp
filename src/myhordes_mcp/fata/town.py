@@ -1,5 +1,6 @@
 """Town-level formatters: overview, citizens, defense."""
 
+from ..utils.fmt import header, town_name
 from ..utils.clock import data_updated
 from .cp import cp_label
 from .risk import (
@@ -86,7 +87,7 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
 
     season_pts_str = f" | Season pts: {season_points}" if season_points is not None else ""
     lines = [
-        f"# {meta.get('town_name', 'Unknown Town')} — Day {meta.get('day', '?')}",
+        f"# {town_name(meta)} — Day {meta.get('day', '?')}",
         f"Season {meta.get('season', '?')} | Type: {meta.get('game_type', '?')} | Region: {meta.get('region', '?')}"
         + season_pts_str
         + (" | CHAOS MODE" if meta.get("chaos") else "")
@@ -177,6 +178,7 @@ def format_citizens(data: dict, cp_log: dict | None = None) -> str:
     outside = [c for c in citizens if not c["inside_town"]]
 
     lines = [
+        header("Citizens", meta),
         gate_line(data),
         roster_line(data),
         f"{len(citizens)} alive — {len(inside)} inside, {len(outside)} outside",

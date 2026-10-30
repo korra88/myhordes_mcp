@@ -10,7 +10,7 @@ from myhordes_mcp import fata, gesthordes  # noqa: E402
 from myhordes_mcp.fata import expedition  # noqa: E402
 from myhordes_mcp.fata.expedition import day_budget_error, parse_zones  # noqa: E402
 from myhordes_mcp.knowledgebase import curated, wiki  # noqa: E402
-from myhordes_mcp.utils.clock import data_updated  # noqa: E402
+from myhordes_mcp.utils.fmt import header  # noqa: E402
 from myhordes_mcp.utils.config import CURRENT_TOWN_FILE, FATAMORGANA_TOWN_ID, resolve_town_id  # noqa: E402
 
 # IMPORTANT: MyHordes rules prohibit automated/scheduled API polling.
@@ -140,8 +140,7 @@ async def get_citizen_cp(town_id: int = 0) -> str:
     if data.get("error"):
         return f"Error: {data['error']}"
     meta = data["meta"]
-    lines = [f"## Citizen CP — {meta.get('town_name')} Day {meta.get('day')}",
-             data_updated(meta),
+    lines = [header("Citizen CP", meta),
              "Last = most recent reading, Max = best ever seen.", ""]
     lines += fata.format_cp_log(fata.load_cp_log(tid), data["citizens"])
     return "\n".join(lines)

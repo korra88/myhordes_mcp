@@ -1,6 +1,6 @@
 """Bank formatters: full item list and strategic summary."""
 
-from ..utils.clock import data_updated
+from ..utils.fmt import header
 from .blueprints import TIERS
 from .buildings import has_water_filter
 
@@ -22,8 +22,7 @@ def format_bank(data: dict) -> str:
         by_cat.setdefault(item["category"], []).append(item)
 
     lines = [
-        f"## Bank Inventory — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
-        data_updated(meta),
+        header("Bank Inventory", meta),
         f"{len(bank)} item types in the bank",
         "",
     ]
@@ -260,8 +259,7 @@ def format_bank_summary(data: dict) -> str:
         return "The bank is empty."
 
     lines = [
-        f"## Bank Summary — {meta.get('town_name', '?')} Day {meta.get('day', '?')}",
-        data_updated(meta),
+        header("Bank Summary", meta),
         f"{len(bank)} item types, {sum(i['count'] for i in bank)} total items",
         "",
     ]

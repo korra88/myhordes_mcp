@@ -8,7 +8,7 @@ from .bank import _CLEAN_WATER, _sum_items, defense_count, totals
 from ..gesthordes.format import at_day, atk_series, has_error
 from .buildings import (WATER_FILTERS, has_blueprint, is_buildable, upgrades_by_day,
                         visible)
-from ..utils.clock import data_updated
+from ..utils.fmt import header
 
 # Daily AP of one citizen used for town budgets (6 AP base + food/water/drugs).
 AP_PER_CITIZEN = 18
@@ -174,8 +174,7 @@ def format_build_options(data: dict, include_resources: bool = False, include_al
     est_txt = f"{est.get('min')}–{est.get('max')}" if est.get("min") is not None else "unknown"
     est_txt += " (confirmed)" if est.get("maxed") else (" (partial)" if est.get("min") is not None else "")
     lines = [
-        f"## Build options — {p['town']} Day {p['day']}",
-        data_updated(data["meta"]),
+        header("Build options", data["meta"]),
         "",
         "### Situation",
     ]
@@ -315,8 +314,7 @@ def format_construction_history(data: dict, gh: dict | None = None) -> str:
     meta = data["meta"]
     rows = construction_history(data, gh)
     lines = [
-        f"## Construction history — {meta.get('town_name')} Day {meta.get('day')}",
-        data_updated(meta, suffix=f" · budget = {AP_PER_CITIZEN} AP × citizens alive at day start"),
+        header("Construction history", meta, suffix=f" · budget = {AP_PER_CITIZEN} AP × citizens alive at day start"),
         "",
         f"{'Day':<4} {'AP':>4} {'Budget':>7} {'%':>4} {'Alive':>5} {'Attack':>11} {'Deaths':>6}  Paid builds",
     ]
