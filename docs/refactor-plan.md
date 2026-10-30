@@ -1,6 +1,6 @@
 # Piano: normalizzazione e riuso del codice
 
-Stato: **piano approvato dall'utente 2026-10-30.** B1–B3 fatti; fase A fatta (20 commit da 89daf98 a 16be11f, eseguita da Sonnet, rivista da Opus; resti sotto); fase B fatta (3e19d37, 0d686a9 identici; 879f471 + correzione Opus: regola "Not feasible as asked"); prossimo: fasi C e D, punto per punto con l'utente. Ogni fase va
+Stato: **piano approvato dall'utente 2026-10-30.** B1–B3 fatti; fase A fatta (20 commit da 89daf98 a 16be11f, eseguita da Sonnet, rivista da Opus; resti sotto); fase B fatta (3e19d37, 0d686a9 identici; 879f471 + correzione Opus: regola "Not feasible as asked"); fase C fatta il 2026-10-30 (8 commit 782bd60…b67d755, golden 193, da rivedere e poi deploy; C5 non fatto per decisione); prossimo: fase D con l'utente. Ogni fase va
 avviata su conferma dell'utente; le fasi C e D cambiano testi o numeri che il bot legge e vanno
 approvate punto per punto.
 
@@ -250,6 +250,29 @@ originale.
 
 Il bot legge questi testi: ogni punto è un commit con il suo diff dei golden mostrato all'utente.
 
+**Decisioni dell'utente (2026-10-30)**, valgono sulle proposte sotto:
+- C1: helper unico; "Day" maiuscolo ovunque (anche kills); nome città mancante sempre `?`;
+  `get_citizen_positions` riceve titolo `## Citizens — {città} Day N` + riga `data_updated` (oggi
+  non ha nessuna delle due, quindi il bot non vede mai l'avviso STALE sulle posizioni); il night
+  report riceve la riga `data_updated`. Le intestazioni Gest'Hordes (`(Season S, Day N)`) restano.
+- C2: una sola forma, `(updated dN)` e `(updated dN, STALE)`, anche nei passi del percorso (oggi
+  `[STALE: day N]`, solo per le zone vecchie: resta solo per quelle) e nei cluster (oggi `(dN)` /
+  `(dN, stale)`).
+- C3: sempre `321–357 zombies` (trattino lungo, senza spazi), con `(partial)` / `(confirmed)`
+  ovunque il dato lo dica.
+- C4: plurali veri (`1 slot`, `3 slots`), niente forme `(s)`; corregge `1 zones`, `1 moves`.
+- C5: **non si fa**. Il `/` resta: la tabella passo-passo (opt-in, `step_table=True`) è Markdown
+  e `|` ne spezzerebbe le colonne; l'itinerario resta coerente con la tabella.
+- C6: `Error: …` ovunque (`town.py` "Error fetching town data:" compreso).
+- C7: etichetta unica della rovina `Nome [BLUEPRINT], N digs left (dried)` in lista rovine, zone in
+  range e passi del percorso. Non confondere il `dried` della rovina con quello della zona
+  (zona senza più nulla da scavare, oggi "depleted" nei passi): restano due cose distinte.
+- C8: ricerche a scelta singola (nome rotta Fata nelle uccisioni, oggetto in `pickups`, dump sheet)
+  = esatto → prefisso unico → sottostringa unica, senza maiuscole; ambiguo = errore con i
+  candidati. La ricerca "oggetto a terra" (zones) resta per sottostringa (più risultati).
+- C9: `town_id: Fata Morgana town ID. Omit for the player's default town.` in tutti i tool Fata;
+  Gest'Hordes: `town_id: Gest'Hordes map ID. Omit for the player's default town.`
+
 - **C1. Intestazione unica** `fmt.header(title, meta, *, suffix="")` per `## Titolo — {città}
   Day {giorno}` + `data_updated` (bank 23/253, zones 62/149/189/249, buildings 126,
   blueprints 141, planning 190/349, changes 77, dump 99, roster 88, night 57, kills 621/790,
@@ -274,6 +297,28 @@ Il bot legge questi testi: ogni punto è un commit con il suo diff dei golden mo
 - **C8. Ricerca per nome** (oggetti, rotte): sottostringa (zones 179-183, pickups 79), esatto poi
   prefisso (kills 660-662), esatto poi prefisso unico (dump 56-65) → `lookup(names, q, modes)`.
   Cambia quali input vengono accettati.
+
+**Fatta il 2026-10-30** (Sonnet; un commit per punto, golden 193 = 181 + 12 casi nuovi per C8):
+C9 782bd60, C6 dd0a5ae, C1 a16a0f4, C2 f1b2b98, C3 c38f582, C4 e21db4d, C7 fb27649, C8 b67d755.
+Nuovi moduli: `utils/fmt.py` (heading/header, updated, estimate/est_status, num/plural,
+ruin_label), `utils/lookup.py` (lookup/ambiguous). Scelte e resti:
+- C6: anche Gest'Hordes (`Error fetching Gest'Hordes stats:` → `Error:`) e `Unknown mode` di
+  buildings. Le ~20 guardie `if data.get("error")` restano scritte a mano (stesso testo).
+- C1: dump sheet: "bank of {città}" → "{città}". Titoli senza città (Defense Analysis, supplies,
+  kill route, "Trapped…") non toccati. Overview `# {città} — Day N` solo con `?` per il nome.
+- C2: i "cluster" `(dN, stale)` erano le stime dello scout in `zones.py`; anche le posizioni dei
+  cittadini (città chaos/devastated, `_staleness_tag`) ora `(updated dN, STALE)`.
+- C3: le tabelle (colonna Attack della history, cella di daily-log.md) hanno `321–357` senza
+  "zombies"; fasce di pericolo delle zone (`low (1-2 zombies)`) non sono stime d'attacco, intatte.
+  Cambia anche il testo scritto in `day-NN.md` / `daily-log.md` dal registro (solo umano).
+- C4: somme sempre grandi (difesa, soglie) non pluralizzate. Anche "1 scrappers", "1 pages".
+- C7: la lista rovine ora mette `(dried)` dopo i digs; i passi del percorso guadagnano `digs left`
+  e `(dried)` della rovina (`| depleted` della zona resta).
+- C8: pickups ora risolve a UN nome oggetto per zona (prima: tutti gli oggetti che contengono il
+  testo); due rotte con lo stesso nome (es. "Ammonia") restano un errore. Dump sheet: la
+  sottostringa unica mappa anche nomi corti (es. "Log" → Rotting Log): da tenere d'occhio.
+- Non fatto: C5 (deciso); le fasce `1-2 zombies` con trattino corto; helper per le ~20 guardie
+  d'errore.
 
 ## Fase D — una sola stima degli zombie (M–L, cambia i numeri: ultima)
 
