@@ -470,7 +470,8 @@ async def find_expedition_path(
              ("I want to dig", "scavenging trip"): later legs and the way back may then
              take up to 1 more AP per zone still to dig. Default False = fewest AP
              (zones still to dig only at equal AP).
-        start_ap: AP at departure (default 6).
+        start_ap: AP at departure (default 6). A player's "19 AP" is a day budget with
+                  food and water included: plan the trip with plan_expedition_supplies.
         start_ep: EP at departure (Scout 2, shoes +1, bike +2; default 0).
         thirst_counter: Thirst at departure. Not thirsty: zones already walked since
                         the last drink (0 if just drank). Already Thirsty: 11 + zones
@@ -518,6 +519,17 @@ def _walked_again(route: list[tuple[int, int]]) -> list[tuple[int, int]]:
             again.append(c)
         seen.add(c)
     return again
+
+
+def _day_budget_error(start_ap: int) -> str | None:
+    """An error when start_ap is a player's day budget ("19 AP"), not AP at departure."""
+    # Twinoid 8 + coffee 4 is the most anyone leaves with.
+    if start_ap <= 12:
+        return None
+    return (f"Error: start_ap={start_ap} is not AP at departure (12 at most). A player's "
+            "'N AP' is the day's budget with food and water included: 18 = start_ap=6, "
+            "available='water=1, food6=1'; 19 = 'water=1, food7=1'; 20/21 = the same with "
+            "scout=True; 24 = add 'steroid=1'. Plan again with start_ap=6.")
 
 
 @mcp.tool()
@@ -592,6 +604,8 @@ async def plan_expedition_supplies(
         round_trip: Come back to `start` (default True).
         start: Starting zone, default "0,0" (town).
         start_ap: AP at departure (default 6; 7 after a lucky dice/cards roll, 5 if wounded).
+                  Never the player's day budget: "19 AP" = start_ap=6 with
+                  available="water=1, food7=1"; "18 AP" = food6 instead; "20 AP" = Scout.
         start_ep: EP at departure. -1 = full: scout 2 + shoes 1 + bike 2. With the Scout's
                   Lair bonus pass the real EP (e.g. scout 6).
         scout / shoes / bike: Scout job, Worn-out Sports Shoes, Mountain Bike equipped.
@@ -660,6 +674,8 @@ async def plan_expedition_supplies(
         items["secondwind"] = 1
     if slots < 1:
         return "Error: slots is the number of free rucksack slots at departure, at least 1."
+    if err := _day_budget_error(start_ap):
+        return err
     entries = pick_mod.parse(pickups)
     if isinstance(entries, str):
         return entries
@@ -843,7 +859,8 @@ async def plan_kill_route(
         party: Comma-separated citizen names; their CP from the CP log (as find_expedition_path).
         group_cp: Total CP of the party, only when the player states it. Omit (-1) to use
                   `party`, else 2.
-        start_ap: AP at departure (default 6).
+        start_ap: AP at departure (default 6), never the player's day budget: "19 AP" =
+                  6 with available="water=1, food7=1".
         slots: Free rucksack slots at departure (default 5); the kit's slots are taken off.
         available: Water / food / drugs the player has, e.g. "water=2, food7=1" (as
                    plan_expedition_supplies). Empty = water and one 7 AP food assumed.
@@ -860,6 +877,8 @@ async def plan_kill_route(
         wps = _parse_zones(waypoints.split(";"))
         if isinstance(wps, str):
             return wps
+    if err := _day_budget_error(start_ap):
+        return err
     data = await fata.fetch_town_data(tid, day=day or None)
     breakdown = None
     if group_cp < 0:

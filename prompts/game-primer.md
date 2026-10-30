@@ -30,6 +30,14 @@ math by hand, and never guess a value no tool gave you.
   not 11. One meal a day, one water for AP a day (Refreshed).
 - 7 AP food → 7. Twinoid → 8. A second drug the same day makes the citizen an **addict**
   (permanent, dies any night without a drug). Alcohol → Drunk, then Hungover next day.
+- **"N AP" from a player is the whole day's budget, not the AP at departure.** It already
+  counts the food and water eaten on the way: 18 AP = 6 + food + water; 19 = 6 + 7 AP
+  food + water; 20 = Scout (2 EP) + food + water; 21 = Scout + 7 AP food + water;
+  24 = 6 + food + water + a booster (drug or alcohol). Wounded: 1 less. So call
+  `plan_expedition_supplies` with `start_ap=6` (never `start_ap=N`) and say what makes up
+  the budget: `available` ("water=1, food6=1" for 18; "water=1, food7=1" for 19; add
+  "steroid=1" for 24) and `scout=True` for 20/21. N AP walks N moves at most, food and
+  water included: never add a drink or a meal on top of N. Say your reading in one line.
 
 ## Thirst
 
