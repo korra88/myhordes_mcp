@@ -1,6 +1,6 @@
 """Bank formatters: full item list and strategic summary."""
 
-from ..utils.fmt import header
+from ..utils.fmt import header, plural
 from .blueprints import TIERS
 from .buildings import has_water_filter
 
@@ -346,7 +346,7 @@ def summary_lines(bank: list[dict], buildings: list[dict] | None = None, *,
 
     # Furniture — count only (exclude items already shown in named buckets above)
     tfurn = sum(i["count"] for i in bank if i.get("category") == "Furniture" and i["name"] not in defense_names)
-    lines.append(f"**Furniture:** {tfurn} items")
+    lines.append(f"**Furniture:** {plural(tfurn, 'item')}")
 
     # Boxes / containers — count only
     boxes = [i for i in bank if i.get("category") == "Box"]

@@ -1,6 +1,6 @@
 """Map formatters: scout data, ruins/ground items, zones in a bounding box."""
 
-from ..utils.fmt import header, heading, updated
+from ..utils.fmt import header, heading, plural, updated
 from ..utils.clock import data_updated
 from .bank import summary_lines
 from .geo import fmt_xy, km, moves, xy, zone_map
@@ -61,8 +61,8 @@ def format_scout(data: dict) -> str:
 
     lines = [
         header("Scout Map", meta),
-        f"{len(zones)} zones visited" + (f", {never} never" if never is not None else "")
-        + f" · today: {len(today)} zones seen ({today_clear} clear) · older: {len(older_count)} with zombies, "
+        f"{plural(len(zones), 'zone')} visited" + (f", {never} never" if never is not None else "")
+        + f" · today: {plural(len(today), 'zone')} seen ({today_clear} clear) · older: {len(older_count)} with zombies, "
         f"{older_clear} clear, {no_info} no data",
         "",
     ]
@@ -81,7 +81,7 @@ def format_scout(data: dict) -> str:
         lines.append("")
     if older_count:
         n = sum(z["zombies"] for z in older_count)
-        lines.append(f"### Older counts — {n} zombies in {len(older_count)} zones (by day of the count; "
+        lines.append(f"### Older counts — {plural(n, 'zombie')} in {plural(len(older_count), 'zone')} (by day of the count; "
                      "+1 per night on average, +2 at most, since)")
         lines += _by_day(older_count, lambda z: f"{z['coords']} {z['zombies']}")
         lines.append("")
@@ -90,7 +90,7 @@ def format_scout(data: dict) -> str:
         lines += _by_day(older_danger, lambda z: f"{z['coords']} ~{z['danger']}")
         lines.append("")
     if scout_only:
-        lines.append(f"### Scout estimates ({len(scout_only)} zones beyond explored map)")
+        lines.append(f"### Scout estimates ({plural(len(scout_only), 'zone')} beyond explored map)")
 
         def _est_day(z: dict) -> str:
             d = z.get("scouted_day")
@@ -103,7 +103,7 @@ def format_scout(data: dict) -> str:
             if z["zombies"] <= 0:
                 empty[_est_day(z)] = empty.get(_est_day(z), 0) + 1
         if empty:
-            lines.append("  ~0: " + ", ".join(f"{n} zones {d}" for d, n in
+            lines.append("  ~0: " + ", ".join(f"{plural(n, 'zone')} {d}" for d, n in
                                               sorted(empty.items(), key=lambda kv: kv[0], reverse=True)))
     return "\n".join(lines).rstrip()
 
@@ -146,8 +146,8 @@ def format_zones(data: dict, item: str = "") -> str:
 
     lines = [
         header("Desert overview", meta),
-        f"{len(zones)} zones visited · {len(item_zones)} with ground items · {len(ruins)} ruins · "
-        f"{len(outside)} citizens outside",
+        f"{plural(len(zones), 'zone')} visited · {len(item_zones)} with ground items · {plural(len(ruins), 'ruin')} · "
+        f"{plural(len(outside), 'citizen')} outside",
         "",
         f"### On the ground ({sum(i['count'] for i in ground)} items, as last seen in each zone)",
     ]
@@ -187,12 +187,12 @@ def _format_item_search(data: dict, item: str) -> str:
     lines = [header(f"'{item}' on the ground", meta)]
     if not hits:
         return "\n".join(lines + [f"No zone holds an item matching '{item}' (as last seen)."])
-    lines.append(f"{total} in {len(hits)} zones, nearest first (as last seen in each zone):")
+    lines.append(f"{total} in {plural(len(hits), 'zone')}, nearest first (as last seen in each zone):")
     for ap, z, found in hits[:ITEM_ZONES_SHOWN]:
         lines.append(f"  {z['coords']} {ap} AP: {fmt_items(found)}{_zone_freshness(z, current_day)}")
     if len(hits) > ITEM_ZONES_SHOWN:
         far = hits[ITEM_ZONES_SHOWN:]
-        lines.append(f"  +{sum(i['count'] for _, _, f in far for i in f)} more in {len(far)} zones at "
+        lines.append(f"  +{sum(i['count'] for _, _, f in far for i in f)} more in {plural(len(far), 'zone')} at "
                      f"{far[0][0]}–{far[-1][0]} AP (a box with x1/y1/x2/y2 lists them)")
     return "\n".join(lines)
 
@@ -297,7 +297,7 @@ def format_zone_path(
         if not groups:
             return []
         total = sum(len(v) for v in groups.values())
-        out = [f"  Nothing on ground ({total} zones, grouped by threat/freshness):"]
+        out = [f"  Nothing on ground ({plural(total, 'zone')}, grouped by threat/freshness):"]
         # Threatened groups first (most dangerous info up top), then clear/no-data
         def _order(key):
             threat, day, dried, noscout, _ = key

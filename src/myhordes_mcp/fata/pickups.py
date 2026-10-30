@@ -16,6 +16,7 @@ player-facing version in knowledge/tactics/expedition-planning.md:
 import re
 from dataclasses import dataclass, field
 
+from ..utils.fmt import plural
 from . import supplies
 from .pathing import reach_indices
 from .geo import fmt_xy, zone_map
@@ -193,7 +194,7 @@ def fit(route: list[tuple[int, int]], points: list[tuple[int, int]], picks: list
 
 
 def _supplies(n: int) -> str:
-    return f"{n} supply" if n == 1 else f"{n} supplies"
+    return plural(n, "supply", "supplies")
 
 
 def verdict(fitted: dict, slots: int, heavy: dict) -> str:
@@ -205,13 +206,13 @@ def verdict(fitted: dict, slots: int, heavy: dict) -> str:
     if fitted["missing"]:
         worst = max(rows, key=lambda r: r["over"])
         z = worst["pickup"].zone
-        return (f"**Pickups NOT FEASIBLE:** at {fmt_xy(z)} the rucksack needs {worst['used']} slots "
+        return (f"**Pickups NOT FEASIBLE:** at {fmt_xy(z)} the rucksack needs {plural(worst['used'], 'slot')} "
                 f"({_supplies(worst['supplies'])} left + {worst['picked']} picked) of {slots} free: "
-                f"{fitted['missing']} more slot(s) needed (supplies are not dropped to make room).")
-    text = (f"**Pickups feasible:** rucksack peaks at {peak}/{slots} slots"
-            + (f", {heavy['max']} heavy item(s)" if heavy["max"] else "") + ".")
+                f"{plural(fitted['missing'], 'more slot')} needed (supplies are not dropped to make room).")
+    text = (f"**Pickups feasible:** rucksack peaks at {peak}/{plural(slots, 'slot')}"
+            + (f", {plural(heavy['max'], 'heavy item')}" if heavy["max"] else "") + ".")
     if fitted["departure_slots"] < slots:
-        text += (f" Supplies planned with {fitted['departure_slots']} slots at departure to leave "
+        text += (f" Supplies planned with {plural(fitted['departure_slots'], 'slot')} at departure to leave "
                  f"room for the pickups.")
     return text
 
@@ -227,6 +228,6 @@ def pickup_lines(fitted: dict, slots: int) -> dict[int, str]:
         heavy = f", {p.heavy} heavy" if p.heavy else ""
         over = " — OVER" if r["over"] else ""
         out.setdefault(r["move"], []).append(
-            f"Pick up {what}{heavy}. Rucksack: {r['used']}/{slots} slots used, "
+            f"Pick up {what}{heavy}. Rucksack: {r['used']}/{plural(slots, 'slot')} used, "
             f"{max(0, slots - r['used'])} free ({_supplies(r['supplies'])} + {r['picked']} picked){over}")
     return {m: " · ".join(v) for m, v in out.items()}

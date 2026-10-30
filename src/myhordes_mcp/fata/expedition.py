@@ -1,6 +1,7 @@
 """plan_expedition_supplies: when to drink, eat and use drugs along an expedition route,
 and what to carry. The tool declaration (and its docstring, which the bot reads) is in main.py."""
 
+from ..utils.fmt import plural
 from . import pickups as pick_mod, supplies
 from .bank import expedition_extras
 from .client import fetch_town_data
@@ -57,7 +58,7 @@ def _rucksack_line(result: dict, rows: list[dict], slots: int) -> str:
                     f"{r['picked']} picked up")
     if peak <= slots:
         return ""
-    return (f"**Does not fit in the rucksack:** {what} = {peak} slots, {slots} free: {peak - slots} short. "
+    return (f"**Does not fit in the rucksack:** {what} = {plural(peak, 'slot')}, {slots} free: {peak - slots} short. "
             "Bring a bag (more slots), pick up less, or split the route into trips.")
 
 

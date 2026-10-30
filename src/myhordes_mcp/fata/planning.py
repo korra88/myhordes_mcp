@@ -8,7 +8,7 @@ from .bank import _CLEAN_WATER, _sum_items, defense_count, totals
 from ..gesthordes.format import at_day, atk_series, has_error
 from .buildings import (WATER_FILTERS, has_blueprint, is_buildable, upgrades_by_day,
                         visible)
-from ..utils.fmt import est_status, estimate, header
+from ..utils.fmt import est_status, estimate, header, plural
 
 # Daily AP of one citizen used for town budgets (6 AP base + food/water/drugs).
 AP_PER_CITIZEN = 18
@@ -334,7 +334,7 @@ def format_construction_history(data: dict, gh: dict | None = None) -> str:
         lines.append(f"D{r['day']:<3} {r['ap']:>4} {budget:>7} {share:>4} {alive:>5} {atk:>11} {r['deaths']:>6}  {builds}")
     lines.append("")
     total = sum(r["ap"] for r in rows)
-    lines.append(f"Total paid AP: {total} over {len(rows)} days. * = tonight (estimate, attack not happened yet).")
+    lines.append(f"Total paid AP: {total} over {plural(len(rows), 'day')}. * = tonight (estimate, attack not happened yet).")
     ups = [(r["day"], u) for r in rows for u in r["upgrades"]]
     if ups:
         lines.append("")

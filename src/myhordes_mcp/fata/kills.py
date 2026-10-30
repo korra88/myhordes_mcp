@@ -37,7 +37,8 @@ from .risk import (CP_PER_CITIZEN, DANGER_TOP, GROWTH_AVG, GROWTH_MAX, danger_ba
                    respawn_check, respawn_totals, zombie_growth, zone_is_today)
 from .towndata import expand_route
 from . import supplies
-from ..utils.fmt import header
+from ..utils.fmt import header, plural
+from ..utils.fmt import num as _fmt
 from ..utils.clock import data_updated
 
 
@@ -73,7 +74,7 @@ def zone_estimate(zone: dict | None, day, zmap: dict[Cell, dict], *, final: bool
             return _est(z, z, z, "today", killed_today=zmax - z)
         return _est(z, z, z, "today")
     if z >= 0 and upd is not None and nights > 0:
-        src = f"day {upd} (+{nights} night{'s' if nights > 1 else ''})"
+        src = f"day {upd} (+{plural(nights, 'night')})"
         if z > 0:
             return _est(*zombie_growth(z, nights), src)
         x, y = xy(zone)
@@ -84,7 +85,7 @@ def zone_estimate(zone: dict | None, day, zmap: dict[Cell, dict], *, final: bool
     lo, hi = danger_band(danger, DANGER_TOP)
     if danger and nights > 0:
         return _est(lo, (lo + hi) / 2 + GROWTH_AVG * nights, hi + GROWTH_MAX * nights,
-                    f"danger {danger} (+{nights} night{'s' if nights > 1 else ''})")
+                    f"danger {danger} (+{plural(nights, 'night')})")
     return _est(lo, (lo + hi) / 2, hi, f"danger {danger}" if danger else "clear (danger 0)")
 
 
@@ -99,22 +100,13 @@ def unvisited_estimate(cell: Cell, day, zmap: dict[Cell, dict], *, final: bool =
     if not infected:
         return _est(0, 0, 0, "unknown")
     return _est(0, sum(e["avg"] for e in infected) / len(infected), max(e["max"] for e in infected),
-                f"never visited, from {_n(len(infected), 'neighbour')}")
+                f"never visited, from {plural(len(infected), 'neighbour')}")
 
 
 def buckets(n: float) -> tuple[int, int]:
     """(pairs, singles) for n zombies in one zone (n rounded half up)."""
     n = int(n + 0.5)
     return n // 2, n % 2
-
-
-def _fmt(n: float) -> str:
-    return f"{n:.1f}".rstrip("0").rstrip(".")
-
-
-def _n(n: float, word: str) -> str:
-    """'1 pair', '2 pairs'."""
-    return f"{_fmt(n)} {word}{'' if n == 1 else 's'}"
 
 
 def _range(e: dict) -> str:
@@ -186,7 +178,7 @@ def edge_gap(data: dict, path: list[Cell]) -> str | None:
     for name, far, edge, bad, est in gaps:
         unseen = [c for c in bad if c not in zmap]
         lo, avg, hi = (sum(est[c][k] for c in bad) for k in ("min", "avg", "max"))
-        parts.append(f"from {name}={far} to the edge {name}={edge}: {_n(len(bad), 'zone')} with zombies or "
+        parts.append(f"from {name}={far} to the edge {name}={edge}: {plural(len(bad), 'zone')} with zombies or "
                      f"never visited, ~{_fmt(avg)} zombies ({_fmt(lo)}–{_fmt(hi)})"
                      + (f", {len(unseen)} never visited" if unseen else "") + f": {_zones_text(bad)}")
     return ("**Stops short of the map edge** " + "; ".join(parts) + ". A zoo side or strip is cleaned "
@@ -292,7 +284,7 @@ def kit_label(key: str) -> str:
         return f"{w.label} ({'loaded' if st else 'empty'})"
     unit = "charge" if wk == "laser" else "shot"
     return f"{w.label} ({'Empty' if wk == 'laser' else 'empty'})" if st == 0 else \
-        f"{w.label} ({st} {unit}{'s' if st > 1 else ''})"
+        f"{w.label} ({plural(st, unit)})"
 
 
 KIT_NAMES = {
@@ -467,7 +459,7 @@ def pick_kit(pairs: float, singles: float, stock: dict[str, int]) -> dict:
 def format_kit(kit: dict[str, int]) -> str:
     items = {k: n for k, n in kit.items() if k != "repair_town"}
     bring = ", ".join(f"{n} × {kit_label(k)}" for k, n in items.items()) or "nothing"
-    return f"{bring} → **{kit_slots(kit)} slot(s)**"
+    return f"{bring} → **{plural(kit_slots(kit), 'slot')}**"
 
 
 def kit_lines(analysis: dict, bank: list[dict], given: dict[str, int] | None,
@@ -489,23 +481,23 @@ def kit_lines(analysis: dict, bank: list[dict], given: dict[str, int] | None,
         head = "**Kit from the bank** (planned on average capacities):"
     lines = [head, f"  {format_kit(kit)}"]
     if kit.get("repair_town"):
-        lines.append(f"  Repair {kit['repair_town']} broken weapon(s) in town first (1 AP each, "
+        lines.append(f"  Repair {plural(kit['repair_town'], 'broken weapon')} in town first (1 AP each, "
                      f"uses {kit['repair_town']} Repair Kit / Kwik-fix).")
     lines.append(f"  Kills: pairs avg {_fmt(cap['pair'][0])} / worst {_fmt(cap['pair'][1])} (need {P}); "
                  f"singles avg {_fmt(cap['single'][0])} / worst {_fmt(cap['single'][1])} (need {S}).")
     by_single, by_pair = cross_use(cap, P, S)
     if by_single:
-        lines.append(f"  {by_single} pair(s) are killed with 2 single-kill uses each (spare uses).")
+        lines.append(f"  {plural(by_single, 'pair')} {'is' if by_single == 1 else 'are'} killed with 2 single-kill uses each (spare uses).")
     if by_pair:
-        lines.append(f"  {by_pair} single(s) are killed with a pair weapon: 1 kill wasted each.")
+        lines.append(f"  {plural(by_pair, 'single')} {'is' if by_pair == 1 else 'are'} killed with a pair weapon: 1 kill wasted each.")
     if kit.get("repair") or kit.get("repair_town"):
         lines.append("  Each repair costs 1 AP (Repair Kit / Kwik-fix) and the weapon must be broken first.")
     if un[0] or un[1]:
-        parts = [f"{_fmt(un[0])} pair(s)" if un[0] else "", f"{_fmt(un[1])} single(s)" if un[1] else ""]
+        parts = [plural(un[0], "pair") if un[0] else "", plural(un[1], "single") if un[1] else ""]
         what = "your kit" if given is not None else "the bank"
         lines.append(f"  **Not covered by {what}:** {' + '.join(p for p in parts if p)}.")
     cover = not any(unmet(cap, Pm, Sm))
-    lines.append(f"  At the maximum estimate ({Pm} pairs, {Sm} singles) the kit "
+    lines.append(f"  At the maximum estimate ({plural(Pm, 'pair')}, {plural(Sm, 'single')}) the kit "
                  + ("still covers it." if cover else "falls short: carry spares or scout first."))
     if cap["pair"][1] < P or cap["single"][1] < S:
         lines.append("  Worst case (breaks and short charges) is below the need: keep a spare weapon "
@@ -606,7 +598,7 @@ def _side_line(d: str, zones: list[Cell], est: dict) -> str:
     z = sum(int(est[c]["avg"] + 0.5) for c in zones)
     p = sum(buckets(est[c]["avg"])[0] for c in zones)
     s = sum(buckets(est[c]["avg"])[1] for c in zones)
-    return f"    {d}: {_n(len(zones), 'zone')}, ~{z} zombies ({_n(p, 'pair')} + {_n(s, 'single')}): {_zones_text(zones)}"
+    return f"    {d}: {plural(len(zones), 'zone')}, ~{z} zombies ({plural(p, 'pair')} + {plural(s, 'single')}): {_zones_text(zones)}"
 
 
 def format_zoo(data: dict) -> str:
@@ -617,15 +609,15 @@ def format_zoo(data: dict) -> str:
         lines.append("No zone with zombies (or danger) in the zones Fata knows.")
     never = never_visited(data)
     if never:
-        lines.append(f"{never} zones never visited (not counted).")
+        lines.append(f"{plural(never, 'zone')} never visited (not counted).")
     big = [c for c in clusters if len(c["zones"]) >= 3][:4]
     small = [c for c in clusters if c not in big]
     for i, c in enumerate(big, 1):
         z = c["zombies"]
         x0, x1, y0, y1 = c["bbox"]
         flags = ", ".join(f for f in ("touches the map edge" if c["edge"] else "",
-                                      f"{len(c['unseen'])} never-visited zones inside/next to it" if c["unseen"] else "") if f)
-        lines += ["", f"### Cluster {i}{' — likely zoo' if c['zoo'] else ''}: {_n(len(c['zones']), 'zone')}, "
+                                      f"{plural(len(c['unseen']), 'never-visited zone')} inside/next to it" if c["unseen"] else "") if f)
+        lines += ["", f"### Cluster {i}{' — likely zoo' if c['zoo'] else ''}: {plural(len(c['zones']), 'zone')}, "
                       f"{_fmt(z['avg'])} zombies ({_fmt(z['min'])}–{_fmt(z['max'])}), "
                       f"x {x0}..{x1}, y {y0}..{y1}" + (f", {flags}" if flags else "")]
         if c["sides"]:
@@ -634,7 +626,7 @@ def format_zoo(data: dict) -> str:
     if small:
         zs = [z for c in small for z in c["zones"]]
         n = sum(c["zombies"]["avg"] for c in small)
-        lines += ["", f"Small clusters: {len(small)} groups, {len(zs)} zones, ~{_fmt(n)} zombies: {_zones_text(zs)}"]
+        lines += ["", f"Small clusters: {plural(len(small), 'group')}, {plural(len(zs), 'zone')}, ~{_fmt(n)} zombies: {_zones_text(zs)}"]
     lines += ["", *respawn_check(data), "",
               "Ask the player which side to clean, or which area / corridor (then call this tool with "
               "waypoints= or route=). Kill every zombie of every zone you enter."]
@@ -688,7 +680,7 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
         notes.append(f"Departure AP {start_ap}: {repairs_town} AP spent repairing in town.")
     if repairs_out:
         end_ap += repairs_out
-        notes.append(f"{repairs_out} AP kept to spare for the repair(s) on the way (1 AP each).")
+        notes.append(f"{repairs_out} AP kept to spare for {'the repair' if repairs_out == 1 else 'the repairs'} on the way (1 AP each).")
     st = supplies.Start(ap=start_ap, sw_ap=sw_ap, sw_ep=sw_ep)
     free = slots - kit
     # slots=0 means no limit: with no slot left, plan freely and say how many are missing.
@@ -704,7 +696,7 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
             result, failed = alt, False
     need = supplies.carried(result["used"])
     if not failed and need > free:
-        notes.append(f"**Does not fit in the rucksack:** kit {kit} + supplies {need} = {kit + need} slots, "
+        notes.append(f"**Does not fit in the rucksack:** kit {kit} + supplies {need} = {plural(kit + need, 'slot')}, "
                      f"{slots} free: {kit + need - slots} short. Bring a bag (more slots), take a kit with "
                      "fewer slots (kit=), or split the route into trips.")
     if not available.strip():
@@ -747,13 +739,13 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
         if isinstance(r, str):
             return r
         path, title = r["path"], r["name"]
-        head = f"{len(path)} steps, {r.get('ap')} AP (Fata)" + (f", drawn by {r['creator']}" if r.get("creator") else "")
+        head = f"{plural(len(path), 'step')}, {r.get('ap')} AP (Fata)" + (f", drawn by {r['creator']}" if r.get("creator") else "")
         instructions = r["instructions"]
         if r.get("day") not in (None, meta.get("day")):
             head += f", route of day {r['day']}"
     else:
         path = expand_route([(0, 0)] + list(waypoints))
-        title, head = "own route", f"{len(path)} steps, {len(path)} AP"
+        title, head = "own route", f"{plural(len(path), 'step')}, {len(path)} AP"
     if not path:
         return "Error: the route has no step."
     a = analyse_route(data, path)
@@ -768,8 +760,8 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
     else:
         lines += ["", "No zone with zombies on this route."]
     avg, lo, hi = tot["avg"], tot["min"], tot["max"]
-    lines += ["", f"**Total (average): {avg['zombies']} zombies in {_n(len(a['rows']), 'zone')} = "
-                  f"{_n(avg['pairs'], 'pair')} + {_n(avg['singles'], 'single')}**"
+    lines += ["", f"**Total (average): {avg['zombies']} zombies in {plural(len(a['rows']), 'zone')} = "
+                  f"{plural(avg['pairs'], 'pair')} + {plural(avg['singles'], 'single')}**"
                   + ("" if lo == hi == avg else
                      f" · range {lo['zombies']}–{hi['zombies']} zombies "
                      f"({min(lo['pairs'], hi['pairs'])}–{max(lo['pairs'], hi['pairs'])} pairs, "

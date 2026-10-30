@@ -18,7 +18,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from ..utils import clock
-from ..utils.fmt import est_status, estimate
+from ..utils.fmt import est_status, estimate, plural
 from ..utils.config import PROJECT_ROOT, TOWN_LOG_AUTO, TOWN_LOG_INTERVAL
 from . import archive
 from .night import night_report
@@ -163,7 +163,7 @@ def _close_day(tdir: Path, f: Path, d: int, current: int, result: dict, day_data
     span = f"{d0:%b} {d0.day} → {d1.day if d1.month == d0.month else f'{d1:%b} {d1.day}'}"
     est = r["estimate"]
     est_txt = f" (estimate {est[0]}–{est[1]})" if est else ""
-    after_txt = _fmt(after) + (f" ({_fmt(before)} − {len(deaths)} death{'s' if len(deaths) != 1 else ''})"
+    after_txt = _fmt(after) + (f" ({_fmt(before)} − {plural(len(deaths), 'death')})"
                                if before is not None and after is not None else "")
     block = ["", "---", "", f"### Night outcome — {span}", f"**Result: {res}**",
              f"**Defense:** {_fmt(r['defense'])} vs **{_fmt(r['attack'])}** zombies{est_txt}",
@@ -184,7 +184,7 @@ def _close_day(tdir: Path, f: Path, d: int, current: int, result: dict, day_data
     else:
         att = f"? (attack {r['attack']})" if r["attack"] is not None else "?"
     _set_row(tdir, d, [f"{_fmt(before)} → {_fmt(after)}", _fmt(r["defense"]), att, outcome], overwrite_tbd=True)
-    verdict = {"SURVIVED": f"survived, {len(deaths)} death{'s' if len(deaths) != 1 else ''}",
+    verdict = {"SURVIVED": f"survived, {plural(len(deaths), 'death')}",
                "FAILED": "FAILED", "UNKNOWN": "outcome unknown"}[res]
     return f"closed day {d} ({verdict})"
 

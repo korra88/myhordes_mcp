@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from ..utils.clock import age_text, data_datetime, fmt_epoch, now
-from ..utils.fmt import updated
+from ..utils.fmt import plural, updated
 from .geo import EP_MIN_KM, NEIGHBOURS8, km, moves, xy
 
 # Evening alerts. By day an open gate, citizens far out and defense below the
@@ -67,13 +67,13 @@ def outside_alert(data: dict, at: datetime | None = None, farthest: int = 5) -> 
                   key=lambda r: -r[0])
     reach = teleport_range(platform_level(data))
     near = sum(1 for _, k, _ in rows if k <= reach) if reach else 0
-    names = ", ".join(f"{c['name']} {c['coords']} {m} moves" for m, _, c in rows[:farthest])
+    names = ", ".join(f"{c['name']} {c['coords']} {plural(m, 'move')}" for m, _, c in rows[:farthest])
     more = f", +{len(rows) - farthest} more" if len(rows) > farthest else ""
     tele = ""
     if near:
         tele = (f"; {near} within the platform teleport ({reach} km)" if data.get("gate") == "open"
                 else f"; {near} within the platform teleport range, but the gate is closed: no teleport")
-    return f"⚠ {len(rows)} citizens outside {when} — farthest: {names}{more}{tele}{old}"
+    return f"⚠ {plural(len(rows), 'citizen')} outside {when} — farthest: {names}{more}{tele}{old}"
 
 
 def defense_status(data: dict) -> tuple[str, int] | None:
@@ -403,7 +403,7 @@ def zone_reach(data: dict, x: int, y: int) -> list[str]:
     if not heroic.startswith("out of range"):
         heroic += "; works with the gate closed"
     return [
-        f"Distance: {moves((x, y))} moves from town (AP/EP to walk it) · {dist} km",
+        f"Distance: {plural(moves((x, y)), 'move')} from town (AP/EP to walk it) · {dist} km",
         f"EP zone: {ep}",
         f"Observation Platform teleport: {tele}",
         f"Heroic Return (Reclusive): {heroic}",
@@ -470,7 +470,7 @@ def respawn_totals(data: dict) -> dict | None:
     days = sorted({z["updated_day"] for z in stale if z.get("updated_day") is not None})
     span = f"days {days[0]}–{days[-1]}" if len(days) > 1 else (f"day {days[0]}" if days else "earlier days")
     never = never_visited(data)
-    missing = (f"{never} zones never visited, " if never is not None else "") + f"{len(uncounted)} without a count"
+    missing = (f"{plural(never, 'zone')} never visited, " if never is not None else "") + f"{len(uncounted)} without a count"
     return {"day": day, "per_day": per_day, "threshold": per_day * (day + 1), "known": seen_n + stale_n,
             "seen": seen, "seen_n": seen_n, "stale": stale, "stale_n": stale_n, "span": span,
             "never": never, "uncounted": uncounted, "missing": missing}
@@ -495,8 +495,8 @@ def respawn_check(data: dict) -> list[str]:
         f"### Global respawn check (tonight, end of day {day})",
         f"  Threshold: {threshold} zombies on the whole map ({per_day} × day {day + 1}). Fewer → the map "
         "regrows from its day-1 layout, on top of the zombies already there.",
-        f"  Fata counts {known}: {seen_n} in {len(t['seen'])} zones seen today (danger lower bounds), "
-        f"{stale_n} in {len(t['stale'])} zones counted on {span} (may have grown or been killed since). "
+        f"  Fata counts {known}: {seen_n} in {plural(len(t['seen']), 'zone')} seen today (danger lower bounds), "
+        f"{stale_n} in {plural(len(t['stale']), 'zone')} counted on {span} (may have grown or been killed since). "
         f"Not counted: {missing}.",
         f"  → {verdict}",
     ]
@@ -561,7 +561,7 @@ def format_trapped(hits: list[dict], fmt_time) -> list[str]:
     """Warning lines for possibly trapped citizens. fmt_time(epoch) -> str."""
     if not hits:
         return []
-    lines = [f"## ⚠ Trapped or possibly trapped ({len(hits)} zone{'s' if len(hits) > 1 else ''}) — "
+    lines = [f"## ⚠ Trapped or possibly trapped ({plural(len(hits), 'zone')}) — "
              "zombies > CP (exact zone CP when Fata has it, else ≥2 per citizen)"]
     for h in hits:
         when = f"zone updated {fmt_time(h['updated_on'])}" if h["updated_on"] else "zone update time unknown"
@@ -571,7 +571,7 @@ def format_trapped(hits: list[dict], fmt_time) -> list[str]:
             cp = f"{h['cp_min']} CP{' (terrorised)' if h['cp_min'] == 0 else ''} — TRAPPED"
         else:
             cp = f"≥{h['cp_min']} CP"
-        lines.append(f"  {', '.join(h['citizens'])} {h['coords']}{extra}: {h['zombies']} zombies vs {cp} ({when}){tp}")
+        lines.append(f"  {', '.join(h['citizens'])} {h['coords']}{extra}: {plural(h['zombies'], 'zombie')} vs {cp} ({when}){tp}")
     return lines
 
 

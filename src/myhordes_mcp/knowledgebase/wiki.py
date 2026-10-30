@@ -4,6 +4,7 @@ import json
 from typing import NamedTuple
 
 from ..utils.config import PROJECT_ROOT
+from ..utils.fmt import plural
 
 # Built by kb_build/ (`make kb`).
 _BASE_DIR = PROJECT_ROOT / "wiki" / "processed"
@@ -186,8 +187,8 @@ def format_categories() -> str:
     lines = ["MyHordes Wiki Categories:\n"]
     total = 0
     for cat, count in cats.items():
-        lines.append(f"- {cat}: {count} pages")
+        lines.append(f"- {cat}: {plural(count, 'page')}")
         total += count
-    lines.append(f"\nTotal: {total} pages")
+    lines.append(f"\nTotal: {plural(total, 'page')}")
     lines.append("\nUse search_wiki(query, category='...') to search within a category.")
     return "\n".join(lines)

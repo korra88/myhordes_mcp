@@ -6,7 +6,7 @@ position, defense vs the attack, alive before/after.
 
 from ..gesthordes.format import at_day, atk_series
 from ..utils.clock import data_updated
-from ..utils.fmt import est_status, estimate, town_name
+from ..utils.fmt import est_status, estimate, plural, town_name
 from .geo import TOWN, fmt_xy
 from .planning import alive_by_day
 
@@ -78,7 +78,7 @@ def format_night_report(data: dict, day: int, gh: dict | None = None, day_data: 
     else:
         lines.append("No deaths recorded by Fata for this day.")
     if r["gh_deaths"] is not None and r["gh_deaths"] != len(r["deaths"]):
-        lines.append(f"Note: Gest'Hordes counts {r['gh_deaths']} death(s) for this night — check with players.")
+        lines.append(f"Note: Gest'Hordes counts {plural(r['gh_deaths'], 'death')} for this night — check with players.")
     lines.append("")
     lines.append("Sources: Fata only (deaths from cadavers, attack and defense from the town newspaper, else the Fata page of that day); Gest'Hordes only cross-checks the death count.")
     return "\n".join(lines)

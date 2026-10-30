@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import NamedTuple
 
+from ..utils.fmt import plural
 from .geo import EP_MIN_KM, MAX_PATH_AP, TOWN, fmt_xy, km
 from .risk import CP_PER_CITIZEN, platform_level, teleport_range
 
@@ -217,7 +218,7 @@ def not_feasible_line(route: list[tuple[int, int]], result: dict, available: str
         return (f"**Not feasible as asked:** {why} with {given}, and not with every booster "
                 "(one drug, one alcohol) either. Plan a shorter route or split it into trips.")
     if not added:
-        return (f"**Not feasible as asked:** {why} with {given} in {free} free slot(s); "
+        return (f"**Not feasible as asked:** {why} with {given} in {plural(free, 'free slot')}; "
                 "the plan below needs more slots than that.")
     return (f"**Not feasible as asked:** {why} with {given}; the plan below adds "
             + ", ".join(f"+{n} × {ITEMS[k].label}"
@@ -393,7 +394,7 @@ def extra_options(route: list[tuple[int, int]], start: Start, available: dict[st
         final, used = r["final"], r["used"]
         name = " + ".join(ITEMS[k].label for k in keys)
         bank = ", ".join(f"{STOCK_LABEL[k]} {stock.get(k, 0)}" for k in keys) if stock is not None else ""
-        out.append(f"{name}: {carried(used)} slots ({used.get('water', 0)} water), arrives "
+        out.append(f"{name}: {plural(carried(used), 'slot')} ({used.get('water', 0)} water), arrives "
                    f"{THIRST[final.th]} with {final.ap} AP" + (f" (bank: {bank})" if bank else ""))
     return out
 
@@ -429,7 +430,7 @@ def end_requirements(data: dict, route: list[tuple[int, int]], end: tuple[int, i
             z = route[cut]
             return (route[:cut + 1], 0,
                     f"Observation Platform level {level}: teleport home from "
-                    f"{fmt_xy(z)} ({len(route) - 1 - cut} moves saved; needs the gate open).")
+                    f"{fmt_xy(z)} ({plural(len(route) - 1 - cut, 'move')} saved; needs the gate open).")
     if any(b["name"].lower() == "labyrinth" for b in data.get("buildings", []) if b.get("built")):
         return route, 1, f"Labyrinth built: entering town from {fmt_xy(TOWN)} costs 1 AP."
     return route, 0, ""
@@ -501,25 +502,25 @@ def _zones_label(r: dict) -> str:
     zs = r.get("zones") or [r["zone"]]
     if len(zs) == 1:
         return fmt_xy(zs[0])
-    return f"{fmt_xy(zs[0])} to {fmt_xy(zs[-1])} ({len(zs)} zones)"
+    return f"{fmt_xy(zs[0])} to {fmt_xy(zs[-1])} ({plural(len(zs), 'zone')})"
 
 
 def _risk_what(r: dict, cp: int) -> str:
     if r["tag"] == "UNKNOWN":
         n = len(r.get("zones") or [1])
-        return "never scouted, zombies unknown" if n == 1 else f"{n} zones never scouted, zombies unknown"
+        return "never scouted, zombies unknown" if n == 1 else f"{plural(n, 'zone')} never scouted, zombies unknown"
     if r["tag"] == "TRAPPED":
-        return f"{r['zombies']} zombies seen today vs {cp} CP: blocked"
-    old = f", data {r['age']} day(s) old" if r.get("age", -1) > 0 else ""
-    return f"~{r['zombies']} zombies estimated{old} vs {cp} CP: may block"
+        return f"{plural(r['zombies'], 'zombie')} seen today vs {cp} CP: blocked"
+    old = f", data {plural(r['age'], 'day')} old" if r.get("age", -1) > 0 else ""
+    return f"~{plural(r['zombies'], 'zombie')} estimated{old} vs {cp} CP: may block"
 
 
 def format_risks(risks: list[dict], cp: int, items: int, slots: int, cp_label: str | None = None) -> list[str]:
     """'Route risks' section: each risky zone, the way around it, or the weapons needed."""
     if not risks:
         return []
-    free = (f"{max(0, slots - items)}/{slots} slots free after supplies" if slots
-            else f"supplies already take {items} slot(s)")
+    free = (f"{max(0, slots - items)}/{plural(slots, 'slot')} free after supplies" if slots
+            else f"supplies already take {plural(items, 'slot')}")
     blocking = [r for r in risks if r["tag"] != "UNKNOWN"]
     lines = ["", f"**Route risks** ({cp_label or f'{cp} CP'})"
              + (" — cannot pass safely unless you re-route or carry weapons" if blocking else "")]
@@ -535,7 +536,7 @@ def format_risks(risks: list[dict], cp: int, items: int, slots: int, cp_label: s
         else:
             around = f"re-route around it: +{r['detour_ap']} AP"
         if r["kills"]:
-            weapons = f"carry weapons to kill {r['kills']} zombie(s) ({free})"
+            weapons = f"carry weapons to kill {plural(r['kills'], 'zombie')} ({free})"
         elif r["tag"] == "UNKNOWN":
             weapons = f"carry a weapon or two just in case ({free})"
         else:
@@ -600,7 +601,7 @@ def itinerary(steps: list[dict], route: list[tuple[int, int]], ending: str,
         last = walk[-1]
         n = len(walk)
         text = (f"Walk {fmt(pos)} → " + " → ".join(fmt(z) for z in _turns(path))
-                + f" ({n} move{'s' if n > 1 else ''}) — {last['ap']} AP, {last['ep']} EP left")
+                + f" ({plural(n, 'move')}) — {last['ap']} AP, {last['ep']} EP left")
         out.append(text + "".join(f"; {e}" for e in events))
         pos, walk = last["zone"], []
 
@@ -662,7 +663,7 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
     final = result["final"]
 
     lines = [f"## {title}", *(lead or []),
-             f"{moves} moves · start {start.ap} AP, "
+             f"{plural(moves, 'move')} · start {start.ap} AP, "
              f"{start.max_ep if start.ep is None else start.ep} EP, thirst counter {start.counter}, "
              f"{THIRST[start.thirst]} · max AP {start.max_ap}, max EP {start.max_ep}"]
     lines += [f"{n}" for n in notes if n]
@@ -675,11 +676,11 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
         lines.append(f"**Uses (partial plan):** {carry}")
     elif used:
         carry = ", ".join(f"{n} × {names[k]}" for k, n in base.items()) or "nothing else"
-        lines.append(f"**Bring:** {carry} → **{sum(base.values())} slot(s)**"
+        lines.append(f"**Bring:** {carry} → **{plural(sum(base.values()), 'slot')}**"
                      + (f" of {slots} free" if slots and not extras else ""))
         if extras:
             more = ", ".join(f"{n} × {names[k]}" for k, n in extras.items())
-            lines.append(f"**Extra needed:** {more} → **{sum(used.values())} slot(s) in total**"
+            lines.append(f"**Extra needed:** {more} → **{plural(sum(used.values()), 'slot')} in total**"
                          + (f" of {slots} free" if slots else ""))
         if used.get("water", 0) >= 2:
             lines.append("  (a Water Cooler Bottle holds up to 3 rations in one slot)")
@@ -694,7 +695,7 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
     if dead:
         verdict = "**DIES of dehydration on the way** — the route is too long for the water available."
     elif short:
-        verdict = (f"**NOT FEASIBLE:** {short} more point(s) needed from move {result['stuck_at']}"
+        verdict = (f"**NOT FEASIBLE:** {plural(short, 'more point')} needed from move {result['stuck_at']}"
                    f" ({fmt_xy(route[result['stuck_at']])}) — "
                    "carry more AP items, or plan a shorter route.")
     else:

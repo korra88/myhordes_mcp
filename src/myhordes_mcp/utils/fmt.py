@@ -31,3 +31,13 @@ def estimate(lo, hi, status: str | None = None, unit: str = " zombies") -> str:
 def est_status(maxed) -> str:
     """Fata's `maxed` flag: a confirmed estimate has reached its final range."""
     return "confirmed" if maxed else "partial"
+
+
+def num(x) -> str:
+    """3 -> '3', 2.5 -> '2.5', 2.0 -> '2' (one decimal at most)."""
+    return f"{x:.1f}".rstrip("0").rstrip(".")
+
+
+def plural(n, word: str, plural_form: str | None = None) -> str:
+    """'1 slot', '3 slots' ('1 supply', '2 supplies' with plural_form)."""
+    return f"{num(n)} {word if n == 1 else plural_form or word + 's'}"

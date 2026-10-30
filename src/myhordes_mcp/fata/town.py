@@ -1,6 +1,6 @@
 """Town-level formatters: overview, citizens, defense."""
 
-from ..utils.fmt import est_status, estimate, header, town_name
+from ..utils.fmt import est_status, estimate, header, plural, town_name
 from ..utils.clock import data_updated
 from .cp import cp_label
 from .risk import (
@@ -38,7 +38,7 @@ def roster_line(data: dict) -> str:
     day 1 it has started for good."""
     alive, dead = len(data["citizens"]), len(data["deaths"])
     joined, day = alive + dead, data["meta"].get("day") or 0
-    head = f"{joined} citizens ({alive} alive, {dead} dead)"
+    head = f"{plural(joined, 'citizen')} ({alive} alive, {dead} dead)"
     if day > 1:
         return f"{head} — town started on day 1: attacks every night"
     if joined >= TOWN_SIZE:

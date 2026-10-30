@@ -9,7 +9,7 @@ import re
 
 from .cp import citizen_key
 from .geo import moves, xy
-from ..utils.fmt import header
+from ..utils.fmt import header, plural
 
 # Forum icons per Fata job display name (towndata.JOB_NAMES values).
 CLASS_ICONS = {
@@ -84,7 +84,7 @@ def format_roster(data: dict, listed: str = "") -> str:
     lines = [header("Expedition roster", meta, suffix=" · distance = Manhattan (AP from town)"), ""]
     n_out = len(r["outside"])
     if r["has_list"]:
-        lines.append(f"Accounting: {len(r['on_list'])} listed + {len(r['scrappers'])} scrappers + "
+        lines.append(f"Accounting: {len(r['on_list'])} listed + {plural(len(r['scrappers']), 'scrapper')} + "
                      f"{len(r['unaccounted'])} unaccounted = {n_out} outside")
         lines.append("")
         if r["unaccounted"]:
@@ -98,7 +98,7 @@ def format_roster(data: dict, listed: str = "") -> str:
                 lines.append(f"  {name} — {why}")
             lines.append("")
     else:
-        lines.append(f"{n_out} outside: {len(r['scrappers'])} scrappers (distance 1), "
+        lines.append(f"{n_out} outside: {plural(len(r['scrappers']), 'scrapper')} (distance 1), "
                      f"{n_out - len(r['scrappers'])} at distance ≥2")
         lines.append("")
     if r["groups"]:

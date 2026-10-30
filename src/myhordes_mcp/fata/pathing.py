@@ -3,7 +3,7 @@
 import heapq
 from dataclasses import dataclass, field
 
-from ..utils.fmt import header
+from ..utils.fmt import header, plural
 from .geo import (EP_MIN_KM, MAX_PATH_AP, NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km,
                   map_bounds, moves, zone_map)
 from .risk import (
@@ -794,7 +794,7 @@ def format_step_table(route: list[tuple[int, int]], start_ap: int = 6, start_ep:
                      f"| {r['counter']} | {r['thirst']} |")
     ap_steps = sum(r["paid"] == "AP" for r in rows)
     lines.append("")
-    summary = [f"{len(rows)} moves: {ap_steps} paid with AP, {len(rows) - ap_steps} with EP"]
+    summary = [f"{plural(len(rows), 'move')}: {ap_steps} paid with AP, {len(rows) - ap_steps} with EP"]
     first_empty = next((i for i, r in enumerate(rows, 1) if r["empty"]), None)
     if first_empty:
         short = -min(r["ap"] for r in rows)
