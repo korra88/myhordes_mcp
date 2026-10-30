@@ -12,19 +12,36 @@ di modificare.
 
 ## Regole per chi esegue
 
-1. **Rete di sicurezza: `make golden`** (`tests/golden.py`). Esegue offline 55 casi (tutti i
-   tool, con le varianti di argomenti principali) sulla città 8299 congelata (giorni 1–7, API
-   beta) e sulla 8212 (giorni beta 4–8 e 13, giorni 1–5 dalla vecchia pagina spy letti da
-   `parse.py`), con orologio fisso, log città spento, Fata e Gest'Hordes serviti da
-   file. Confronta il testo con gli output registrati e stampa il diff.
-   - Prima di ogni intervento: `make golden` deve dare `55 same, 0 different`.
+1. **Rete di sicurezza: `make golden`** (`tests/golden.py`, ~15 s). 176 golden offline: 174 casi
+   (tutti i tool, varianti di argomenti, rami d'errore, ogni tool senza città e con un giorno
+   mancante, livelli dell'Osservatorio 0–4, sera con gli avvisi delle 23:10, stime ricostruite
+   dall'archivio, registro della città acceso, città scelta da file utente / file corrente) sulla
+   città 8299 (API beta, giorni 1–3 e 5–7) e sulla 8212 (giorni beta 4–8 e 13, giorni 1–5 dalla
+   vecchia pagina spy, letti da `parse.py`), più due pseudo-casi: `_files` (ogni file scritto
+   nella copia temporanea di towns/, con hash del contenuto) e `_tools` (nome, docstring e schema
+   di ogni tool: ciò che il bot vede).
+   - Orologio fisso (patch prima di importare il codice), log città spento salvo nei casi
+     `townlog_*`, Fata e Gest'Hordes serviti da file (Gest'Hordes solo per 8299).
+   - Il test si ferma se un modulo usa ancora i percorsi o l'orologio veri, e se la `towns/`
+     vera cambia durante l'esecuzione.
+   - Prima di ogni intervento: `make golden` deve dare `176 same, 0 different`.
    - Dopo un intervento delle fasi A e B: **identico**, nessuna eccezione.
+   - Una volta per fase anche `make golden-anyseed` (seme dell'hash casuale: trova ordini di set
+     che finiscono nell'output).
    - Fasi C e D: il diff è il cambiamento voluto. Mostralo all'utente, poi `make golden-update`.
    - Mai `--freeze` durante un refactoring: rifà le fixture dai dati vivi e i golden non
-     valgono più. Si rifà solo a fine lavoro, se serve, e poi `--update`.
+     valgono più.
    - `tests/golden/` contiene dati veri (nomi dei giocatori): è in `.gitignore`, **mai
      committarlo**. I golden esistono solo su questa macchina (WSL).
-   - Nuovo comportamento → aggiungi un caso in `CASES` (nome stabile = nome del file golden).
+   - Nuovo comportamento → aggiungi un caso in `CASES` (nome stabile = nome del file golden;
+     opzioni per caso: `clock`, `env`, `files`, `hide`, `townlog`).
+   - **Non coperto, verifica a mano** (audit del 2026-10-30): fine nel Labirinto (`end_ap`,
+     nessuna fixture ne ha uno); Osservatorio non costruito; `plan_expedition_supplies` a livelli
+     diversi da 4 (il tool non ha `day`); variante "dig" che vince e morte per disidratazione nei
+     rifornimenti; stima legacy "tomorrow"; chiave della cache della griglia (A1: non usare
+     `id(data)`); velocità dopo A6 (cronometra `make golden`); codice morto da rimuovere (grep
+     anche in scripts, kb_build, .claude/commands); docstring della fase C9 e comportamento
+     del bot su Discord.
 2. **Un commit per intervento** (o per gruppo piccolo dello stesso tipo), messaggio che dice
    "no output change" per le fasi A/B.
 3. Il repo non ha altri test. Per le parti non coperte dai casi (es. `townlog`, che è spento

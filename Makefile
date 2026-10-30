@@ -32,7 +32,7 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 .PHONY: kb fetch process clean-kb clean-all help advisor persona town discord-listen discord-listen-once \
 	discord-service-install discord-service-disable discord-service-uninstall \
 	towns-commit towns-commit-install towns-commit-disable towns-commit-uninstall \
-	golden golden-update golden-freeze
+	golden golden-update golden-freeze golden-anyseed
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -160,3 +160,6 @@ golden-update: ## Record the current tool outputs as the goldens (review the cha
 
 golden-freeze: ## Copy the fixture towns from towns/ and fetch the Gest'Hordes stats once
 	@.venv/bin/python tests/golden.py --freeze
+
+golden-anyseed: ## Golden check with a random string-hash seed (finds set order leaking into outputs)
+	@.venv/bin/python tests/golden.py --any-seed
