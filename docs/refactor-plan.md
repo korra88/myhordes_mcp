@@ -1,6 +1,6 @@
 # Piano: normalizzazione e riuso del codice
 
-Stato: **piano approvato dall'utente 2026-10-30.** B1–B3 fatti; fase A fatta (20 commit da 89daf98 a 16be11f, eseguita da Sonnet, rivista da Opus; resti sotto); prossimo: fase B. Ogni fase va
+Stato: **piano approvato dall'utente 2026-10-30.** B1–B3 fatti; fase A fatta (20 commit da 89daf98 a 16be11f, eseguita da Sonnet, rivista da Opus; resti sotto); fase B fatta (3e19d37, 0d686a9 identici; 879f471 + correzione Opus: regola "Not feasible as asked"); prossimo: fasi C e D, punto per punto con l'utente. Ogni fase va
 avviata su conferma dell'utente; le fasi C e D cambiano testi o numeri che il bot legge e vanno
 approvate punto per punto.
 
@@ -203,6 +203,14 @@ cerca per nome di funzione.
   da 1, nessun effetto oggi.
 
 ## Fase B — un solo cablaggio dei rifornimenti (M, golden identici)
+
+**Fatta il 2026-10-30.** `supplies.parse_supplies`, `with_boosters`, `home_leg`/`HomeLeg`,
+`wants_extra_options`, `not_feasible_line`; `fata/expedition.py:plan_supplies` (main.py tiene solo
+la dichiarazione). Le note "Feasible with" e "Needs more than the items given" non esistono più:
+al loro posto la riga "**Not feasible as asked:** …" in testa al piano (e "Does not fit in the
+rucksack" quando mancano slot); un cibo / droga / alcol aggiunto al posto di uno dato e non usato
+è detto "(instead of the 6 AP food)". Casi golden `supplies_asked_*`. Il testo sotto è il piano
+originale.
 
 `main.plan_expedition_supplies` e `kills._supplies_block` ripetono gli stessi pezzi:
 

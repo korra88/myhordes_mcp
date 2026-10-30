@@ -697,8 +697,8 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
     if failed:
         # The goal sets a kill route, not the AP: plan it with every booster it needs
         # (one drug, one alcohol at most), in any number of slots, and check the slots below.
-        alt, added = supplies.with_boosters(route, st, items, end_ap)
-        lead.append(supplies.not_feasible_line(route, result, available, added if alt else None, max(0, free)))
+        alt, added, swapped = supplies.with_boosters(route, st, items, end_ap)
+        lead.append(supplies.not_feasible_line(route, result, available, added if alt else None, max(0, free), swapped))
         if alt:
             result, failed = alt, False
     need = supplies.carried(result["used"])

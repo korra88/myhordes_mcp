@@ -186,19 +186,25 @@ def carried(used: dict[str, int]) -> int:
 
 
 def with_boosters(route: list[tuple[int, int]], start: Start, items: dict[str, int],
-                  end_ap: int) -> tuple[dict | None, dict[str, int]]:
+                  end_ap: int) -> tuple[dict | None, dict[str, int], dict[str, str]]:
     """The plan when `items` fall short: raised to the default set (water, one 7 AP food, one
-    drug, one alcohol), in any number of slots. (plan, what it adds to `items`), or
-    (None, {}) when even that is not feasible."""
+    drug, one alcohol), in any number of slots. (plan, what it adds to `items`, {added: given
+    item of the same kind it replaces}: one meal / drug / alcohol a day, so a 7 AP food added
+    while the 6 AP food given stays unused is a swap), or (None, {}, {}) when even that fails."""
     more = {**items, **{k: max(items.get(k, 0), n) for k, n in DEFAULT_AVAILABLE.items()}}
     alt = plan(route, start, more, end_ap=end_ap)
     if not feasible(alt):
-        return None, {}
-    return alt, {k: n - items.get(k, 0) for k, n in alt["used"].items() if n > items.get(k, 0)}
+        return None, {}, {}
+    used = alt["used"]
+    added = {k: n - items.get(k, 0) for k, n in used.items() if n > items.get(k, 0)}
+    unused = [k for k, n in items.items() if n and not used.get(k) and ITEMS[k].kind != "water"]
+    swapped = {k: g for k in added for g in unused if ITEMS[g].kind == ITEMS[k].kind}
+    return alt, added, swapped
 
 
 def not_feasible_line(route: list[tuple[int, int]], result: dict, available: str,
-                      added: dict[str, int] | None, free: int) -> str:
+                      added: dict[str, int] | None, free: int,
+                      swapped: dict[str, str] | None = None) -> str:
     """The line that opens a plan made with more than the player gave: why `result` (the
     plan with the items as given, `free` rucksack slots) fails, and what the plan below adds.
     added None = not even the boosters (one drug, one alcohol) make the route feasible."""
@@ -214,7 +220,9 @@ def not_feasible_line(route: list[tuple[int, int]], result: dict, available: str
         return (f"**Not feasible as asked:** {why} with {given} in {free} free slot(s); "
                 "the plan below needs more slots than that.")
     return (f"**Not feasible as asked:** {why} with {given}; the plan below adds "
-            + ", ".join(f"+{n} × {ITEMS[k].label}" for k, n in added.items()) + ".")
+            + ", ".join(f"+{n} × {ITEMS[k].label}"
+                        + (f" (instead of the {ITEMS[swapped[k]].label})" if k in (swapped or {}) else "")
+                        for k, n in added.items()) + ".")
 
 
 def wants_extra_options(available: str, result: dict) -> bool:

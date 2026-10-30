@@ -212,8 +212,8 @@ async def plan_supplies(
     if not supplies.feasible(result):
         # The items (or slots) given are not enough: plan again with every booster the route
         # needs, in any number of slots, and say so first. The rucksack is checked below.
-        alt, added = supplies.with_boosters(route, st, items, end_ap)
-        lead.append(supplies.not_feasible_line(route, result, available, added if alt else None, slots))
+        alt, added, swapped = supplies.with_boosters(route, st, items, end_ap)
+        lead.append(supplies.not_feasible_line(route, result, available, added if alt else None, slots, swapped))
         if alt:
             rows = pick_mod.timeline(route, points, picks, alt, slots) if picks else []
             fitted = {"result": alt, "rows": rows, "departure_slots": slots,
