@@ -77,11 +77,29 @@ _ALCOHOL = {
 }
 
 
+def totals(bank: list[dict], *, intact_only: bool = False) -> dict[str, int]:
+    """Count per item name, the stacks of a name merged. intact_only: leave broken items out
+    (they cannot be used as resources)."""
+    out: dict[str, int] = {}
+    for item in bank:
+        if not (intact_only and item.get("broken")):
+            out[item["name"]] = out.get(item["name"], 0) + item["count"]
+    return out
+
+
+def defense_count(bank: list[dict]) -> int:
+    """Items of the game's Defences category (Fata `Armor`), broken included; the bank
+    summary's "Defense items" total and the Defensive Focus check must agree."""
+    return sum(i["count"] for i in bank if i.get("category") == "Armor")
+
+
 def expedition_extras(bank: list[dict]) -> dict[str, int]:
     """Bank stock of the expedition extras the supplies planner knows (steroid, alcohol,
     Twinoid), intact items only."""
+    have = totals(bank, intact_only=True)
+
     def count(match) -> int:
-        return sum(i["count"] for i in bank if match(i["name"]) and not i.get("broken"))
+        return sum(n for name, n in have.items() if match(name))
     return {"steroid": count(lambda n: n.startswith("Anabolic Steroids")),
             "alcohol": count(_ALCOHOL.__contains__),
             "twinoid": count(lambda n: n.startswith("Twinoid"))}

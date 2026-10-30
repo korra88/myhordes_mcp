@@ -13,6 +13,7 @@ see .claude/commands/update-garbage-dump-list.md):
 
 import re
 from ..utils.clock import data_updated
+from .bank import totals as bank_totals
 
 ALIASES = {
     "water bomb": ["Water Bomb", "Plastic Bag"],
@@ -30,12 +31,8 @@ def _base(name: str) -> str:
 
 def _bank_totals(bank: list[dict]) -> tuple[dict[str, int], dict[str, str]]:
     """Total per bank name (broken included), and each name's category."""
-    totals: dict[str, int] = {}
-    category: dict[str, str] = {}
-    for item in bank:
-        totals[item["name"]] = totals.get(item["name"], 0) + item["count"]
-        category[item["name"]] = item.get("category") or "?"
-    return totals, category
+    category = {item["name"]: item.get("category") or "?" for item in bank}
+    return bank_totals(bank), category
 
 
 def map_dump_rows(bank: list[dict], sheet_items: list[str]) -> dict:

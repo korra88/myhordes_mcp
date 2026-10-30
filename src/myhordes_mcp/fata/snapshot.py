@@ -5,14 +5,13 @@ import hashlib
 import json
 import time
 
+from .bank import totals
 from .risk import platform_level
 
 
 def snapshot(data: dict) -> dict:
     """Compact, comparable state of a parsed Fata result."""
-    bank: dict[str, int] = {}
-    for item in data["bank"]:
-        bank[item["name"]] = bank.get(item["name"], 0) + item["count"]
+    bank = totals(data["bank"])
     content = {
         "day": data["meta"].get("day"),
         "data_time": data["meta"].get("data_time"),

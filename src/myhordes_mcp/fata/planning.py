@@ -4,7 +4,7 @@ Deterministic numbers for the build-plan and building-report skills, so the
 model reasons over a ranked list instead of doing arithmetic.
 """
 
-from .bank import _CLEAN_WATER, _sum_items
+from .bank import _CLEAN_WATER, _sum_items, defense_count, totals
 from .buildings import PRIVATE_TOWN_BUILDINGS
 from ..utils.clock import data_updated
 
@@ -30,15 +30,6 @@ JERRYCANS_FOR_FILTER = 10
 
 WATER_RATION = "Water Ration"
 NUTS_AND_BOLTS = "Handful of nuts and bolts"
-
-
-def _bank_counts(bank: list[dict]) -> dict[str, int]:
-    """Usable count per item name. Broken items cannot be used as resources."""
-    counts: dict[str, int] = {}
-    for item in bank:
-        if not item.get("broken"):
-            counts[item["name"]] = counts.get(item["name"], 0) + item["count"]
-    return counts
 
 
 def _ratio(defense: int, cost: int) -> float | None:
@@ -79,7 +70,7 @@ def build_options(data: dict, include_private: bool = False) -> dict:
     """Compute the situation and every buildable option. See format_build_options."""
     meta = data["meta"]
     bank = data["bank"]
-    have = _bank_counts(bank)
+    have = totals(bank, intact_only=True)
     buildings = data["buildings"]
     if not include_private:
         buildings = [b for b in buildings if b["name"] not in PRIVATE_TOWN_BUILDINGS]
@@ -113,7 +104,7 @@ def build_options(data: dict, include_private: bool = False) -> dict:
 
     alive = len(data["citizens"])
     water, _ = _sum_items(bank, _CLEAN_WATER)
-    armor = sum(i["count"] for i in bank if i.get("category") == "Armor")
+    armor = defense_count(bank)
     focus = next((b for b in data["buildings"] if b["name"] == DEFENSIVE_FOCUS), None)
     est = data["estimations"].get("today", {})
     total_def = data["defense"].get("total")
