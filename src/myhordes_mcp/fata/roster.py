@@ -11,7 +11,7 @@ from .cp import citizen_key
 from .geo import moves, xy
 from ..utils.clock import data_updated
 
-# Forum icons per Fata job display name (parse.JOB_NAMES values).
+# Forum icons per Fata job display name (towndata.JOB_NAMES values).
 CLASS_ICONS = {
     "Guardian": ":guard:", "Tamer": ":tamer:", "Scavenger": ":scav:",
     "Technician": ":tech:", "Survivalist": ":surv:", "Scout": ":scout:",

@@ -54,7 +54,30 @@ from datetime import datetime
 
 from ..utils.clock import GAME_TZ
 from .geo import fmt_xy
-from .parse import DEATH_TYPES, JOB_NAMES
+
+# dtype int → human-readable cause of death
+DEATH_TYPES = {
+    1: "Dehydrated",
+    2: "Eaten by zombies",
+    3: "Suicide by cyanide",
+    4: "Vanished",
+    5: "Disappeared into the outside world",
+    6: "Nuclear",
+    7: "Infection",
+    8: "Ghoul purge",
+}
+
+
+# Fata job key → display name
+JOB_NAMES = {
+    "basic": "Resident",
+    "guardian": "Guardian",
+    "hunter": "Scout",
+    "collec": "Scavenger",
+    "survivalist": "Survivalist",
+    "tamer": "Tamer",
+    "tech": "Technician",
+}
 
 # /towndata job keys (icon names) → display name; legacy keys stay in JOB_NAMES.
 TOWNDATA_JOBS = {

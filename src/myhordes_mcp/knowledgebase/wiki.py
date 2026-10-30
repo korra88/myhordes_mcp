@@ -1,6 +1,7 @@
 """Knowledge base loader and search engine for the MyHordes wiki."""
 
 import json
+from typing import NamedTuple
 
 from ..utils.config import PROJECT_ROOT
 
@@ -11,8 +12,16 @@ _BASE_DIR = PROJECT_ROOT / "wiki" / "processed"
 _index: dict[str, dict] = {}
 _entities: dict[str, dict] = {}
 
-# Pre-built search corpus: list of (name_lower, category, has_entity, entity_keywords_lower)
-_search_entries: list[tuple[str, str, str, bool, str]] = []
+class _Entry(NamedTuple):
+    """One page of the pre-built search corpus (lowercase fields are for matching)."""
+    name: str
+    name_lower: str
+    category: str
+    has_entity: bool
+    keywords: str   # entity keywords, lowercase
+
+
+_search_entries: list[_Entry] = []
 
 
 def _load():
@@ -49,7 +58,7 @@ def _load():
                             parts.append(item["value"])
             entity_keywords = " ".join(parts)
 
-        _search_entries.append((
+        _search_entries.append(_Entry(
             name,
             name.lower(),
             info["category"],
@@ -120,17 +129,6 @@ def get_categories() -> dict[str, int]:
     for _name, _name_lower, cat, _has_entity, _kw in _search_entries:
         cats[cat] = cats.get(cat, 0) + 1
     return dict(sorted(cats.items(), key=lambda x: -x[1]))
-
-
-def get_page(name: str) -> str | None:
-    """Get a specific page by exact name. Returns markdown content or None."""
-    info = _index.get(name)
-    if not info:
-        return None
-    page_path = _BASE_DIR / info["file"]
-    if page_path.exists():
-        return page_path.read_text()
-    return None
 
 
 def is_loaded() -> bool:

@@ -87,40 +87,6 @@ def get_current_day(town_id: int) -> int | None:
         return None
 
 
-def save_day(town_id: int, day: int, html: str, js_data: dict,
-             town_name: str = "Unknown", season: int | None = None,
-             is_current_day: bool = False):
-    """Save a day's HTML and extracted JSON to the filesystem cache.
-
-    Creates the town directory if it doesn't exist yet.
-
-    For past days (is_current_day=False): HTML is written once (immutable),
-    JSON is always updated (in case the parser improved).
-
-    For the current day (is_current_day=True): both HTML and JSON are
-    overwritten on every fetch, since players update Fata throughout the day.
-    The current day number is also stored in _meta.json so that explicit
-    requests for the current day number (e.g. day=1 when town is on day 1)
-    are treated as live, not served from stale cache.
-    """
-    town_dir = _find_town_dir(town_id)
-    if town_dir is None:
-        town_dir = _create_town_dir(town_id, town_name, season)
-
-    cache_dir = _ensure_cache_dir(town_dir)
-    # Always update current_day in meta when we know the town's actual day
-    actual_day = js_data.get("system", {}).get("day")
-    _save_meta(cache_dir, town_id, town_name, season, current_day=actual_day)
-
-    html_file = cache_dir / f"day-{day:02d}.html"
-    json_file = cache_dir / f"day-{day:02d}.json"
-
-    if is_current_day or not html_file.exists():
-        html_file.write_text(html, encoding="utf-8")
-
-    json_file.write_text(json.dumps(js_data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
 def load_day_json(town_id: int, day: int) -> dict | None:
     """Load cached JSON for a specific day. Returns None if not cached."""
     town_dir = _find_town_dir(town_id)
@@ -133,36 +99,6 @@ def load_day_json(town_id: int, day: int) -> dict | None:
         return json.loads(json_file.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return None
-
-
-def load_day_html(town_id: int, day: int) -> str | None:
-    """Load cached HTML for a specific day. Returns None if not cached."""
-    town_dir = _find_town_dir(town_id)
-    if town_dir is None:
-        return None
-    html_file = town_dir / "cache" / f"day-{day:02d}.html"
-    if not html_file.exists():
-        return None
-    try:
-        return html_file.read_text(encoding="utf-8")
-    except OSError:
-        return None
-
-
-def list_cached_days(town_id: int) -> list[int]:
-    """Return sorted list of day numbers that are cached for this town (any format)."""
-    town_dir = _find_town_dir(town_id)
-    if town_dir is None:
-        return []
-    cache_dir = town_dir / "cache"
-    if not cache_dir.is_dir():
-        return []
-    days = set()
-    for f in cache_dir.glob("day-*"):
-        m = re.match(r"day-(\d+)\.(json|towndata\.json\.gz|towndata\.live\.json\.gz)$", f.name)
-        if m:
-            days.add(int(m.group(1)))
-    return sorted(days)
 
 
 # ---------------------------------------------------------------------------

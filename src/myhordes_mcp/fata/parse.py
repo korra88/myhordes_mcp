@@ -1,34 +1,9 @@
 """Parse the `var data = {...}` object embedded in the Fata Morgana spy page."""
 
-import json
 import re
 
 from .geo import fmt_xy
-
-
-# dtype int → human-readable cause of death
-DEATH_TYPES = {
-    1: "Dehydrated",
-    2: "Eaten by zombies",
-    3: "Suicide by cyanide",
-    4: "Vanished",
-    5: "Disappeared into the outside world",
-    6: "Nuclear",
-    7: "Infection",
-    8: "Ghoul purge",
-}
-
-
-# Fata job key → display name
-JOB_NAMES = {
-    "basic": "Resident",
-    "guardian": "Guardian",
-    "hunter": "Scout",
-    "collec": "Scavenger",
-    "survivalist": "Survivalist",
-    "tamer": "Tamer",
-    "tech": "Technician",
-}
+from .towndata import DEATH_TYPES, JOB_NAMES
 
 
 def _build_result(town_id: int, js_data: dict) -> dict:
@@ -65,40 +40,6 @@ def _build_result(town_id: int, js_data: dict) -> dict:
         "scout": _parse_scout(js_data),
         "zones": _parse_map(js_data),
     }
-
-
-def _extract_js_data(html: str) -> dict | None:
-    """Extract the `var data = {...}` JSON object using brace-matching."""
-    marker = html.find("var data = {")
-    if marker == -1:
-        marker = html.find("var data={")
-    if marker == -1:
-        return None
-
-    brace_start = html.index("{", marker)
-    depth = 0
-    i = brace_start
-    while i < len(html):
-        ch = html[i]
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                break
-        elif ch == '"':
-            # Skip string contents to avoid counting braces inside strings
-            i += 1
-            while i < len(html) and html[i] != '"':
-                if html[i] == "\\":
-                    i += 1  # skip escaped char
-                i += 1
-        i += 1
-
-    try:
-        return json.loads(html[brace_start : i + 1])
-    except json.JSONDecodeError:
-        return None
 
 
 def _parse_citizens(js_data: dict, sys_data: dict) -> list[dict]:
