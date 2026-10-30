@@ -123,7 +123,7 @@ def format_town_changes(data: dict, snaps: list[dict], ref: dict | None, ref_lab
 
         changed = {k for k in set(ref["bank"]) | set(cur["bank"]) if ref["bank"].get(k, 0) != cur["bank"].get(k, 0)}
         crit = [k for k in CRITICAL_ITEMS if k in changed]
-        other = sorted(changed - set(crit), key=lambda k: -abs(cur["bank"].get(k, 0) - ref["bank"].get(k, 0)))
+        other = sorted(changed - set(crit), key=lambda k: (-abs(cur["bank"].get(k, 0) - ref["bank"].get(k, 0)), k))
         if crit or other:
             lines.append("### Bank")
             for k in crit:

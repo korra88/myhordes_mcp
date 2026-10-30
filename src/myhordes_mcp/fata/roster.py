@@ -7,6 +7,7 @@ listed + scrappers + unaccounted = outside.
 
 import re
 
+from .cp import citizen_key
 from .risk import _parse_coords
 from ..utils.clock import data_updated
 
@@ -26,11 +27,6 @@ def icon(c: dict) -> str:
     return CLASS_ICONS.get(c["job"], UNKNOWN_ICON)
 
 
-def _norm(name: str) -> str:
-    # "@PlayerName:12345" → "playername"
-    return re.sub(r"^@", "", name.strip()).split(":")[0].strip().lower()
-
-
 def parse_listed(listed: str) -> list[str]:
     return [n for n in (x.strip() for x in re.split(r"[,\n;]+", listed)) if n]
 
@@ -45,15 +41,15 @@ def roster(data: dict, listed: list[str] | None = None) -> dict:
         outside.append({**c, "distance": abs(x) + abs(y), "icon": icon(c)})
 
     listed = listed or []
-    wanted = {_norm(n): n for n in listed}
-    on_list = [c for c in outside if _norm(c["name"]) in wanted]
-    off_list = [c for c in outside if _norm(c["name"]) not in wanted]
+    wanted = {citizen_key(n): n for n in listed}
+    on_list = [c for c in outside if citizen_key(c["name"]) in wanted]
+    off_list = [c for c in outside if citizen_key(c["name"]) not in wanted]
     scrappers = [c for c in off_list if c["distance"] <= SCRAPPER_DISTANCE]
     unaccounted = [c for c in off_list if c["distance"] > SCRAPPER_DISTANCE]
 
-    by_name = {_norm(c["name"]): c for c in data["citizens"]}
-    dead = {_norm(d["name"]): d for d in data["deaths"]}
-    outside_names = {_norm(c["name"]) for c in outside}
+    by_name = {citizen_key(c["name"]): c for c in data["citizens"]}
+    dead = {citizen_key(d["name"]): d for d in data["deaths"]}
+    outside_names = {citizen_key(c["name"]) for c in outside}
     ghosts = []
     for key, original in wanted.items():
         if key in outside_names:

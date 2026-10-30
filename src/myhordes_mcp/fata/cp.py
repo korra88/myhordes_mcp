@@ -18,6 +18,7 @@ Stored per town in towns/{town}/citizens-cp.json, updated on every fetch.
 """
 
 import json
+import re
 import time
 
 from . import archive
@@ -156,11 +157,17 @@ def cp_label(log: dict, citizen_id: int) -> str:
     return tag
 
 
+def citizen_key(name: str) -> str:
+    """A citizen name as players type it, for matching: "@PlayerName:12345" (a forum or
+    Discord handle) and "playername" both → "playername"."""
+    return re.sub(r"^@", "", name.strip()).split(":")[0].strip().lower()
+
+
 def party_cp(log: dict, citizens: list[dict], names: list[str], base: int = 2) -> tuple[int, list[str]]:
     """Total CP of a party by citizen names, from each one's last reading.
 
     Unknown citizens count `base` (2, no bonus). Returns (total, breakdown lines)."""
-    by_name = {c["name"].lower(): c for c in citizens}
+    by_name = {citizen_key(c["name"]): c for c in citizens}
     total, lines = 0, []
     names = [n for n in names if n.strip()]
     if not names:
@@ -169,7 +176,7 @@ def party_cp(log: dict, citizens: list[dict], names: list[str], base: int = 2) -
         n = raw.strip()
         if not n:
             continue
-        c = by_name.get(n.lower())
+        c = by_name.get(citizen_key(n))
         cp = citizen_cp(log, c["id"]) if c else None
         if c is None:
             total += base

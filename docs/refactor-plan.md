@@ -1,6 +1,6 @@
 # Piano: normalizzazione e riuso del codice
 
-Stato: **piano approvato dall'utente 2026-10-30.** B1–B3 approvati (vedi sotto). Ogni fase va
+Stato: **piano approvato dall'utente 2026-10-30.** B1–B3 fatti; prossimo: fase A. Ogni fase va
 avviata su conferma dell'utente; le fasi C e D cambiano testi o numeri che il bot legge e vanno
 approvate punto per punto.
 
@@ -12,12 +12,12 @@ di modificare.
 
 ## Regole per chi esegue
 
-1. **Rete di sicurezza: `make golden`** (`tests/golden.py`). Esegue offline 53 casi (tutti i
+1. **Rete di sicurezza: `make golden`** (`tests/golden.py`). Esegue offline 55 casi (tutti i
    tool, con le varianti di argomenti principali) sulla città 8299 congelata (giorni 1–7, API
    beta) e sulla 8212 (giorni beta 4–8 e 13, giorni 1–5 dalla vecchia pagina spy letti da
    `parse.py`), con orologio fisso, log città spento, Fata e Gest'Hordes serviti da
    file. Confronta il testo con gli output registrati e stampa il diff.
-   - Prima di ogni intervento: `make golden` deve dare `53 same, 0 different`.
+   - Prima di ogni intervento: `make golden` deve dare `55 same, 0 different`.
    - Dopo un intervento delle fasi A e B: **identico**, nessuna eccezione.
    - Fasi C e D: il diff è il cambiamento voluto. Mostralo all'utente, poi `make golden-update`.
    - Mai `--freeze` durante un refactoring: rifà le fixture dai dati vivi e i golden non
@@ -34,7 +34,7 @@ di modificare.
 
 ## Già trovato durante la revisione (bug, non refactoring)
 
-B1–B3 approvati il 2026-10-30; B4–B6 confluiscono nelle fasi C e D. Ognuno è un commit a sé,
+B1–B3 **fatti** il 2026-10-30 (vedi git log); B4–B6 confluiscono nelle fasi C e D. Ognuno è un commit a sé,
 con il suo diff dei golden.
 
 | # | Dove | Problema | Proposta |

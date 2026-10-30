@@ -201,40 +201,30 @@ _BP_RUIN = {
 _ALL_BLUEPRINTS = _BP_COMMON | _BP_UNCOMMON | _BP_RARE | _BP_VERY_RARE | _BP_RUIN
 
 
-def _sum_items(bank: list[dict], names: set[str], *, include_broken: bool = False) -> tuple[int, list[tuple[str, int, int]]]:
+def _sum_items(bank: list[dict], names: set[str]) -> tuple[int, list[tuple[str, int, int]]]:
     """Return (total_count, [(name, count, broken), ...]) for items matching *names*.
 
-    Merges multiple stacks of the same item (e.g. intact + broken Machete).
+    Merges the stacks of the same item (e.g. intact + broken Machete): count is every item,
+    broken how many of them are broken.
     """
     merged: dict[str, list[int]] = {}  # name -> [count, broken]
     for item in bank:
         if item["name"] in names:
             entry = merged.setdefault(item["name"], [0, 0])
             entry[0] += item["count"]
-            entry[1] += item["broken"]
-    matches: list[tuple[str, int, int]] = []
-    total = 0
-    for name, (count, broken) in merged.items():
-        if not include_broken and count == 0:
-            matches.append((name, 0, broken))
-            continue
-        matches.append((name, count, broken))
-        total += count
-    matches.sort(key=lambda t: (-t[1], t[0]))
-    return total, matches
+            if item["broken"]:
+                entry[1] += item["count"]
+    matches = sorted(((name, count, broken) for name, (count, broken) in merged.items()),
+                     key=lambda t: (-t[1], t[0]))
+    return sum(t[1] for t in matches), matches
 
 
-def _fmt_bucket(label: str, total: int, items: list[tuple[str, int, int]], *, show_items: bool = True) -> list[str]:
+def _fmt_bucket(label: str, total: int, items: list[tuple[str, int, int]]) -> list[str]:
     """Format one summary bucket."""
     lines = [f"**{label}:** {total}"]
-    if show_items and items:
-        parts = []
-        for name, count, broken in items:
-            s = f"{name} ×{count}" if count else f"{name} (broken)"
-            if broken and count:
-                s += f" (+{broken} broken)"
-            parts.append(s)
-        lines.append("  " + ", ".join(parts))
+    if items:
+        lines.append("  " + ", ".join(f"{name} ×{count}" + (f" ({broken} broken)" if broken else "")
+                                      for name, count, broken in items))
     return lines
 
 
@@ -332,7 +322,7 @@ def summary_lines(bank: list[dict], buildings: list[dict] | None = None, *,
         lines.append(f"**Blueprints:** {', '.join(bp_parts)}{ruin_detail}")
 
     # Weapons
-    tweap, itemsweap = _sum_items(bank, _STRONG_WEAPONS, include_broken=True)
+    tweap, itemsweap = _sum_items(bank, _STRONG_WEAPONS)
     lines.extend(_fmt_bucket("Strong weapons", tweap, itemsweap))
     # Count weak weapons: anything in Weapon category not in strong set
     weak_count = sum(i["count"] for i in bank
