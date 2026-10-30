@@ -77,7 +77,8 @@ applies the mapping rules in code:
   "correct" this to 1:1);
 - emptied weapons (`X (empty)`) fold into their loaded row; with several candidate
   rows (Aqua-Splash 1–5 shots) the first one, reported as a decision;
-- a truncated sheet name (`Unshaped Concre`) takes the unique bank name it prefixes;
+- a truncated sheet name (`Unshaped Concre`) takes the unique bank name it prefixes, else the unique one that contains it
+  (reported as "Truncated"/"Partial sheet name" in the decisions);
   `(incomplete)` items are never mapped (Misc components, not weapons);
 - duplicate sheet rows are reported — ask which one owns the item.
 

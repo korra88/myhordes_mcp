@@ -132,6 +132,8 @@ async def plan_supplies(
         return f"Error: {data['error']}"
     group_cp, breakdown = resolve_group_cp(data, tid, group_cp, party)
     picks = pick_mod.resolve(data, [(z, w, n) for z, (_, w, n) in zip(zones, entries)])
+    if isinstance(picks, str):
+        return picks
     for p in picks:
         p.wp = points.index(p.zone, 1)
     heavy = pick_mod.heavy_check(picks, bike=bike, trolley=trolley, guardian=guardian)

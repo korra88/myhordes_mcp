@@ -17,6 +17,7 @@ import re
 from dataclasses import dataclass, field
 
 from ..utils.fmt import plural
+from ..utils.lookup import ambiguous, lookup
 from . import supplies
 from .pathing import reach_indices
 from .geo import fmt_xy, zone_map
@@ -58,11 +59,12 @@ def parse(text: str) -> list[tuple[str, str, int]] | str:
     return out
 
 
-def resolve(data: dict, entries: list[tuple[tuple[int, int], str, int]]) -> list[Pickup]:
+def resolve(data: dict, entries: list[tuple[tuple[int, int], str, int]]) -> list[Pickup] | str:
     """Match each (zone, what, count) against the zone's ground items. `what` is `defense`
-    (defensive object or part), `heavy`, or part of an item name. Heavy-first when the
-    zone has several matches (worst case for carrying). What Fata did not see is kept:
-    light (heavy for the word `heavy`), with a warning."""
+    (defensive object or part), `heavy`, or an item name (exact, unique prefix, unique
+    substring; an error text when it names several items there). Heavy-first when the
+    items are several of one name (worst case for carrying). What Fata did not see is
+    kept: light (heavy for the word `heavy`), with a warning."""
     zones = zone_map(data)
     day = data["meta"].get("day")
     seen_day = f" (data from day {day})" if day is not None else ""
@@ -75,7 +77,10 @@ def resolve(data: dict, entries: list[tuple[tuple[int, int], str, int]]) -> list
         elif key == "heavy":
             pred = lambda i: bool(i.get("heavy"))  # noqa: E731
         else:
-            pred = lambda i, k=key: k in i["name"].lower()  # noqa: E731
+            found_name = lookup([i["name"] for i in z.get("items") or []], spec)
+            if found_name.match is None and found_name.hits:
+                return ambiguous(spec, found_name.hits, f"items at {fmt_xy(zone)}")
+            pred = lambda i, m=found_name.match: i["name"] == m  # noqa: E731
         found: list[dict] = []
         for it in z.get("items") or []:
             if pred(it):

@@ -353,7 +353,8 @@ async def map_bank_to_dump_sheet(sheet_items: str, town_id: int = 0) -> str:
     Map the live bank onto a Garbage Dump spreadsheet's item rows, for the
     update-garbage-dump-list skill. Applies the agreed rules: broken items count,
     Plastic Bag → Water Bomb, emptied weapons fold into their loaded row, truncated
-    sheet names match the unique bank name they prefix ("(incomplete)" items never).
+    sheet names match the unique bank name they prefix, else the unique one that contains
+    them ("(incomplete)" items never).
     Returns one value per row in order (ready for the column write), decisions to
     confirm, and bank items with no row grouped by category.
 
@@ -598,8 +599,10 @@ async def plan_expedition_supplies(
                which heroes have). The player says their own ("I have 7 slots"): bags,
                trolley and Utility Belt are theirs to add up. Must be at least 1.
         pickups: Items to bring back, each at one of the waypoints: "14,2: blueprint;
-                 -3,8: 2 defense". After the colon: an item name (part of it), `defense`
-                 (defensive object or part) or `heavy`, with an optional count. Matched
+                 -3,8: 2 defense". After the colon: an item name (the whole
+                 name, or its start or a part of it if only one item there fits; else an
+                 error lists them), `defense` (defensive object or part) or `heavy`, with
+                 an optional count. Matched
                  against the zone's ground items (heavy / defense as Fata tags them); an
                  item Fata did not see there is kept as light, with a warning.
         trolley: A Shopping Trolley is carried (it is the one heavy item, like the bike).
@@ -667,8 +670,8 @@ async def plan_kill_route(
     then offer the plan with what it adds as a proposal.
 
     Modes:
-    - route="SpecialAgent3": a route drawn on Fata's map, by name (case-insensitive, exact
-      then prefix; several matches are listed). With `day` it is that day's route.
+    - route="SpecialAgent3": a route drawn on Fata's map, by name (case-insensitive: exact,
+      then unique prefix, then unique substring; several matches are listed). With `day` it is that day's route.
     - waypoints="1,0; 1,13; 2,13; 2,0": your own route, straight segments from town.
     - zoo=True, or no route at all: the zombie clusters (the likely zoo) and each side that
       can be cleaned, plus the global-respawn check. No kit. Then ask the player which side

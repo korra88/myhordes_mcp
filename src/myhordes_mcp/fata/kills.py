@@ -38,6 +38,7 @@ from .risk import (CP_PER_CITIZEN, DANGER_TOP, GROWTH_AVG, GROWTH_MAX, danger_ba
 from .towndata import expand_route
 from . import supplies
 from ..utils.fmt import header, plural
+from ..utils.lookup import ambiguous, lookup
 from ..utils.fmt import num as _fmt
 from ..utils.clock import data_updated
 
@@ -638,21 +639,20 @@ def format_zoo(data: dict) -> str:
 # ---------------------------------------------------------------------------
 
 def find_route(data: dict, name: str) -> dict | str:
-    """The Fata route called `name` (case-insensitive: exact first, then prefix), or an
-    error text (none found, or several: they are listed)."""
+    """The Fata route called `name` (case-insensitive: exact, unique prefix, unique
+    substring), or an error text (none found, or several: they are listed)."""
     routes = data.get("routes") or []
     if not routes:
         return "No routes in this data (Fata routes exist only in /towndata days)."
-    low = name.strip().lower()
-    hits = [r for r in routes if r["name"].lower() == low] or \
-           [r for r in routes if r["name"].lower().startswith(low)]
-    if len(hits) == 1:
-        return hits[0]
-    if not hits:
+    found = lookup([r["name"] for r in routes], name)
+    if found.match is not None:
+        same = [r for r in routes if r["name"] == found.match]
+        return same[0] if len(same) == 1 else ambiguous(name, [r["name"] for r in same], "routes")
+    if not found.hits:
         sample = ", ".join(r["name"] for r in routes[:12])
         return f"No route named '{name}' on day {data['meta'].get('day')}. Routes: {sample}" \
                + (f" (+{len(routes) - 12} more)" if len(routes) > 12 else "")
-    return f"'{name}' matches {len(hits)} routes: " + "; ".join(r["name"] for r in hits[:12]) + ". Use the full name."
+    return ambiguous(name, found.hits, "routes")
 
 
 def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, kit: int, available: str,

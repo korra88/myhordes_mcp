@@ -7,12 +7,13 @@ see .claude/commands/update-garbage-dump-list.md):
 - Plastic Bag counts as Water Bomb (filled for free at the Faucet), Plastic Bag
   and Semtex as Exploding Water Bomb;
 - emptied weapons "X (empty)" fold into their loaded row X;
-- a sheet name with no exact match takes the unique bank name it prefixes
-  (the sheet truncates long names, e.g. "Unshaped Concre").
+- a sheet name with no exact match takes the unique bank name it prefixes, else the
+  unique one that contains it (the sheet truncates long names, e.g. "Unshaped Concre").
 """
 
 import re
 from ..utils.fmt import header
+from ..utils.lookup import lookup
 from .bank import totals as bank_totals
 
 ALIASES = {
@@ -54,12 +55,14 @@ def map_dump_rows(bank: list[dict], sheet_items: list[str]) -> dict:
         if not sources and key in lower:
             sources = [lower[key]]
         if not sources:
-            prefixed = [n for n in totals if n.lower().startswith(key) and INCOMPLETE not in n.lower()]
-            if len(prefixed) == 1:
-                sources = prefixed
-                notes.append(f"Truncated sheet name '{sheet_name}' → '{prefixed[0]}'")
-            elif len(prefixed) > 1:
-                notes.append(f"Ambiguous truncated name '{sheet_name}': {', '.join(prefixed)} — left at 0")
+            found = lookup([n for n in totals if INCOMPLETE not in n.lower()], key)
+            if found.match:
+                sources = [found.match]
+                label = "Truncated" if found.how == "prefix" else "Partial"
+                notes.append(f"{label} sheet name '{sheet_name}' → '{found.match}'")
+            elif found.hits:
+                label = "truncated" if found.how == "prefix" else "partial"
+                notes.append(f"Ambiguous {label} name '{sheet_name}': {', '.join(found.hits)} — left at 0")
         rows.append([sheet_name, sum(totals[s] for s in sources), sources])
         used.update(sources)
 

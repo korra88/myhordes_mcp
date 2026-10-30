@@ -229,6 +229,22 @@ _TOWN_TOOLS = ["get_bank_inventory", "get_town_overview", "get_citizen_positions
                "plan_kill_route", "get_zone_details", "get_attack_distribution", "get_attack_forecast"]
 _DAY_TOOLS = ["get_bank_inventory", "get_town_overview", "get_citizen_positions", "get_defense_status",
               "get_buildings", "get_scout_map", "find_expedition_path", "plan_kill_route", "get_zone_details"]
+# Name lookup (exact / unique prefix / unique substring / ambiguous), at each lookup site.
+CASES += [
+    ("kill_route_exact", "plan_kill_route", {"route": "ivana", "day": 6}),
+    ("kill_route_prefix", "plan_kill_route", {"route": "Skip", "day": 6}),
+    ("kill_route_substring", "plan_kill_route", {"route": "Agent2", "day": 6}),
+    ("kill_route_ambiguous", "plan_kill_route", {"route": "SpecialAgent", "day": 6}),
+    ("kill_route_ambiguous_sub", "plan_kill_route", {"route": "agent", "day": 6}),
+    ("kill_route_duplicate", "plan_kill_route", {"route": "Ammonia", "day": 6}),
+    ("kill_route_none", "plan_kill_route", {"route": "zzzz", "day": 6}),
+    ("supplies_pickup_name_exact", "plan_expedition_supplies", {"waypoints": "1,-5", "pickups": "1,-5: Rotting Log"}),
+    ("supplies_pickup_name_prefix", "plan_expedition_supplies", {"waypoints": "1,-5", "pickups": "1,-5: scrap"}),
+    ("supplies_pickup_name_substring", "plan_expedition_supplies", {"waypoints": "1,-5", "pickups": "1,-5: projector"}),
+    ("supplies_pickup_name_ambiguous", "plan_expedition_supplies", {"waypoints": "1,-5", "pickups": "1,-5: in"}),
+    ("dump_lookup", "map_bank_to_dump_sheet",
+     {"sheet_items": "Battery\nUnshaped Concre\nOverhead Proj\netal\nWater P\nzzz\nWater Ration"}),
+]
 CASES += [(f"notown_{t}", t, {"town_id": 0, **_REQUIRED.get(t, {})}) for t in _TOWN_TOOLS]
 CASES += [(f"noday_{t}", t, {"day": 4, **_REQUIRED.get(t, {})}) for t in _DAY_TOOLS]
 
