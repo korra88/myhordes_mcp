@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from ..utils.clock import age_text, data_datetime, fmt_epoch, now
+from ..utils.fmt import updated
 from .geo import EP_MIN_KM, NEIGHBOURS8, km, moves, xy
 
 # Evening alerts. By day an open gate, citizens far out and defense below the
@@ -137,7 +138,7 @@ def is_stale(day, current) -> bool:
 def _staleness_tag(last_update_day: int | None, current_day: int | None) -> str:
     """Return a staleness warning if position data is old, empty string otherwise."""
     if is_stale(last_update_day, current_day):
-        return f" [STALE: day {last_update_day}]"
+        return " " + updated(last_update_day, True)
     return ""
 
 
@@ -291,7 +292,7 @@ def _zone_freshness(zone: dict, current_day: int | None) -> str:
         return ""
     if zone.get("danger_today"):
         return f" (zombies today, items d{updated_day})"
-    return f" (updated d{updated_day}" + (", STALE)" if is_stale(updated_day, current_day) else ")")
+    return " " + updated(updated_day, is_stale(updated_day, current_day))
 
 
 # Heavy parts that assemble into a defensive object; Fata files them under Miscellaneous.

@@ -1,6 +1,6 @@
 """Map formatters: scout data, ruins/ground items, zones in a bounding box."""
 
-from ..utils.fmt import header, heading
+from ..utils.fmt import header, heading, updated
 from ..utils.clock import data_updated
 from .bank import summary_lines
 from .geo import fmt_xy, km, moves, xy, zone_map
@@ -94,16 +94,16 @@ def format_scout(data: dict) -> str:
 
         def _est_day(z: dict) -> str:
             d = z.get("scouted_day")
-            return f"d{d}, stale" if is_stale(d, current_day) else f"d{d}"
+            return updated(d, is_stale(d, current_day))
 
         for z in sorted((z for z in scout_only if z["zombies"] > 0), key=lambda z: -z["zombies"]):
-            lines.append(f"  {z['coords']}: ~{z['zombies']} ({_est_day(z)})")
+            lines.append(f"  {z['coords']}: ~{z['zombies']} {_est_day(z)}")
         empty: dict = {}
         for z in scout_only:
             if z["zombies"] <= 0:
                 empty[_est_day(z)] = empty.get(_est_day(z), 0) + 1
         if empty:
-            lines.append("  ~0: " + ", ".join(f"{n} zones ({d})" for d, n in
+            lines.append("  ~0: " + ", ".join(f"{n} zones {d}" for d, n in
                                               sorted(empty.items(), key=lambda kv: kv[0], reverse=True)))
     return "\n".join(lines).rstrip()
 
@@ -311,8 +311,7 @@ def format_zone_path(
             if day is not None and today:
                 when = f" (zombies today, items d{day})"
             elif day is not None:
-                stale = ", STALE" if is_stale(day, current_day) else ""
-                when = f" (updated d{day}{stale})"
+                when = " " + updated(day, is_stale(day, current_day))
             cells = sorted(groups[key], key=lambda t: (t[0], t[1]["coords"]))
             coords = ", ".join(f"{z['coords']} {ap}AP" for ap, z in cells)
             out.append(f"    {desc}{when}: {coords}")

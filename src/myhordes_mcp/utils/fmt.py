@@ -15,3 +15,8 @@ def heading(title: str, meta: dict) -> str:
 def header(title: str, meta: dict, *, suffix: str = "") -> str:
     """heading + the 'Data updated:' line (suffix goes on that line)."""
     return heading(title, meta) + "\n" + data_updated(meta, suffix=suffix)
+
+
+def updated(day, stale: bool = False) -> str:
+    """'(updated d7)' / '(updated d4, STALE)': how old a zone or position reading is."""
+    return f"(updated d{day}{', STALE' if stale else ''})"
