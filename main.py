@@ -834,7 +834,14 @@ async def plan_kill_route(
     cleaned COMPLETELY (one zombie left alive infects the clean zones around it tonight):
     do not invent your own counts, weapons or kill totals, and do not call get_zone_details
     for the zombie counts: this tool counts them (exact when counted today, else grown by
-    the nights since, else from the danger level; never-visited zones are listed to scout).
+    the nights since, else from the danger level; a never-visited zone from its infected
+    neighbours).
+
+    A zoo side or strip goes TO THE MAP EDGE (the output warns when it stops short): the
+    goal sets the route, not the AP. Never drop zones to fit the AP, and leave `available`
+    empty: the supplies plan adds every booster the route needs. When the output says it
+    does not fit (AP or rucksack slots), propose trips that each reach the edge (e.g. one
+    column per trip) and call this tool again for each.
 
     Modes:
     - route="SpecialAgent3": a route drawn on Fata's map, by name (case-insensitive, exact
@@ -845,8 +852,10 @@ async def plan_kill_route(
       to clean, or which area / corridor.
     Output: the zones with zombies (step, estimate, source, pairs, singles), the totals, the
     kit from the bank (or a check of the `kit` given) with its slots, the supplies plan on
-    the exact route with the slots left, and warnings (respawn risk: only a warning,
-    zones with more zombies than the CP, the route's own notes). Report them as given.
+    the exact route (with the boosters added when the items given fall short) and whether
+    kit + supplies fit in the slots, and warnings (short of the map edge, respawn risk:
+    only a warning, zones with more zombies than the CP, the route's own notes). Report
+    them as given.
 
     Args:
         route: Name of a Fata route (see Modes).
@@ -863,7 +872,8 @@ async def plan_kill_route(
                   6 with available="water=1, food7=1".
         slots: Free rucksack slots at departure (default 5); the kit's slots are taken off.
         available: Water / food / drugs the player has, e.g. "water=2, food7=1" (as
-                   plan_expedition_supplies). Empty = water and one 7 AP food assumed.
+                   plan_expedition_supplies). Empty = water and one 7 AP food assumed, plus
+                   the boosters the route needs. Items given that fall short get boosters added.
         second_wind: Enduring level 1-4 of the player, 0 = none (as plan_expedition_supplies).
         day: Specific day to inspect (a finished day is analysed from its maximum counts).
              Use 0 or omit for the current day.

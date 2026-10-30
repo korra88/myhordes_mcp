@@ -5,6 +5,13 @@ solo avviso). Fasi 1–5 = v1, **fatte e in produzione 2026-10-29** (d431876, Pi
 (generazione automatica rotte) = v2, solo schizzo: **non implementarla senza nuova revisione
 dell'utente**.
 
+**2026-10-30 (feedback zoo trimming di Korra):** zona mai visitata = stima dai vicini infetti
+(min 0, media dei vicini infetti, max il loro max; `kills.unvisited_estimate`); avviso quando una
+striscia si ferma prima del bordo mappa (`kills.edge_gap`, asse lungo, lato lontano dalla città);
+rifornimenti: se gli oggetti dati non bastano il piano aggiunge i booster (una droga, un alcol) e
+dice cosa manca; controllo duro slot kit + rifornimenti; i percorsi non escono più dalla mappa
+(`pathing._leg_search` rispetta `map_bounds`).
+
 Leggi prima: `CLAUDE.md` (vincoli: read-only, nessun polling, output testuale condensato),
 `docs/mechanics-in-code.md` (regole di gioco in Python, non in prosa), `knowledge/tactics/weapons.md`
 e `knowledge/tactics/opti-town-meta.md` § Zombie Zoo (già corretti col sorgente il 2026-10-29).

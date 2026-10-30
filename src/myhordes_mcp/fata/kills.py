@@ -22,6 +22,9 @@ knowledge/tactics/weapons.md and opti-town-meta.md (Zombie Zoo).
   Machete or Knife for 1 AP (repair_1, repair_2). Melee weapons need AP left and healthy hands.
 - Entering a zone with more zombies than the group's CP blocks the group until they are
   killed: out of weapons = stuck.
+- A zone never visited holds zombies only by spread from the zones next to it (the day-1
+  spawn puts them on ruins and a few free zones, then spreadCycleMH): it is estimated from
+  its infected neighbours. A zoo side is cleaned up to the map edge (edge_gap warns).
 """
 
 import math
@@ -90,6 +93,20 @@ def zone_estimate(zone: dict | None, day, zmap: dict[Cell, dict], *, final: bool
     return _est(lo, (lo + hi) / 2, hi, f"danger {danger}" if danger else "clear (danger 0)")
 
 
+def unvisited_estimate(cell: Cell, day, zmap: dict[Cell, dict], *, final: bool = False) -> dict:
+    """A zone never visited. Zombies only spread to the zones next to them (spreadCycleMH),
+    so it is estimated from its known neighbours (8): min 0, avg the mean of the infected
+    ones, max the highest of them. No infected neighbour known: source "unknown" (0)."""
+    x, y = cell
+    near = [zone_estimate(zmap[n], day, zmap, final=final) for dx, dy in _NEIGHBOURS
+            if (n := (x + dx, y + dy)) in zmap and n != (0, 0)]
+    infected = [e for e in near if e["avg"] > 0]
+    if not infected:
+        return _est(0, 0, 0, "unknown")
+    return _est(0, sum(e["avg"] for e in infected) / len(infected), max(e["max"] for e in infected),
+                f"never visited, from {_n(len(infected), 'neighbour')}")
+
+
 def buckets(n: float) -> tuple[int, int]:
     """(pairs, singles) for n zombies in one zone (n rounded half up)."""
     n = int(n + 0.5)
@@ -113,7 +130,9 @@ def _range(e: dict) -> str:
 
 def analyse_route(data: dict, path: list[Cell]) -> dict:
     """The zones of `path` (town excluded, each counted once on its first step) that hold
-    zombies, the ones never visited, and totals (zombies, pairs, singles) by min/avg/max."""
+    zombies, the ones never visited with no infected neighbour, and totals (zombies, pairs,
+    singles) by min/avg/max. A never-visited zone next to infected ones is a row, estimated
+    from them (unvisited_estimate)."""
     day = data["meta"].get("day")
     final = data["meta"].get("live") is False
     zmap = zone_map(data)
@@ -122,7 +141,8 @@ def analyse_route(data: dict, path: list[Cell]) -> dict:
         if cell == (0, 0) or cell in seen:
             continue
         seen.add(cell)
-        est = zone_estimate(zmap.get(cell), day, zmap, final=final)
+        est = zone_estimate(zmap[cell], day, zmap, final=final) if cell in zmap \
+            else unvisited_estimate(cell, day, zmap, final=final)
         if est["source"] == "unknown":
             unknown.append((step, cell))
         elif final and est["source"].startswith("danger") and est["max"] > 0:
@@ -136,6 +156,47 @@ def analyse_route(data: dict, path: list[Cell]) -> dict:
         totals[k] = {"zombies": sum(int(r["est"][k] + 0.5) for r in rows),
                      "pairs": sum(p for p, _ in pb), "singles": sum(s for _, s in pb)}
     return {"rows": rows, "unknown": unknown, "banded": banded, "totals": totals, "zones": len(seen)}
+
+
+def edge_gap(data: dict, path: list[Cell]) -> str | None:
+    """A warning when a strip stops short of the map edge with zombies (or never-visited
+    zones) left between its far end and the edge. The strip runs along the longer side of
+    the route's box (both on a square), away from town; only the box's width is checked."""
+    bounds = data["meta"].get("map_bounds")
+    cells = [c for c in path if c != (0, 0)]
+    if not bounds or not cells:
+        return None
+    day = data["meta"].get("day")
+    zmap = zone_map(data)
+    x0, x1 = min(c[0] for c in cells), max(c[0] for c in cells)
+    y0, y1 = min(c[1] for c in cells), max(c[1] for c in cells)
+    gaps = []
+    for axis, (lo, hi), (blo, bhi), (olo, ohi) in ((1, (y0, y1), bounds[2:], (x0, x1)),
+                                                    (0, (x0, x1), bounds[:2], (y0, y1))):
+        if hi - lo < ohi - olo:
+            continue
+        for far, edge, step in ((hi, bhi, 1), (lo, blo, -1)):
+            if far * step <= 0 or far == edge:   # toward town, or already on the edge
+                continue
+            zones = [(o, a) if axis == 1 else (a, o)
+                     for a in range(far + step, edge + step, step) for o in range(olo, ohi + 1)]
+            est = {c: zone_estimate(zmap[c], day, zmap) if c in zmap else unvisited_estimate(c, day, zmap)
+                   for c in zones}
+            bad = [c for c in zones if est[c]["max"] > 0 or c not in zmap]
+            if bad:
+                gaps.append((("y" if axis == 1 else "x"), far, edge, bad, est))
+    if not gaps:
+        return None
+    parts = []
+    for name, far, edge, bad, est in gaps:
+        unseen = [c for c in bad if c not in zmap]
+        lo, avg, hi = (sum(est[c][k] for c in bad) for k in ("min", "avg", "max"))
+        parts.append(f"from {name}={far} to the edge {name}={edge}: {_n(len(bad), 'zone')} with zombies or "
+                     f"never visited, ~{_fmt(avg)} zombies ({_fmt(lo)}–{_fmt(hi)})"
+                     + (f", {len(unseen)} never visited" if unseen else "") + f": {_zones_text(bad)}")
+    return ("**Stops short of the map edge** " + "; ".join(parts) + ". A zoo side or strip is cleaned "
+            "up to the edge (zombies left there spread back tonight): extend the waypoints to the edge; "
+            "if AP or slots do not fit, split it into trips that each reach the edge.")
 
 
 # ---------------------------------------------------------------------------
@@ -653,32 +714,39 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
     free = slots - kit
     # slots=0 means no limit: with no slot left, plan freely and say how many are missing.
     result = supplies.plan(route, st, items, end_ap=end_ap, slots=max(0, free))
-    warn = []
-    if free < 1:
-        need = supplies.carried(result["used"])
-        warn.append(f"The kit takes {kit} of your {slots} slots: the supplies below need {need} more "
-                    f"({max(0, need - max(0, free))} short). Plan with more slots or a smaller kit.")
-    elif result["cost"][0] or result["cost"][1]:
+    failed = result["cost"][0] or result["cost"][1]
+    if failed:
+        # The goal sets a kill route, not the AP: plan it with every booster it needs
+        # (one drug, one alcohol at most), in any number of slots, and check the slots below.
         more = {**items, **{k: max(items.get(k, 0), n) for k, n in supplies.DEFAULT_AVAILABLE.items()}}
         alt = supplies.plan(route, st, more, end_ap=end_ap)
         if not (alt["cost"][0] or alt["cost"][1]):
-            need = ", ".join(f"{n} × {supplies.ITEMS[k].label}" for k, n in alt["used"].items())
-            warn.append(f"Feasible with: {need} ({supplies.carried(alt['used'])} slots), "
-                        f"you have {free} left after the kit.")
+            added = {k: n - items.get(k, 0) for k, n in alt["used"].items() if n > items.get(k, 0)}
+            if added:   # else only the slots were short: the check below says so
+                notes.append("**Needs more than the items given** (" + (available.strip() or "default") + "): "
+                             + ", ".join(f"+{n} × {supplies.ITEMS[k].label}" for k, n in added.items())
+                             + ". The plan below uses them.")
+            result, failed = alt, False
         else:
-            warn.append("Not feasible even with the default set of items: shorten the route.")
-    notes += warn
+            notes.append("Not feasible even with every booster (one drug, one alcohol): split the route "
+                         "into trips.")
+    need = supplies.carried(result["used"])
+    if not failed and need > free:
+        notes.append(f"**Does not fit in the rucksack:** kit {kit} + supplies {need} = {kit + need} slots, "
+                     f"{slots} free: {kit + need - slots} short. Bring a bag (more slots), take a kit with "
+                     "fewer slots (kit=), or split the route into trips.")
     if not available.strip():
         notes.append("Assumed: water and one 7 AP food; drugs/alcohol only as extras if needed.")
     notes.append(f"Slots: {slots} free at departure, minus {kit} for the kit = {free}.")
     options = None
     if not available.strip() and any(k in supplies.EXTRAS for k in result["used"]) \
-            and not (result["cost"][0] or result["cost"][1]) and free >= 1:
+            and not failed and free >= need:
         from .bank import expedition_extras
         options = supplies.extra_options(route, st, items, end_ap=end_ap, slots=free,
                                          stock=expedition_extras(data["bank"]))
     text = supplies.format_plan(route, st, result, title="Supplies plan, the route as given",
-                                notes=[n for n in notes if n], slots=max(free, 0), end_ap=end_ap,
+                                notes=[n for n in notes if n], slots=max(free, 0) if need <= free else 0,
+                                end_ap=end_ap,
                                 teleport=any("teleport home" in n for n in notes),
                                 generic_extras=not available.strip(), cp=group_cp, options=options)
     return text.split("\n")
@@ -737,7 +805,7 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
                      f"{min(lo['singles'], hi['singles'])}–{max(lo['singles'], hi['singles'])} singles)"),
               "Kill every zombie of every zone: one left alive infects the clean zones around it tonight."]
     if a["unknown"]:
-        lines.append("Never visited, not counted (scout first): "
+        lines.append("Never visited, no infected zone known around (counted 0, scout first): "
                      + " ".join(f"[{c[0]}|{c[1]}] (step {s})" for s, c in a["unknown"]))
     if a["banded"]:
         lines.append("Danger band only, left out of the totals (past day): "
@@ -748,6 +816,8 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
     else:
         kslots, kit_used = 0, {}
     warns = respawn_after_kills(data, avg["zombies"])
+    if gap := edge_gap(data, path):
+        warns.insert(0, gap)
     blocked = [r for r in a["rows"] if r["est"]["max"] > group_cp]
     if blocked:
         zs = ", ".join(f"[{r['zone'][0]}|{r['zone'][1]}] ({_fmt(r['est']['max'])})" for r in blocked[:MAX_LISTED])

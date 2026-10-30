@@ -222,7 +222,7 @@ def _leg_search(grid: tuple, a: tuple[int, int], b: tuple[int, int], f0: int, *,
     budget is 0). Cost is the (pri, sec) tuple; AP is capped at MAX_PATH_AP per leg.
     `seen` zones cost rw to enter; on a dig_leg so do depleted zones (no dig either way),
     elsewhere they cost WALK["dried"]."""
-    zone_map, cell_class, spread_map, cd, cp = grid
+    zone_map, cell_class, spread_map, cd, cp, bounds = grid
     margin = 3
     bx = (min(a[0], b[0]) - margin, max(a[0], b[0]) + margin)
     by = (min(a[1], b[1]) - margin, max(a[1], b[1]) + margin)
@@ -247,6 +247,8 @@ def _leg_search(grid: tuple, a: tuple[int, int], b: tuple[int, int], f0: int, *,
             n = (x + dx, y + dy)
             if n not in zone_map and not (bx[0] <= n[0] <= bx[1] and by[0] <= n[1] <= by[1]):
                 continue
+            if bounds and not (bounds[0] <= n[0] <= bounds[1] and bounds[2] <= n[1] <= bounds[3]):
+                continue   # off the map
             if n in banned:
                 continue
             dried = (zone_map.get(n) or {}).get("dried")
@@ -313,7 +315,7 @@ def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[in
     grids: dict[int, tuple] = {}
     for c in set(cps):
         zone_map, cell_class, spread_map, cd = _zone_grid(data, c)
-        grids[c] = (zone_map, cell_class, spread_map, cd, c)
+        grids[c] = (zone_map, cell_class, spread_map, cd, c, data["meta"].get("map_bounds"))
     # states: flashes used so far -> (pri, sec, route, flash cells, cells walked per leg)
     states = {0: (0.0, 0.0, [points[0]], [], [])}
     for i, (a, b) in enumerate(zip(points, points[1:])):
@@ -334,7 +336,7 @@ def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[in
     # Exposure: walkability of each zone entered, with the CP of its leg.
     risk, k = 0.0, 1
     for c, n in zip(cps, lens):
-        zone_map, _, spread_map, cd, _ = grids[c]
+        zone_map, _, spread_map, cd, _, _ = grids[c]
         for cell in route[k:k + n]:
             risk += _cell_risk(zone_map.get(cell), cd, coords=cell, spread_map=spread_map,
                                group_cp=c, scout_mode=scout_mode, mode="safest")
