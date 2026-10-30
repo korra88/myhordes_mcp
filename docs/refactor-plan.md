@@ -1,6 +1,6 @@
 # Piano: normalizzazione e riuso del codice
 
-Stato: **piano approvato dall'utente 2026-10-30.** B1–B3 fatti; prossimo: fase A. Ogni fase va
+Stato: **piano approvato dall'utente 2026-10-30.** B1–B3 fatti; fase A fatta (20 commit da 89daf98 a 16be11f, eseguita da Sonnet, rivista da Opus; resti sotto); prossimo: fase B. Ogni fase va
 avviata su conferma dell'utente; le fasi C e D cambiano testi o numeri che il bot legge e vanno
 approvate punto per punto.
 
@@ -185,6 +185,22 @@ cerca per nome di funzione.
   `parse._extract_js_data` (lascia inutilizzato l'import `json`), `archive.save_day`,
   `archive.load_day_html`, `archive.list_cached_days`, `wiki.get_page`. `TTLCache.clear` ha un
   chiamante: resta. Commento di wiki.py:14 descrive una tupla di 4 campi, sono 5 → NamedTuple.
+
+### Resti della fase A (non fatti, da riprendere quando si tocca quel codice)
+- Difesa degli edifici ancora sommata due volte (buildings ~55 e ~124); riga di morte ripetuta in
+  town/night/townlog; il bucket "Defense items" di bank costruisce il suo insieme di nomi.
+- `_town()` usato dai 12 tool semplici; restano a mano: find_expedition_path,
+  plan_expedition_supplies, plan_kill_route (validano prima di scaricare), i due che scaricano
+  in parallelo con Gest'Hordes e quelli che prendono solo l'ID. Il controllo dell'errore dei
+  dati resta nei formattatori (i testi differiscono: unificarli è C6).
+- `cell_class`/`spread_map` ancora ricalcolati tra `route_risks` e il formattatore del percorso
+  (passare `grid=` lungo `safest_route` e `route_risks`; non è un problema di velocità).
+- Variabili locali `zone_map` che coprono `geo.zone_map` in `_leg_search` e nel formattatore.
+- parse.py (legacy) e towndata.py ripetono ancora il parsing degli edifici;
+  `gesthordes.format._val` e `at_day` fanno lo stesso con limiti diversi.
+- `parse.py` e archive (~217) tengono `maxed` grezzo (renderlo int cambierebbe file salvati).
+- `age_days` tratta il giorno 0 come giorno vero (le guardie vecchie no): i giorni Fata partono
+  da 1, nessun effetto oggi.
 
 ## Fase B — un solo cablaggio dei rifornimenti (M, golden identici)
 
