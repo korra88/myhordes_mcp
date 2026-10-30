@@ -1,5 +1,7 @@
 """Gest'Hordes formatters: attack forecast/distribution and season-point extraction."""
 
+from ..utils.fmt import estimate
+
 
 def has_error(data: dict) -> bool:
     """Gest'Hordes results carry an `error` key only when the fetch failed."""
@@ -113,12 +115,12 @@ def format_attack_forecast(data: dict) -> str:
 
     lines.append("### Tonight's numbers")
     if t_min_now is not None and t_max_now is not None:
-        lines.append(f"- Theoretical range: **{t_min_now}** – **{t_max_now}** zombies")
+        lines.append(f"- Theoretical range: **{estimate(t_min_now, t_max_now)}**")
     else:
         lines.append("- Theoretical range: not available")
 
     if gh_min_now is not None and gh_max_now is not None:
-        lines.append(f"- Gest'Hordes estimate: {gh_min_now} – {gh_max_now} zombies")
+        lines.append(f"- Gest'Hordes estimate: {estimate(gh_min_now, gh_max_now)}")
     else:
         lines.append("- Gest'Hordes estimate: not yet available (players haven't reported)")
 

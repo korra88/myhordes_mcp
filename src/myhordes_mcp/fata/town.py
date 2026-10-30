@@ -1,6 +1,6 @@
 """Town-level formatters: overview, citizens, defense."""
 
-from ..utils.fmt import header, town_name
+from ..utils.fmt import est_status, estimate, header, town_name
 from ..utils.clock import data_updated
 from .cp import cp_label
 from .risk import (
@@ -50,8 +50,7 @@ def _format_estimate(est: dict) -> str:
     """Format a single attack estimate with confirmed/partial indicator."""
     if est.get("min") is None:
         return "not estimated yet"
-    label = "(confirmed)" if est.get("maxed") else "(partial)"
-    return f"{est['min']}-{est['max']} zombies {label}"
+    return estimate(est["min"], est["max"], est_status(est.get("maxed")))
 
 
 def format_town_overview(data: dict, season_points: int | None = None, detail: str = "compact") -> str:

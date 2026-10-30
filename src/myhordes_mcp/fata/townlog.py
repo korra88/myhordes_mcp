@@ -18,6 +18,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from ..utils import clock
+from ..utils.fmt import est_status, estimate
 from ..utils.config import PROJECT_ROOT, TOWN_LOG_AUTO, TOWN_LOG_INTERVAL
 from . import archive
 from .night import night_report
@@ -178,8 +179,8 @@ def _close_day(tdir: Path, f: Path, d: int, current: int, result: dict, day_data
         fh.write("\n".join(block) + "\n")
 
     if est:
-        att = f"{est[0]}-{est[1]}" + (f" (attack {r['attack']})" if r["attack"] is not None
-                                       else " (confirmed)" if est[2] else "")
+        att = (estimate(est[0], est[1], unit="") + f" (attack {r['attack']})" if r["attack"] is not None
+               else estimate(est[0], est[1], est_status(est[2]), unit=""))
     else:
         att = f"? (attack {r['attack']})" if r["attack"] is not None else "?"
     _set_row(tdir, d, [f"{_fmt(before)} → {_fmt(after)}", _fmt(r["defense"]), att, outcome], overwrite_tbd=True)
@@ -201,7 +202,8 @@ def _open_day(tdir: Path, day: int, result: dict) -> list[str]:
     citizens = result["citizens"]
     inside = sum(1 for c in citizens if c["inside_town"])
     est = result["estimations"].get("today", {})
-    est_txt = "?" if est.get("min") is None else f"{est['min']}-{est['max']}" + (" (confirmed)" if est.get("maxed") else "")
+    est_txt = ("?" if est.get("min") is None
+               else estimate(est["min"], est["max"], est_status(est.get("maxed")), unit=""))
     _set_row(tdir, day, [f"{len(citizens)} ({inside} in / {len(citizens) - inside} out)",
                          _fmt(result["defense"].get("total")), est_txt, "TBD"], overwrite_tbd=False)
     return notes

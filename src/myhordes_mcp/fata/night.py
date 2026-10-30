@@ -6,7 +6,7 @@ position, defense vs the attack, alive before/after.
 
 from ..gesthordes.format import at_day, atk_series
 from ..utils.clock import data_updated
-from ..utils.fmt import town_name
+from ..utils.fmt import est_status, estimate, town_name
 from .geo import TOWN, fmt_xy
 from .planning import alive_by_day
 
@@ -64,7 +64,7 @@ def format_night_report(data: dict, day: int, gh: dict | None = None, day_data: 
         vs += f" (margin {d - a:+d})"
     if r["estimate"]:
         lo, hi, conf = r["estimate"]
-        vs += f" · estimate was {lo}–{hi}{' (confirmed)' if conf else ''}"
+        vs += f" · estimate was {estimate(lo, hi, est_status(conf))}"
     lines.append(vs)
     before, after = r["alive_before"], r["alive_after"]
     if before is not None and after is not None:

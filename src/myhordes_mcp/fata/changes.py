@@ -8,7 +8,7 @@ citizen spent moving. Replaces the arithmetic inspect-town used to do by hand.
 
 from datetime import datetime
 
-from ..utils.fmt import header
+from ..utils.fmt import est_status, estimate, header
 from ..utils.clock import GAME_TZ, fmt_epoch
 from ..utils.config import PLAYER_NAME
 from . import archive
@@ -87,7 +87,7 @@ def format_town_changes(data: dict, snaps: list[dict], ref: dict | None, ref_lab
             state += f" · gate {ref['gate']}→{cur['gate']}"
     est = data["estimations"].get("today", {})
     if est.get("min") is not None:
-        state += f" · Tonight {est['min']}–{est['max']}z"
+        state += f" · Tonight {estimate(est['min'], est['max'], est_status(est.get('maxed')))}"
     lines += [state, ""]
 
     if ref is not None and ref is not cur:

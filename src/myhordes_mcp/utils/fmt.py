@@ -20,3 +20,14 @@ def header(title: str, meta: dict, *, suffix: str = "") -> str:
 def updated(day, stale: bool = False) -> str:
     """'(updated d7)' / '(updated d4, STALE)': how old a zone or position reading is."""
     return f"(updated d{day}{', STALE' if stale else ''})"
+
+
+def estimate(lo, hi, status: str | None = None, unit: str = " zombies") -> str:
+    """'321–357 zombies (partial)': an attack estimate. status: 'partial' | 'confirmed'
+    (est_status); unit '' where a column or label already says what is counted."""
+    return f"{lo}–{hi}{unit}" + (f" ({status})" if status else "")
+
+
+def est_status(maxed) -> str:
+    """Fata's `maxed` flag: a confirmed estimate has reached its final range."""
+    return "confirmed" if maxed else "partial"

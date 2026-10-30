@@ -8,7 +8,7 @@ from .bank import _CLEAN_WATER, _sum_items, defense_count, totals
 from ..gesthordes.format import at_day, atk_series, has_error
 from .buildings import (WATER_FILTERS, has_blueprint, is_buildable, upgrades_by_day,
                         visible)
-from ..utils.fmt import header
+from ..utils.fmt import est_status, estimate, header
 
 # Daily AP of one citizen used for town budgets (6 AP base + food/water/drugs).
 AP_PER_CITIZEN = 18
@@ -171,8 +171,8 @@ def format_build_options(data: dict, include_resources: bool = False, include_al
         return f"Error: {data['error']}"
     p = build_options(data)
     est = p["estimate"]
-    est_txt = f"{est.get('min')}–{est.get('max')}" if est.get("min") is not None else "unknown"
-    est_txt += " (confirmed)" if est.get("maxed") else (" (partial)" if est.get("min") is not None else "")
+    est_txt = (estimate(est["min"], est["max"], est_status(est.get("maxed")))
+               if est.get("min") is not None else "unknown")
     lines = [
         header("Build options", data["meta"]),
         "",
@@ -322,7 +322,7 @@ def format_construction_history(data: dict, gh: dict | None = None) -> str:
         if r["attack"] is not None:
             atk = str(r["attack"])
         elif r["estimate"]:
-            atk = f"~{r['estimate'][0]}-{r['estimate'][1]}"
+            atk = "~" + estimate(*r["estimate"], unit="")
         else:
             atk = "—"
         if r["day"] == meta.get("day"):
