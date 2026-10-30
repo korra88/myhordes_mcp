@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass, field
 
 from .pathing import reach_indices
-from .geo import fmt_xy, xy
+from .geo import fmt_xy, zone_map
 from .risk import is_defense
 
 GUARDIAN_CP_LOSS = 2
@@ -61,11 +61,7 @@ def resolve(data: dict, entries: list[tuple[tuple[int, int], str, int]]) -> list
     (defensive object or part), `heavy`, or part of an item name. Heavy-first when the
     zone has several matches (worst case for carrying). What Fata did not see is kept:
     light (heavy for the word `heavy`), with a warning."""
-    zones = {}
-    for z in data.get("zones", []):
-        c = xy(z)
-        if c:
-            zones[c] = z
+    zones = zone_map(data)
     day = data["meta"].get("day")
     seen_day = f" (data from day {day})" if day is not None else ""
     out = []

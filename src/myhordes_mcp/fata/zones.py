@@ -2,7 +2,7 @@
 
 from ..utils.clock import data_updated
 from .bank import summary_lines
-from .geo import fmt_xy, km, moves, xy
+from .geo import fmt_xy, km, moves, xy, zone_map
 from .risk import (
     DANGER_LEVELS,
     _build_spread_map,
@@ -238,12 +238,7 @@ def format_zone_path(
     day = meta.get("day", "?")
 
     # Build full zone_map for spread simulation (all explored zones, not just bbox)
-    zone_map: dict[tuple[int, int], dict] = {}
-    for z in zones:
-        c = xy(z)
-        if c:
-            zone_map[c] = z
-    spread_map = _build_spread_map(zone_map, current_day if isinstance(current_day, int) else None)
+    spread_map = _build_spread_map(zone_map(data), current_day if isinstance(current_day, int) else None)
 
     header_parts = [f"## Zone Path {fmt_xy((x1, y1))} → {fmt_xy((x2, y2))} — {town} Day {day}"]
     if max_ap is not None:

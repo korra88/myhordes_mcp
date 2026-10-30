@@ -20,8 +20,13 @@ class Bounds(NamedTuple):
     ymax: int
 
 
-def in_bounds(bounds: Bounds | tuple, cell: Cell) -> bool:
-    return bounds[0] <= cell[0] <= bounds[1] and bounds[2] <= cell[1] <= bounds[3]
+def map_bounds(data: dict) -> Bounds | None:
+    b = data["meta"].get("map_bounds")
+    return Bounds(*b) if b else None
+
+
+def in_bounds(bounds: Bounds, cell: Cell) -> bool:
+    return bounds.xmin <= cell[0] <= bounds.xmax and bounds.ymin <= cell[1] <= bounds.ymax
 
 
 def xy(c: str | dict) -> Cell | None:

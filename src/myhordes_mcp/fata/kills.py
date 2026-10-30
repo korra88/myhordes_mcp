@@ -32,25 +32,19 @@ import re
 from dataclasses import dataclass
 
 from .pathing import loop_return
-from .geo import fmt_xy, xy
-from .risk import (GROWTH_AVG, GROWTH_MAX, respawn_check, respawn_totals,
+from .geo import NEIGHBOURS8, Cell, fmt_xy, in_bounds, map_bounds, xy, zone_map
+from .risk import (GROWTH_AVG, GROWTH_MAX, never_visited, respawn_check, respawn_totals,
                    zombie_growth, zone_is_today)
 from .towndata import expand_route
 from . import supplies
 from ..utils.clock import data_updated
 
-Cell = tuple[int, int]
-_NEIGHBOURS = tuple((dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy)
 _DANGER_BAND = {0: (0, 0), 1: (1, 2), 2: (3, 5), 3: (6, 9)}  # risk.DANGER_LEVELS, "6+" capped at 9
 
 
 # ---------------------------------------------------------------------------
 # Zombie counts per zone
 # ---------------------------------------------------------------------------
-
-def zone_map(data: dict) -> dict[Cell, dict]:
-    return {c: z for z in data.get("zones", []) if (c := xy(z))}
-
 
 def _est(lo: float, avg: float, hi: float, source: str, **extra) -> dict:
     return {"min": lo, "avg": avg, "max": hi, "source": source, **extra}
@@ -83,7 +77,7 @@ def zone_estimate(zone: dict | None, day, zmap: dict[Cell, dict], *, final: bool
         if z > 0:
             return _est(*zombie_growth(z, nights), src)
         x, y = xy(zone)
-        near = any(zmap.get((x + dx, y + dy), {}).get("zombies", 0) > 0 for dx, dy in _NEIGHBOURS)
+        near = any(zmap.get((x + dx, y + dy), {}).get("zombies", 0) > 0 for dx, dy in NEIGHBOURS8)
         return _est(0, GROWTH_AVG * nights if near else 0, GROWTH_MAX * nights if near else 0, src)
     if z >= 0:
         return _est(z, z, z, f"day {upd}" if upd is not None else "counted")
@@ -99,7 +93,7 @@ def unvisited_estimate(cell: Cell, day, zmap: dict[Cell, dict], *, final: bool =
     so it is estimated from its known neighbours (8): min 0, avg the mean of the infected
     ones, max the highest of them. No infected neighbour known: source "unknown" (0)."""
     x, y = cell
-    near = [zone_estimate(zmap[n], day, zmap, final=final) for dx, dy in _NEIGHBOURS
+    near = [zone_estimate(zmap[n], day, zmap, final=final) for dx, dy in NEIGHBOURS8
             if (n := (x + dx, y + dy)) in zmap and n != (0, 0)]
     infected = [e for e in near if e["avg"] > 0]
     if not infected:
@@ -163,7 +157,7 @@ def edge_gap(data: dict, path: list[Cell]) -> str | None:
     """A warning when a strip stops short of the map edge with zombies (or never-visited
     zones) left between its far end and the edge. The strip runs along the longer side of
     the route's box (both on a square), away from town; only the box's width is checked."""
-    bounds = data["meta"].get("map_bounds")
+    bounds = map_bounds(data)
     cells = [c for c in path if c != (0, 0)]
     if not bounds or not cells:
         return None
@@ -172,8 +166,8 @@ def edge_gap(data: dict, path: list[Cell]) -> str | None:
     x0, x1 = min(c[0] for c in cells), max(c[0] for c in cells)
     y0, y1 = min(c[1] for c in cells), max(c[1] for c in cells)
     gaps = []
-    for axis, (lo, hi), (blo, bhi), (olo, ohi) in ((1, (y0, y1), bounds[2:], (x0, x1)),
-                                                    (0, (x0, x1), bounds[:2], (y0, y1))):
+    for axis, (lo, hi), (blo, bhi), (olo, ohi) in ((1, (y0, y1), (bounds.ymin, bounds.ymax), (x0, x1)),
+                                                    (0, (x0, x1), (bounds.xmin, bounds.xmax), (y0, y1))):
         if hi - lo < ohi - olo:
             continue
         for far, edge, step in ((hi, bhi, 1), (lo, blo, -1)):
@@ -570,9 +564,8 @@ def zoo_clusters(data: dict) -> list[dict]:
     zmap = zone_map(data)
     est = {c: zone_estimate(z, day, zmap, final=final) for c, z in zmap.items() if c != (0, 0)}
     infected = {c for c, e in est.items() if e["avg"] > 0 or zmap[c].get("danger", 0) > 0}
-    bounds = data["meta"].get("map_bounds")
-    inside = (lambda c: bounds[0] <= c[0] <= bounds[1] and bounds[2] <= c[1] <= bounds[3]) if bounds \
-        else (lambda c: False)
+    bounds = map_bounds(data)
+    inside = (lambda c: in_bounds(bounds, c)) if bounds else (lambda c: False)
 
     def clean(c: Cell) -> bool:
         return c in zmap and c not in infected and (c == (0, 0) or est[c]["avg"] == 0)
@@ -583,15 +576,15 @@ def zoo_clusters(data: dict) -> list[dict]:
         comp, stack = {seed}, [seed]
         while stack:
             x, y = stack.pop()
-            for dx, dy in _NEIGHBOURS:
+            for dx, dy in NEIGHBOURS8:
                 n = (x + dx, y + dy)
                 if n in todo:
                     todo.discard(n)
                     comp.add(n)
                     stack.append(n)
-        unseen = {(x + dx, y + dy) for x, y in comp for dx, dy in _NEIGHBOURS
+        unseen = {(x + dx, y + dy) for x, y in comp for dx, dy in NEIGHBOURS8
                   if (x + dx, y + dy) not in zmap and inside((x + dx, y + dy))}
-        edge = bool(bounds) and any(x in (bounds[0], bounds[1]) or y in (bounds[2], bounds[3]) for x, y in comp)
+        edge = bool(bounds) and any(x in (bounds.xmin, bounds.xmax) or y in (bounds.ymin, bounds.ymax) for x, y in comp)
         sides = {}
         for d, (dx, dy) in DIRS4.items():
             zs = [c for c in comp if clean((c[0] + dx, c[1] + dy))]
@@ -622,8 +615,8 @@ def format_zoo(data: dict) -> str:
     lines = [f"## Zombie clusters — {meta.get('town_name', '?')} day {meta.get('day', '?')}", data_updated(meta)]
     if not clusters:
         lines.append("No zone with zombies (or danger) in the zones Fata knows.")
-    never = meta.get("map_zones", 0) - len(data.get("zones", []))
-    if never > 0:
+    never = never_visited(data)
+    if never:
         lines.append(f"{never} zones never visited (not counted).")
     big = [c for c in clusters if len(c["zones"]) >= 3][:4]
     small = [c for c in clusters if c not in big]

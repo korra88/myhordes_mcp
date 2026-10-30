@@ -4,7 +4,8 @@ import heapq
 from dataclasses import dataclass, field
 
 from ..utils.clock import data_updated
-from .geo import fmt_xy, km, moves, xy
+from .geo import (NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km, map_bounds, moves,
+                  zone_map)
 from .risk import (
     DANGER_LEVELS,
     DANGER_MAX_EST,
@@ -202,7 +203,7 @@ class ZoneGrid:
     zone_map: dict
     spread_map: dict
     day: int | None
-    bounds: tuple | None
+    bounds: Bounds | None
     _classes: dict = field(default_factory=dict, repr=False, compare=False)
 
     def cell_class(self, cp: int) -> dict:
@@ -217,18 +218,9 @@ class ZoneGrid:
 def zone_grid(data: dict) -> ZoneGrid:
     """Scout radar readings fill zones missing from the map data."""
     current_day = data["meta"].get("day")
-    zone_map: dict[tuple[int, int], dict] = {}
-    for z in data.get("zones", []):
-        coords = xy(z)
-        if coords:
-            zone_map[coords] = z
-    map_coords = set(zone_map.keys())
-    for z in data.get("scout", []):
-        coords = xy(z)
-        if coords and coords not in map_coords:
-            zone_map[coords] = {"coords": z["coords"], "zombies": z["zombies"], "danger": 0, "items": [], "ruin": None, "scouted_day": z.get("scouted_day")}
+    zmap = zone_map(data, scout=True)
     cd = current_day if isinstance(current_day, int) else None
-    return ZoneGrid(zone_map, _build_spread_map(zone_map, cd), cd, data["meta"].get("map_bounds"))
+    return ZoneGrid(zmap, _build_spread_map(zmap, cd), cd, map_bounds(data))
 
 
 def _leg_search(grid: ZoneGrid, cp: int, a: tuple[int, int], b: tuple[int, int], f0: int, *, mode: str,
@@ -260,11 +252,11 @@ def _leg_search(grid: ZoneGrid, cp: int, a: tuple[int, int], b: tuple[int, int],
             continue
         if ap >= MAX_PATH_AP:
             continue
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        for dx, dy in NEIGHBOURS4:
             n = (x + dx, y + dy)
             if n not in zone_map and not (bx[0] <= n[0] <= bx[1] and by[0] <= n[1] <= by[1]):
                 continue
-            if bounds and not (bounds[0] <= n[0] <= bounds[1] and bounds[2] <= n[1] <= bounds[3]):
+            if bounds and not in_bounds(bounds, n):
                 continue   # off the map
             if n in banned:
                 continue
@@ -400,7 +392,7 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2,
     else:
         ends = [start]
     walked = frozenset(out[1:-1]) - {start}
-    dried = {c for z in data.get("zones", []) if z.get("dried") and (c := xy(z))}
+    dried = {c for c, z in zone_map(data).items() if z.get("dried")}
     last = len(out) - 1
     # Walking the way out backwards stops at the first zone the platform teleports from.
     retrace = last - next((j for j in range(last - 1, 0, -1) if reach and km(*out[j]) <= reach), 0)

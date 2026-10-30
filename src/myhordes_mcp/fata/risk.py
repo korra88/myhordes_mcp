@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from ..utils.clock import age_text, data_datetime, now
-from .geo import km, moves, xy
+from .geo import NEIGHBOURS8, km, moves, xy
 
 # Evening alerts. By day an open gate, citizens far out and defense below the
 # estimate are all normal; they become alarms as the attack (23:59, game time)
@@ -159,7 +159,6 @@ def _zombie_max_estimate(zombies: int, last_day: int | None, current_day: int | 
     return zombie_growth(zombies, age)[2]
 
 
-_NEIGHBOURS = tuple((dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy)
 
 
 def _build_spread_map(
@@ -202,7 +201,7 @@ def _build_spread_map(
 
     while queue:
         x, y, dist, source_zm = queue.popleft()
-        for dx, dy in _NEIGHBOURS:
+        for dx, dy in NEIGHBOURS8:
             nx, ny = x + dx, y + dy
             if (nx, ny) not in zone_map:
                 continue  # only spread through explored cells
