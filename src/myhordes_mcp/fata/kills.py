@@ -32,7 +32,8 @@ import re
 from dataclasses import dataclass
 
 from .pathing import loop_return
-from .risk import (GROWTH_AVG, GROWTH_MAX, _parse_coords, respawn_check, respawn_totals,
+from .geo import xy
+from .risk import (GROWTH_AVG, GROWTH_MAX, respawn_check, respawn_totals,
                    zombie_growth, zone_is_today)
 from .towndata import expand_route
 from . import supplies
@@ -48,7 +49,7 @@ _DANGER_BAND = {0: (0, 0), 1: (1, 2), 2: (3, 5), 3: (6, 9)}  # risk.DANGER_LEVEL
 # ---------------------------------------------------------------------------
 
 def zone_map(data: dict) -> dict[Cell, dict]:
-    return {c: z for z in data.get("zones", []) if (c := _parse_coords(z))}
+    return {c: z for z in data.get("zones", []) if (c := xy(z))}
 
 
 def _est(lo: float, avg: float, hi: float, source: str, **extra) -> dict:
@@ -81,7 +82,7 @@ def zone_estimate(zone: dict | None, day, zmap: dict[Cell, dict], *, final: bool
         src = f"day {upd} (+{nights} night{'s' if nights > 1 else ''})"
         if z > 0:
             return _est(*zombie_growth(z, nights), src)
-        x, y = _parse_coords(zone)
+        x, y = xy(zone)
         near = any(zmap.get((x + dx, y + dy), {}).get("zombies", 0) > 0 for dx, dy in _NEIGHBOURS)
         return _est(0, GROWTH_AVG * nights if near else 0, GROWTH_MAX * nights if near else 0, src)
     if z >= 0:

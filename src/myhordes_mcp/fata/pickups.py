@@ -17,7 +17,8 @@ import re
 from dataclasses import dataclass, field
 
 from .pathing import reach_indices
-from .risk import _parse_coords, is_defense
+from .geo import xy
+from .risk import is_defense
 
 GUARDIAN_CP_LOSS = 2
 DEFENSE_WORDS = {"defense", "defence", "defenses", "defences", "defensive"}
@@ -62,7 +63,7 @@ def resolve(data: dict, entries: list[tuple[tuple[int, int], str, int]]) -> list
     light (heavy for the word `heavy`), with a warning."""
     zones = {}
     for z in data.get("zones", []):
-        c = _parse_coords(z)
+        c = xy(z)
         if c:
             zones[c] = z
     day = data["meta"].get("day")

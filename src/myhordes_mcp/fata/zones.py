@@ -2,16 +2,15 @@
 
 from ..utils.clock import data_updated
 from .bank import summary_lines
+from .geo import km, moves, xy
 from .risk import (
     DANGER_LEVELS,
     _build_spread_map,
-    _parse_coords,
     _staleness_tag,
     _zone_freshness,
     _zone_status,
     _zone_threat,
     fmt_items,
-    km,
     never_visited,
     respawn_check,
     zone_is_today,
@@ -114,8 +113,8 @@ def _ruin_line(z: dict, current_day) -> str:
     bp = " [BLUEPRINT]" if r.get("blueprint_available") else ""
     dried = " (dried)" if r.get("dried") else ""
     digs = f", {r['digs_remaining']} digs left" if r.get("digs_remaining") not in (None, "0", 0) else ""
-    x, y = _parse_coords(z)
-    return (f"  {z['coords']} {abs(x) + abs(y)} AP: {r['name']}{bp}{dried}{digs}"
+    x, y = xy(z)
+    return (f"  {z['coords']} {moves((x, y))} AP: {r['name']}{bp}{dried}{digs}"
             f"{_zone_threat(z)}{_zone_status(z)}{_zone_freshness(z, current_day)}")
 
 
@@ -132,7 +131,7 @@ def format_zones(data: dict, item: str = "") -> str:
         return _format_item_search(data, item)
 
     current_day = meta.get("day")
-    ruins = sorted((z for z in zones if z.get("ruin")), key=lambda z: (abs(_parse_coords(z)[0]) + abs(_parse_coords(z)[1])))
+    ruins = sorted((z for z in zones if z.get("ruin")), key=lambda z: moves(xy(z)))
     item_zones = [z for z in zones if z.get("items")]
     merged: dict = {}
     for z in item_zones:
@@ -143,7 +142,7 @@ def format_zones(data: dict, item: str = "") -> str:
             else:
                 merged[key] = dict(i)
     ground = sorted(merged.values(), key=lambda i: (i["name"].lower(), i["broken"]))
-    outside = [c for c in data.get("citizens", []) if not c["inside_town"] and _parse_coords(c)]
+    outside = [c for c in data.get("citizens", []) if not c["inside_town"] and xy(c)]
 
     lines = [
         f"## Desert overview — {meta.get('town_name', '?')} Day {current_day}",
@@ -165,9 +164,9 @@ def format_zones(data: dict, item: str = "") -> str:
         for c in outside:
             by_zone.setdefault(c["coords"], []).append(c["name"])
         lines.append(f"### Citizens outside ({len(outside)}, farthest first)")
-        for coords in sorted(by_zone, key=lambda k: -sum(map(abs, _parse_coords({"coords": k})))):
-            x, y = _parse_coords({"coords": coords})
-            lines.append(f"  {coords} {abs(x) + abs(y)} AP: {', '.join(by_zone[coords])}")
+        for coords in sorted(by_zone, key=lambda k: -moves(xy(k))):
+            x, y = xy(coords)
+            lines.append(f"  {coords} {moves((x, y))} AP: {', '.join(by_zone[coords])}")
     return "\n".join(lines).rstrip()
 
 
@@ -182,8 +181,8 @@ def _format_item_search(data: dict, item: str) -> str:
     for z in data["zones"]:
         found = [i for i in z.get("items", []) if q in i["name"].lower()]
         if found:
-            x, y = _parse_coords(z)
-            hits.append((abs(x) + abs(y), z, found))
+            x, y = xy(z)
+            hits.append((moves((x, y)), z, found))
     hits.sort(key=lambda h: (h[0], h[1]["coords"]))
     total = sum(i["count"] for _, _, f in hits for i in f)
     lines = [f"## '{item}' on the ground — {meta.get('town_name', '?')} Day {current_day}",
@@ -226,12 +225,12 @@ def format_zone_path(
 
     in_range = []
     for z in zones:
-        coords = _parse_coords(z)
+        coords = xy(z)
         if coords is None:
             continue
         rx, ry = coords
         if min_x <= rx <= max_x and min_y <= ry <= max_y:
-            ap = abs(rx) + abs(ry)
+            ap = moves((rx, ry))
             in_range.append((ap, z, rx, ry))
 
     current_day = meta.get("day")
@@ -241,7 +240,7 @@ def format_zone_path(
     # Build full zone_map for spread simulation (all explored zones, not just bbox)
     zone_map: dict[tuple[int, int], dict] = {}
     for z in zones:
-        c = _parse_coords(z)
+        c = xy(z)
         if c:
             zone_map[c] = z
     spread_map = _build_spread_map(zone_map, current_day if isinstance(current_day, int) else None)

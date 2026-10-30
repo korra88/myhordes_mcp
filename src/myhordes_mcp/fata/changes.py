@@ -12,7 +12,8 @@ from ..utils.clock import GAME_TZ, data_updated, fmt_epoch
 from ..utils.config import PLAYER_NAME
 from . import archive
 from .client import fetch_town_data
-from .risk import _parse_coords, format_trapped, night_alerts, trapped_citizens
+from .geo import moves, xy
+from .risk import format_trapped, night_alerts, trapped_citizens
 
 # Items inspect-town tracks for deposits and withdrawals.
 CRITICAL_ITEMS = [
@@ -25,7 +26,7 @@ OTHER_BANK_LINES = 8
 
 
 def _xy(coords: str) -> tuple[int, int]:
-    return _parse_coords({"coords": coords}) or (0, 0)
+    return xy(coords) or (0, 0)
 
 
 def platform_discount(level: int | None) -> int:
@@ -42,12 +43,12 @@ def _move_cost(a: dict, b: dict, discount: int) -> int:
         return 0
     if a["inside"]:
         x, y = _xy(b["coords"])
-        return abs(x) + abs(y)
+        return moves((x, y))
     x1, y1 = _xy(a["coords"])
     if b["inside"]:
-        return max(0, abs(x1) + abs(y1) - discount)
+        return max(0, moves((x1, y1)) - discount)
     x2, y2 = _xy(b["coords"])
-    return abs(x2 - x1) + abs(y2 - y1)
+    return moves((x1, y1), (x2, y2))
 
 
 def day_movement(snaps: list[dict]) -> dict[str, dict]:

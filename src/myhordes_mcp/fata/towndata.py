@@ -46,7 +46,7 @@ Field meanings checked against the game with players in town 8212:
                      source, route [{x, y}, ...] (absolute corners; the first one is
                      the town, straight segments between them), instructions
                      null | {"<step>": text}} (step 1 = first zone after the town)
-  km                 rounded Euclidean distance to town, matches risk.km()
+  km                 rounded Euclidean distance to town, matches geo.km()
                      (676/676 zones, town 8212, 2026-10-16)
 """
 

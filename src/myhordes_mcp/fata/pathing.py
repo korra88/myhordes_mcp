@@ -4,16 +4,15 @@ import heapq
 from dataclasses import dataclass, field
 
 from ..utils.clock import data_updated
+from .geo import km, moves, xy
 from .risk import (
     DANGER_LEVELS,
     DANGER_MAX_EST,
     _build_spread_map,
-    _parse_coords,
     _spread_risk_for_clear,
     _staleness_tag,
     _zombie_max_estimate,
     fmt_items,
-    km,
     platform_level,
     teleport_range,
 )
@@ -220,12 +219,12 @@ def zone_grid(data: dict) -> ZoneGrid:
     current_day = data["meta"].get("day")
     zone_map: dict[tuple[int, int], dict] = {}
     for z in data.get("zones", []):
-        coords = _parse_coords(z)
+        coords = xy(z)
         if coords:
             zone_map[coords] = z
     map_coords = set(zone_map.keys())
     for z in data.get("scout", []):
-        coords = _parse_coords(z)
+        coords = xy(z)
         if coords and coords not in map_coords:
             zone_map[coords] = {"coords": z["coords"], "zombies": z["zombies"], "danger": 0, "items": [], "ruin": None, "scouted_day": z.get("scouted_day")}
     cd = current_day if isinstance(current_day, int) else None
@@ -393,7 +392,7 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2,
     level = platform_level(data) if start == (0, 0) else None
     reach = teleport_range(level)
     if reach and km(*dest) <= reach:
-        return {"route": [dest], "teleport_from": dest, "saved_ap": abs(dest[0]) + abs(dest[1]),
+        return {"route": [dest], "teleport_from": dest, "saved_ap": moves(dest),
                 "level": level, "reused": [], "retrace_ap": len(out) - 1}
     if reach:
         ends = [(x, y) for x in range(-reach, reach + 1) for y in range(-reach, reach + 1)
@@ -401,7 +400,7 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2,
     else:
         ends = [start]
     walked = frozenset(out[1:-1]) - {start}
-    dried = {c for z in data.get("zones", []) if z.get("dried") and (c := _parse_coords(z))}
+    dried = {c for z in data.get("zones", []) if z.get("dried") and (c := xy(z))}
     last = len(out) - 1
     # Walking the way out backwards stops at the first zone the platform teleports from.
     retrace = last - next((j for j in range(last - 1, 0, -1) if reach and km(*out[j]) <= reach), 0)
@@ -417,7 +416,7 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2,
         reused = [c for c in route[1:] if c in walked]
         no_dig = sum(1 for c in route[1:] if c in walked or c in dried)
         key = (len(route) - 1 + rw * no_dig, res["risk"],
-               -(abs(end[0]) + abs(end[1])))
+               -moves(end))
         if best is None or key < best[0]:
             best = (key, route, end, reused)
     if best is None:
@@ -425,7 +424,7 @@ def loop_return(data: dict, out: list[tuple[int, int]], group_cp: int = 2,
     _, route, end, reused = best
     tele = end if reach else None
     return {"route": route, "teleport_from": tele,
-            "saved_ap": abs(end[0]) + abs(end[1]) if tele else 0, "level": level,
+            "saved_ap": moves(end) if tele else 0, "level": level,
             "reused": reused, "retrace_ap": retrace}
 
 
@@ -761,7 +760,7 @@ def find_safe_path(
 # (knowledge/tactics/expedition-planning.md)
 # ---------------------------------------------------------------------------
 
-EP_MIN_KM = 3            # EP pays for moves leaving a zone 3+ km (risk.km) from town
+EP_MIN_KM = 3            # EP pays for moves leaving a zone 3+ km (geo.km) from town
 THIRSTY_AT, DEHYDRATED_AT, DEATH_AT = 11, 22, 33
 
 

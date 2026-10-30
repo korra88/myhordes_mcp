@@ -22,7 +22,7 @@ How to move one rule:
 | Consumables restore to a level, once-a-day limits, drugs/addiction, alcohol | `fata/supplies.py` | `plan_expedition_supplies` |
 | Thirst step counter (11/22/33), only water resets it | `fata/supplies.py`, `fata/pathing.py` | `plan_expedition_supplies`, `find_expedition_path` |
 | EP: paid first leaving a 3+ km zone, refill only shoes/bike part | `fata/supplies.py` | `plan_expedition_supplies` |
-| Manhattan move cost, rounded-Euclidean km | `fata/risk.py:km`, `fata/pathing.py` | route tools |
+| Manhattan move cost, rounded-Euclidean km | `fata/geo.py:km`, `fata/pathing.py` | route tools |
 | Observation Platform teleport range, Labyrinth entry cost | `fata/risk.py:teleport_range`, `fata/changes.py:platform_discount` | supplies, `get_town_changes` |
 | Rucksack slots along a trip: `slots` free at departure (default 5 = 4 + Enduring 1); at each pickup, supplies still to use (a use at the pickup zone counts as made) + items picked so far ≤ slots, a picked item takes a slot heavy or not; supplies are never dropped (plan redone with fewer departure slots only if thirst/AP outcome stays the same, else not feasible + slots missing) | `fata/pickups.py` (`fit`, `timeline`) | `plan_expedition_supplies` (`slots`, `pickups`) |
 | Heavy items: one per citizen (bike, trolley and heavy pickups count; more is refused); Guardian (`guardian`) carries two, group CP -2 on every leg after the 2nd heavy pickup (per-leg CP in `search_route`, `route_risks`) | `fata/pickups.py` (`heavy_check`, `leg_cps`), `fata/pathing.py` | `plan_expedition_supplies` |

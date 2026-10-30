@@ -1,9 +1,9 @@
 """Shared zone helpers: coordinates, data freshness, zombie spread and threat estimates."""
 
-import re
 from datetime import datetime
 
 from ..utils.clock import age_text, data_datetime, now
+from .geo import km, moves, xy
 
 # Evening alerts. By day an open gate, citizens far out and defense below the
 # estimate are all normal; they become alarms as the attack (23:59, game time)
@@ -55,14 +55,14 @@ def gate_line(data: dict, at: datetime | None = None) -> str:
 
 def outside_alert(data: dict, at: datetime | None = None, farthest: int = 5) -> str | None:
     """Citizens still outside from 22:00, farthest first (moves = AP to walk home)."""
-    out = [c for c in data.get("citizens", []) if not c["inside_town"] and _parse_coords(c)]
+    out = [c for c in data.get("citizens", []) if not c["inside_town"] and xy(c)]
     if not out:
         return None
     ev = _evening(data, OUTSIDE_WARN_FROM, at)
     if ev is None:
         return None
     when, old = ev
-    rows = sorted(((abs(x) + abs(y), km(x, y), c) for c in out for x, y in [_parse_coords(c)]),
+    rows = sorted(((moves((x, y)), km(x, y), c) for c in out for x, y in [xy(c)]),
                   key=lambda r: -r[0])
     reach = teleport_range(platform_level(data))
     near = sum(1 for _, k, _ in rows if k <= reach) if reach else 0
@@ -327,14 +327,6 @@ def _zone_status(zone: dict) -> str:
     return "".join(f", {p}" for p in parts)
 
 
-def _parse_coords(zone: dict) -> tuple[int, int] | None:
-    """Extract (rx, ry) integers from a zone's coords string '[rx|ry]'."""
-    m = re.match(r"\[(-?\d+)\|(-?\d+)\]", zone.get("coords", ""))
-    if not m:
-        return None
-    return int(m.group(1)), int(m.group(2))
-
-
 # ---------------------------------------------------------------------------
 # Trapped citizens (zombies outnumber the citizens' control points)
 # ---------------------------------------------------------------------------
@@ -350,12 +342,6 @@ def platform_level(data: dict) -> int | None:
         if b["name"].lower() == OBSERVATION_PLATFORM.lower() and b["built"]:
             return b.get("level") or 0
     return None
-
-
-def km(x: int, y: int) -> int:
-    """The game's zone distance: Euclidean, rounded half up (Zone::getDistance).
-    Decides EP use (>= 3 km) and the Observation Platform teleport range."""
-    return int((x * x + y * y) ** 0.5 + 0.5)
 
 
 def teleport_range(level: int | None) -> int:
@@ -404,7 +390,7 @@ def zone_reach(data: dict, x: int, y: int) -> list[str]:
     if not heroic.startswith("out of range"):
         heroic += "; works with the gate closed"
     return [
-        f"Distance: {abs(x) + abs(y)} moves from town (AP/EP to walk it) · {dist} km",
+        f"Distance: {moves((x, y))} moves from town (AP/EP to walk it) · {dist} km",
         f"EP zone: {ep}",
         f"Observation Platform teleport: {tele}",
         f"Heroic Return (Reclusive): {heroic}",
@@ -535,8 +521,8 @@ def trapped_citizens(data: dict) -> list[dict]:
         cp = exact if exact is not None else CP_PER_CITIZEN * len(people)
         if zone["zombies"] <= cp:
             continue
-        xy = _parse_coords(zone)
-        dist = km(*xy) if xy else None
+        cell = xy(zone)
+        dist = km(*cell) if cell else None
         hits.append({
             "coords": coords,
             "citizens": [c["name"] for c in people],

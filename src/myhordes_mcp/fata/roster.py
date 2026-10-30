@@ -8,7 +8,7 @@ listed + scrappers + unaccounted = outside.
 import re
 
 from .cp import citizen_key
-from .risk import _parse_coords
+from .geo import moves, xy
 from ..utils.clock import data_updated
 
 # Forum icons per Fata job display name (parse.JOB_NAMES values).
@@ -37,8 +37,8 @@ def roster(data: dict, listed: list[str] | None = None) -> dict:
     for c in data["citizens"]:
         if c["inside_town"]:
             continue
-        x, y = _parse_coords({"coords": c["coords"]}) or (0, 0)
-        outside.append({**c, "distance": abs(x) + abs(y), "icon": icon(c)})
+        x, y = xy(c["coords"]) or (0, 0)
+        outside.append({**c, "distance": moves((x, y)), "icon": icon(c)})
 
     listed = listed or []
     wanted = {citizen_key(n): n for n in listed}
