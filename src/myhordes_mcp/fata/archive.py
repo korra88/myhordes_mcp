@@ -18,6 +18,7 @@ import unicodedata
 from pathlib import Path
 
 from ..utils.config import TOWNS_DIR
+from .towndata import estimation_entry
 
 
 def _find_town_dir(town_id: int) -> Path | None:
@@ -177,14 +178,8 @@ def _write_estimations(cache_dir: Path, data: dict) -> None:
     _est_file(cache_dir).write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
 
 
-def _est_entry(est) -> dict | None:
-    if not isinstance(est, dict) or est.get("min") is None:
-        return None
-    return {"min": est["min"], "max": est.get("max"), "maxed": int(bool(est.get("maxed")))}
-
-
 def _save_estimation(cache_dir: Path, day: int, est, *, final: bool) -> None:
-    entry = _est_entry(est)
+    entry = estimation_entry(est)
     data = _load_estimations(cache_dir)
     if entry is None or (str(day) in data["final"] and not final):
         return
@@ -223,7 +218,7 @@ def estimation_history(town_id: int, before_day: int) -> dict:
         if not m or str(int(m.group(1))) in data["towndata"]:
             continue
         raw = load_towndata(town_id, int(m.group(1)))
-        entry = _est_entry(((raw or {}).get("town_info") or {}).get("estimation_today"))
+        entry = estimation_entry(((raw or {}).get("town_info") or {}).get("estimation_today"))
         if entry:
             data["towndata"][str(int(m.group(1)))] = entry
             changed = True

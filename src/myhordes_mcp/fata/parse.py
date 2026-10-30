@@ -3,7 +3,7 @@
 import re
 
 from .geo import fmt_xy
-from .towndata import DEATH_TYPES, JOB_NAMES
+from .towndata import DEATH_TYPES, JOB_NAMES, link_parents
 
 
 def _build_result(town_id: int, js_data: dict) -> dict:
@@ -248,17 +248,7 @@ def _parse_buildings(js_data: dict) -> list[dict]:
             "resources": resources,
         })
 
-    # Second pass: resolve parent names now that all buildings are parsed
-    id_to_name = {b["id"]: b["name"] for b in buildings}
-    for b in buildings:
-        pid = b["parent_id"]
-        if pid and pid != "0":
-            b["parent_name"] = id_to_name.get(pid)
-            b["parent_built"] = pid in built_ids
-        else:
-            b["parent_name"] = None
-            b["parent_built"] = True  # no prerequisite = effectively satisfied
-
+    link_parents(buildings)
     return buildings
 
 

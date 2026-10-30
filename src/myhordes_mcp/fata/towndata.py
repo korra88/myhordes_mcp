@@ -215,15 +215,16 @@ def _bank_water(bank: list[dict]) -> int:
     return sum(b.get("count", 0) for b in bank if b.get("id") == 1 and not b.get("broken"))
 
 
-def _est(e) -> dict:
+def estimation_entry(e) -> dict | None:
+    """{min, max, maxed} of a /towndata attack estimate (maxed as 0/1), None if it has no min."""
     if not isinstance(e, dict) or e.get("min") is None:
-        return {}
-    return {"min": e.get("min"), "max": e.get("max"), "maxed": int(bool(e.get("maxed")))}
+        return None
+    return {"min": e["min"], "max": e.get("max"), "maxed": int(bool(e.get("maxed")))}
 
 
 def _parse_estimations(ti: dict, history: dict | None) -> dict:
-    today = _est(ti.get("estimation_today"))
-    tomorrow = _est(ti.get("estimation_tomorrow"))
+    today = estimation_entry(ti.get("estimation_today")) or {}
+    tomorrow = estimation_entry(ti.get("estimation_tomorrow")) or {}
     hist = dict(history or {})
     day = ti.get("day")
     if today and day is not None:
@@ -381,6 +382,13 @@ def _parse_buildings(constructions: dict, catalogue: list[dict], items: dict, *,
             "resources": resources,
         })
 
+    link_parents(buildings)
+    return buildings
+
+
+def link_parents(buildings: list[dict]) -> None:
+    """Set parent_name and parent_built on each building, once all are parsed. No
+    prerequisite (parent_id empty or "0") counts as built."""
     built_ids = {b["id"] for b in buildings if b["built"]}
     id_to_name = {b["id"]: b["name"] for b in buildings}
     for b in buildings:
@@ -391,7 +399,6 @@ def _parse_buildings(constructions: dict, catalogue: list[dict], items: dict, *,
         else:
             b["parent_name"] = None
             b["parent_built"] = True
-    return buildings
 
 
 def _parse_scout(maps: list[dict], rel, who) -> list[dict]:
