@@ -41,3 +41,12 @@ def num(x) -> str:
 def plural(n, word: str, plural_form: str | None = None) -> str:
     """'1 slot', '3 slots' ('1 supply', '2 supplies' with plural_form)."""
     return f"{num(n)} {word if n == 1 else plural_form or word + 's'}"
+
+
+def ruin_label(ruin: dict) -> str:
+    """'Name [BLUEPRINT], 3 digs left (dried)': blueprint still there, digs left, ruin
+    depleted (the ruin's own `dried`, not the zone's)."""
+    digs = int(ruin.get("digs_remaining") or 0)
+    return (ruin["name"] + (" [BLUEPRINT]" if ruin.get("blueprint_available") else "")
+            + (f", {plural(digs, 'dig')} left" if digs else "")
+            + (" (dried)" if ruin.get("dried") else ""))

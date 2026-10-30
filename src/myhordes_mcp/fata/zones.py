@@ -1,6 +1,6 @@
 """Map formatters: scout data, ruins/ground items, zones in a bounding box."""
 
-from ..utils.fmt import header, heading, plural, updated
+from ..utils.fmt import header, heading, plural, ruin_label, updated
 from ..utils.clock import data_updated
 from .bank import summary_lines
 from .geo import fmt_xy, km, moves, xy, zone_map
@@ -110,11 +110,8 @@ def format_scout(data: dict) -> str:
 
 def _ruin_line(z: dict, current_day) -> str:
     r = z["ruin"]
-    bp = " [BLUEPRINT]" if r.get("blueprint_available") else ""
-    dried = " (dried)" if r.get("dried") else ""
-    digs = f", {r['digs_remaining']} digs left" if r.get("digs_remaining") not in (None, "0", 0) else ""
     x, y = xy(z)
-    return (f"  {z['coords']} {moves((x, y))} AP: {r['name']}{bp}{dried}{digs}"
+    return (f"  {z['coords']} {moves((x, y))} AP: {ruin_label(r)}"
             f"{_zone_threat(z)}{_zone_status(z)}{_zone_freshness(z, current_day)}")
 
 
@@ -261,9 +258,7 @@ def format_zone_path(
         ruin = z.get("ruin")
 
         if ruin:
-            bp = " [BLUEPRINT]" if ruin.get("blueprint_available") else ""
-            digs = f", {ruin['digs_remaining']} digs left" if ruin.get("digs_remaining") not in (None, "0", 0) else ""
-            label = f" {ruin['name']}{bp}{digs}"
+            label = f" {ruin_label(ruin)}"
         else:
             label = ""
 

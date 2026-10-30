@@ -3,7 +3,7 @@
 import heapq
 from dataclasses import dataclass, field
 
-from ..utils.fmt import header, plural
+from ..utils.fmt import header, plural, ruin_label
 from .geo import (EP_MIN_KM, MAX_PATH_AP, NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km,
                   map_bounds, moves, zone_map)
 from .risk import (
@@ -676,7 +676,7 @@ def find_safe_path(
         ruin = z.get("ruin") if z else None
         ruin_str = " [WAYPOINT]" if (px, py) in wp_set else ""
         if ruin:
-            ruin_str += f" | {ruin['name']}" + (" [BLUEPRINT]" if ruin.get("blueprint_available") else "")
+            ruin_str += f" | {ruin_label(ruin)}"
         if z and z.get("dried"):
             ruin_str += " | depleted"
         elif z and z.get("scav_level"):
