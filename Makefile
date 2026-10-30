@@ -8,6 +8,7 @@
 #   make clean-kb     Remove processed output (keeps raw wiki)
 #   make clean-all    Remove everything (raw wiki + processed)
 #   make discord-listen  Answer Discord mentions (../discord_mcp listener)
+#   make golden       Check every tool's output against the recorded goldens (tests/golden.py)
 
 -include .env
 export
@@ -30,7 +31,8 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 
 .PHONY: kb fetch process clean-kb clean-all help advisor persona town discord-listen discord-listen-once \
 	discord-service-install discord-service-disable discord-service-uninstall \
-	towns-commit towns-commit-install towns-commit-disable towns-commit-uninstall
+	towns-commit towns-commit-install towns-commit-disable towns-commit-uninstall \
+	golden golden-update golden-freeze
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -147,3 +149,14 @@ towns-commit-uninstall: ## Stop the nightly towns-commit timer and remove its un
 	-systemctl --user disable --now towns-commit.timer
 	rm -f $(UNIT_DIR)/towns-commit.service $(UNIT_DIR)/towns-commit.timer
 	systemctl --user daemon-reload
+
+# ─── Golden-output tests (offline; fixtures and outputs stay local in tests/golden/) ───
+
+golden: ## Check every tool's output against the recorded goldens (exit 1 on a difference)
+	@.venv/bin/python tests/golden.py
+
+golden-update: ## Record the current tool outputs as the goldens (review the change first)
+	@.venv/bin/python tests/golden.py --update
+
+golden-freeze: ## Copy the fixture towns from towns/ and fetch the Gest'Hordes stats once
+	@.venv/bin/python tests/golden.py --freeze

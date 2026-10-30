@@ -33,3 +33,6 @@ persona.md
 # Discord listener config (local — copy from the *.example.* files)
 discord-listener.toml
 discord-listener.mcp.json
+
+# Golden-test fixtures and outputs: real town data (tests/golden.py)
+tests/golden/
