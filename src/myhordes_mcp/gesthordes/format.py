@@ -43,7 +43,7 @@ def format_attack_forecast(data: dict) -> str:
     """Format the attack forecast from Gest'Hordes stats. Defense is left out: the
     tools take it from Fata only (get_defense_status, get_night_report)."""
     if has_error(data):
-        return f"Error fetching Gest'Hordes stats: {data['error']}"
+        return f"Error: {data['error']}"
 
     stats, ville = _ville(data)
 
@@ -136,7 +136,7 @@ def format_attack_distribution(data: dict) -> str:
     per day — to compute median, 25th/75th percentiles, min, max, and sample count.
     """
     if has_error(data):
-        return f"Error fetching Gest'Hordes stats: {data['error']}"
+        return f"Error: {data['error']}"
 
     stats, ville = _ville(data)
 

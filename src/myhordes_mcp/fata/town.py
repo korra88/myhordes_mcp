@@ -65,7 +65,7 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
                 plus the complete bank item list and death log.
     """
     if data.get("error"):
-        return f"Error fetching town data: {data['error']}"
+        return f"Error: {data['error']}"
 
     meta = data["meta"]
     defense = data["defense"]

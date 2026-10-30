@@ -199,4 +199,4 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
                 lines.append(_available_line(b, locked=True, include_resources=include_resources))
         return "\n".join(lines)
 
-    return f"Unknown mode '{mode}'. Use: summary, history, available."
+    return f"Error: unknown mode '{mode}'. Use: summary, history, available."
