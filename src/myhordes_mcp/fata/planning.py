@@ -5,7 +5,8 @@ model reasons over a ranked list instead of doing arithmetic.
 """
 
 from .bank import _CLEAN_WATER, _sum_items, defense_count, totals
-from .buildings import PRIVATE_TOWN_BUILDINGS
+from .buildings import (WATER_FILTERS, has_blueprint, is_buildable, upgrades_by_day,
+                        visible)
 from ..utils.clock import data_updated
 
 # Daily AP of one citizen used for town budgets (6 AP base + food/water/drugs).
@@ -24,7 +25,6 @@ WATER_PRODUCERS = {
     "Pump", "Drilling Rig", "Eden Project", "Divining Rocket",
     "Mechanical Pump", "Divining Rods", "No Holes Barred",
 }
-WATER_FILTERS = {"Water Purifier", "Water Filter"}
 JERRYCAN = "Full Jerrycan"
 JERRYCANS_FOR_FILTER = 10
 
@@ -72,23 +72,18 @@ def build_options(data: dict, include_private: bool = False) -> dict:
     bank = data["bank"]
     have = totals(bank, intact_only=True)
     buildings = data["buildings"]
-    if not include_private:
-        buildings = [b for b in buildings if b["name"] not in PRIVATE_TOWN_BUILDINGS]
+    buildings = visible(buildings, include_private)
     by_id = {b["id"]: b for b in buildings}
 
-    def buildable(b: dict) -> bool:
-        return (not b["built"] and b.get("parent_built", True)
-                and (b.get("rarity", 0) == 0 or b.get("blueprint_found")))
-
-    options = [_option(b, have) for b in buildings if buildable(b)]
-    buildable_ids = {b["id"] for b in buildings if buildable(b)}
+    options = [_option(b, have) for b in buildings if is_buildable(b)]
+    buildable_ids = {b["id"] for b in buildings if is_buildable(b)}
 
     # One step of prerequisite chaining: locked buildings whose parent is buildable now.
     chains = []
     for b in buildings:
         if b["built"] or b.get("parent_built", True):
             continue
-        if b.get("rarity", 0) > 0 and not b.get("blueprint_found"):
+        if not has_blueprint(b):
             continue
         parent = by_id.get(b.get("parent_id"))
         if parent is None or parent["id"] not in buildable_ids:
@@ -125,7 +120,7 @@ def build_options(data: dict, include_private: bool = False) -> dict:
         "construction_ap": round(alive * AP_PER_CITIZEN * CONSTRUCTION_SHARE),
         "armor_items": armor,
         "focus_built": bool(focus and focus["built"]),
-        "focus_buildable": bool(focus and buildable(focus)),
+        "focus_buildable": bool(focus and is_buildable(focus)),
         "focus_parent": focus.get("parent_name") if focus else None,
         "jerrycans": have.get(JERRYCAN, 0),
         "options": options,
@@ -294,12 +289,10 @@ def construction_history(data: dict, gh: dict | None = None) -> list[dict]:
     built = [b for b in data["buildings"] if b["built"]]
 
     builds: dict[int, list] = {}
-    upgrades: dict[int, list] = {}
     for b in built:
         if b.get("built_day") is not None:
             builds.setdefault(int(b["built_day"]), []).append(b)
-        for day, level in (b.get("upgrade_days") or {}).items():
-            upgrades.setdefault(int(day), []).append((b["name"], level - 1, level))
+    upgrades = upgrades_by_day(built)
 
     night_deaths = deaths_by_day(data)
     alive = alive_by_day(data)

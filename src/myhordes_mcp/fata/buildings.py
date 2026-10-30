@@ -1,13 +1,49 @@
 """Building formatters: today's builds, history, available constructions."""
 
 from ..utils.clock import data_updated
+from .blueprints import TIERS
 
 
 # Fata returns rarityCurrent=0 for private-town buildings — rarity filter won't catch them.
 # Hardcoded exclusion list is the only reliable approach.
 PRIVATE_TOWN_BUILDINGS = {"Holy Raincloud", "Spirit Mirage", "Sword of Bokor", "XXL Voodoo Doll"}
 
-_RARITY_LABEL = {0: None, 1: "bp:common", 2: "bp:uncommon", 3: "bp:rare", 4: "bp:very rare"}
+_RARITY_LABEL = {0: None, **{rarity: f"bp:{tier}" for rarity, tier in TIERS.items()}}
+WATER_FILTERS = {"Water Purifier", "Water Filter"}
+
+
+def visible(buildings: list[dict], include_private: bool = False) -> list[dict]:
+    """The buildings, without the private-town-only ones unless include_private."""
+    if include_private:
+        return buildings
+    return [b for b in buildings if b["name"] not in PRIVATE_TOWN_BUILDINGS]
+
+
+def has_blueprint(b: dict) -> bool:
+    """No blueprint needed (rarity 0) or the blueprint was found."""
+    return b.get("rarity", 0) == 0 or bool(b.get("blueprint_found"))
+
+
+def is_buildable(b: dict) -> bool:
+    """Not built, parent built and blueprint not missing."""
+    return not b["built"] and b.get("parent_built", True) and has_blueprint(b)
+
+
+def has_water_filter(buildings: list[dict]) -> bool:
+    return any(b["built"] and b["name"] in WATER_FILTERS for b in buildings)
+
+
+def upgrades_by_day(built: list[dict]) -> dict[int, list[tuple[str, int, int]]]:
+    """Free-vote upgrades of the built buildings: {day: [(name, old level, new level)]}."""
+    out: dict[int, list[tuple[str, int, int]]] = {}
+    for b in built:
+        for day_str, new_level in (b.get("upgrade_days") or {}).items():
+            try:
+                day, level = int(day_str), int(new_level)
+            except (ValueError, TypeError):
+                continue
+            out.setdefault(day, []).append((b["name"], level - 1, level))
+    return out
 
 
 def _building_line(b: dict, show_day: bool = False) -> str:
@@ -62,8 +98,6 @@ def _build_history_lines(built: list) -> list[str]:
         return lines
 
     day_builds: dict[int, list] = {}
-    day_upgrades: dict[int, list] = {}
-
     for b in built:
         bd = b.get("built_day")
         if bd is not None:
@@ -73,15 +107,7 @@ def _build_history_lines(built: list) -> list[str]:
                 key = 0
             day_builds.setdefault(key, []).append(b)
 
-        udays = b.get("upgrade_days")
-        if udays:
-            for day_str, new_level in udays.items():
-                try:
-                    uday = int(day_str)
-                    nlevel = int(new_level)
-                except (ValueError, TypeError):
-                    continue
-                day_upgrades.setdefault(uday, []).append((b["name"], nlevel - 1, nlevel))
+    day_upgrades = upgrades_by_day(built)
 
     all_days = sorted(set(day_builds.keys()) | set(day_upgrades.keys()))
     lines = [f"### Built — construction history (total defense from buildings: {total_def})"]
@@ -115,8 +141,7 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
     if not buildings:
         return "No building data available."
 
-    if not include_private:
-        buildings = [b for b in buildings if b["name"] not in PRIVATE_TOWN_BUILDINGS]
+    buildings = visible(buildings, include_private)
 
     current_day = meta.get("day")
     built = [b for b in buildings if b["built"]]
@@ -128,12 +153,7 @@ def format_buildings(data: dict, mode: str = "summary", include_private: bool = 
     if mode == "summary":
         today = [b for b in built if b.get("built_day") == current_day]
         # Also collect upgrades that happened today
-        today_upgrades: list[tuple[str, int, int]] = []
-        for b in built:
-            udays = b.get("upgrade_days") or {}
-            for day_key, new_level in udays.items():
-                if int(day_key) == current_day:
-                    today_upgrades.append((b["name"], new_level - 1, new_level))
+        today_upgrades = upgrades_by_day(built).get(current_day, [])
 
         lines = [header, f"{len(built)} built total — defense from buildings: {total_def}", ""]
         if not today and not today_upgrades:

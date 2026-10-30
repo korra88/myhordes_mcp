@@ -1,6 +1,8 @@
 """Bank formatters: full item list and strategic summary."""
 
 from ..utils.clock import data_updated
+from .blueprints import TIERS
+from .buildings import has_water_filter
 
 
 def format_bank(data: dict) -> str:
@@ -278,10 +280,7 @@ def summary_lines(bank: list[dict], buildings: list[dict] | None = None, *,
 
     # Clean water — check if Water Filter / Water Purifier is built
     buildings = buildings or []
-    has_purifier = any(
-        b["built"] and b["name"] in ("Water Filter", "Water Purifier")
-        for b in buildings
-    )
+    has_purifier = has_water_filter(buildings)
     water_names = _CLEAN_WATER | (_CONDITIONAL_WATER if has_purifier else set())
     twater, itemswater = _sum_items(bank, water_names)
     purifier_note = " (incl. purifiable)" if has_purifier else ""
@@ -335,7 +334,7 @@ def summary_lines(bank: list[dict], buildings: list[dict] | None = None, *,
                                    for n, *_ in itemsbp_ruin)
             ruin_detail = f"; ruin: {tbp_ruin} ({ruin_names}){bp_hint}"
         bp_parts = []
-        for tier, count in (("common", tbp_common), ("uncommon", tbp_uncommon), ("rare", tbp_rare), ("very rare", tbp_vrare)):
+        for tier, count in zip(TIERS.values(), (tbp_common, tbp_uncommon, tbp_rare, tbp_vrare)):
             bp_parts.append(f"{tier} {count}")
         lines.append(f"**Blueprints:** {', '.join(bp_parts)}{ruin_detail}")
 
