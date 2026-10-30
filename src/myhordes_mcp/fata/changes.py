@@ -13,7 +13,7 @@ from ..utils.config import PLAYER_NAME
 from . import archive
 from .client import fetch_town_data
 from .geo import moves, xy
-from .risk import format_trapped, platform_return_saving, night_alerts, trapped_citizens
+from .risk import night_alerts, platform_return_saving, trapped_lines
 
 # Items inspect-town tracks for deposits and withdrawals.
 CRITICAL_ITEMS = [
@@ -148,7 +148,7 @@ def format_town_changes(data: dict, snaps: list[dict], ref: dict | None, ref_lab
             lines.append(f"  {w['name']} ~{w['ap']} AP ({pos})")
         lines.append("")
 
-    warnings = format_trapped(trapped_citizens(data), fmt_epoch)
+    warnings = trapped_lines(data)
     warnings += night_alerts(data)
     zones = {z["coords"]: z for z in data["zones"]}
     dried = sorted(c["name"] for c in data["citizens"]

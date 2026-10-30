@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from ..utils.clock import age_text, data_datetime, now
+from ..utils.clock import age_text, data_datetime, fmt_epoch, now
 from .geo import EP_MIN_KM, NEIGHBOURS8, km, moves, xy
 
 # Evening alerts. By day an open gate, citizens far out and defense below the
@@ -565,3 +565,8 @@ def format_trapped(hits: list[dict], fmt_time) -> list[str]:
             cp = f"≥{h['cp_min']} CP"
         lines.append(f"  {', '.join(h['citizens'])} {h['coords']}{extra}: {h['zombies']} zombies vs {cp} ({when}){tp}")
     return lines
+
+
+def trapped_lines(data: dict) -> list[str]:
+    """The trapped-citizens warning for a town, as tool lines (empty if nobody is)."""
+    return format_trapped(trapped_citizens(data), fmt_epoch)

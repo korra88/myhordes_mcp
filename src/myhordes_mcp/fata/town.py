@@ -1,17 +1,29 @@
 """Town-level formatters: overview, citizens, defense."""
 
-from ..utils.clock import data_updated, fmt_epoch
+from ..utils.clock import data_updated
 from .cp import cp_label
 from .risk import (
     _staleness_tag,
     defense_alert,
     defense_status,
-    format_trapped,
     gate_line,
     night_alerts,
     outside_alert,
-    trapped_citizens,
+    trapped_lines,
 )
+
+
+def _who(c: dict) -> str:
+    shaman = " [Shaman]" if c["is_shaman"] else ""
+    return f"{c['name']} ({c['job']}{shaman})"
+
+
+def _stale(c: dict, meta: dict) -> str:
+    """Position age tag; citizen positions are auto-synced unless the town is in
+    chaos/devastated mode."""
+    if not (meta.get("chaos") or meta.get("devastated")):
+        return ""
+    return _staleness_tag(c.get("last_update_day"), meta.get("day"))
 
 
 TOWN_SIZE = 40  # citizens a standard town needs before its first attack
@@ -62,7 +74,6 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
     citizens = data["citizens"]
     deaths = data["deaths"]
     bank = data["bank"]
-    current_day = meta.get("day")
 
     alive = len(citizens)
     inside = sum(1 for c in citizens if c["inside_town"])
@@ -101,18 +112,13 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
         f"## Citizens: {roster_line(data)}",
         f"  {alive} alive — {inside} inside, {outside} outside",
     ]
-    # Citizen positions are auto-synced unless town is in chaos/devastated mode
-    show_citizen_stale = meta.get("chaos") or meta.get("devastated")
-
     if detail == "compact":
         # Outside citizens keep individual lines (coordinates matter);
         # inside citizens collapse to one comma-joined roster line.
         for c in citizens:
             if c["inside_town"]:
                 continue
-            shaman = " [Shaman]" if c["is_shaman"] else ""
-            stale = _staleness_tag(c.get("last_update_day"), current_day) if show_citizen_stale else ""
-            lines.append(f"  {c['name']} ({c['job']}{shaman}) — {c['coords']}{stale}")
+            lines.append(f"  {_who(c)} — {c['coords']}{_stale(c, meta)}")
         inside_c = [c for c in citizens if c["inside_town"]]
         if inside_c:
             roster = ", ".join(
@@ -121,7 +127,7 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
             )
             lines.append(f"  In town: {roster}")
         lines.append("")
-        trapped = format_trapped(trapped_citizens(data), fmt_epoch)
+        trapped = trapped_lines(data)
         if trapped:
             lines.extend(trapped + [""])
         if deaths:
@@ -135,11 +141,9 @@ def format_town_overview(data: dict, season_points: int | None = None, detail: s
 
     for c in citizens:
         loc = "IN TOWN" if c["inside_town"] else c["coords"]
-        shaman = " [Shaman]" if c["is_shaman"] else ""
-        stale = _staleness_tag(c.get("last_update_day"), current_day) if show_citizen_stale else ""
-        lines.append(f"  {c['name']} ({c['job']}{shaman}) — {loc}{stale}")
+        lines.append(f"  {_who(c)} — {loc}{_stale(c, meta)}")
 
-    trapped = format_trapped(trapped_citizens(data), fmt_epoch)
+    trapped = trapped_lines(data)
     if trapped:
         lines.append("")
         lines.extend(trapped)
@@ -168,8 +172,6 @@ def format_citizens(data: dict, cp_log: dict | None = None) -> str:
     citizens = data["citizens"]
     deaths = data["deaths"]
     meta = data["meta"]
-    current_day = meta.get("day")
-    show_citizen_stale = meta.get("chaos") or meta.get("devastated")
 
     inside = [c for c in citizens if c["inside_town"]]
     outside = [c for c in citizens if not c["inside_town"]]
@@ -185,10 +187,8 @@ def format_citizens(data: dict, cp_log: dict | None = None) -> str:
     if outside:
         lines.append("### Outside the town:")
         for c in outside:
-            shaman = " [Shaman]" if c["is_shaman"] else ""
-            stale = _staleness_tag(c.get("last_update_day"), current_day) if show_citizen_stale else ""
             cp = cp_label(cp_log, c["id"]) if cp_log else ""
-            lines.append(f"  {c['name']} ({c['job']}{shaman}) at {c['coords']}{stale}{cp}")
+            lines.append(f"  {_who(c)} at {c['coords']}{_stale(c, meta)}{cp}")
     else:
         lines.append("Everyone is inside the town.")
 
@@ -196,18 +196,17 @@ def format_citizens(data: dict, cp_log: dict | None = None) -> str:
         lines.append("")
         lines.append("### Inside the town:")
         for c in inside:
-            shaman = " [Shaman]" if c["is_shaman"] else ""
             cp = cp_label(cp_log, c["id"]) if cp_log else ""
-            lines.append(f"  {c['name']} ({c['job']}{shaman}){cp}")
+            lines.append(f"  {_who(c)}{cp}")
 
     if deaths:
         lines.append("")
         lines.append(f"### Dead citizens ({len(deaths)}):")
-        current_day = None
+        death_day = None
         for d in deaths:
-            if d["day"] != current_day:
-                current_day = d["day"]
-                lines.append(f"  Day {current_day}:")
+            if d["day"] != death_day:
+                death_day = d["day"]
+                lines.append(f"  Day {death_day}:")
             lines.append(f"    {d['name']} — {d['cause']} (last at {d['last_coords']})")
 
     return "\n".join(lines)
