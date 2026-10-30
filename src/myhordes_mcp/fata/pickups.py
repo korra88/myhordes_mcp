@@ -16,6 +16,7 @@ player-facing version in knowledge/tactics/expedition-planning.md:
 import re
 from dataclasses import dataclass, field
 
+from . import supplies
 from .pathing import reach_indices
 from .geo import fmt_xy, zone_map
 from .risk import is_defense
@@ -176,10 +177,10 @@ def fit(route: list[tuple[int, int]], points: list[tuple[int, int]], picks: list
             break
         res = plan_fn(s)
         if k == 0:
-            first = res["cost"][:5]
-            if res["cost"][0] or res["cost"][1]:
+            first = res["cost"][supplies.THIRST_KEY]
+            if not supplies.feasible(res):
                 return {"result": res, "rows": [], "departure_slots": s, "missing": 0}
-        elif res["cost"][:5] > first:
+        elif res["cost"][supplies.THIRST_KEY] > first:
             break
         rows = timeline(route, points, picks, res, slots)
         over = max((r["over"] for r in rows), default=0)

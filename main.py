@@ -749,9 +749,9 @@ async def plan_expedition_supplies(
             alt_fit = pick_mod.fit(alt_route, points, picks, slots,
                                    lambda n: supplies.plan(alt_route, st, items, end_ap=alt_end, slots=n))
             alt = alt_fit["result"]
-            if alt["cost"][:6] < result["cost"][:6]:
+            if alt["cost"][supplies.SUPPLY_KEY] < result["cost"][supplies.SUPPLY_KEY]:
                 extra = (len(route) - 1) - (len(alt_route) - 1)
-                why = ("not feasible with these supplies" if result["cost"][0] or result["cost"][1]
+                why = ("not feasible with these supplies" if not supplies.feasible(result)
                        else "needs more supplies")
                 route, end_ap, result, note, fitted = alt_route, alt_end, alt, alt_note, alt_fit
                 risks = route_risks(data, route, points, cps, avoid_revisits=True,
@@ -780,11 +780,11 @@ async def plan_expedition_supplies(
         notes.append("Assumed: water and one 7 AP food; drugs/alcohol only as extras if needed.")
     if slots == 5:
         notes.append("Assumed: 5 free slots.")
-    if result["cost"][0] or result["cost"][1]:
+    if not supplies.feasible(result):
         # Not feasible: what would make it work (default items, no slot limit)?
         more = {**items, **{k: max(items.get(k, 0), n) for k, n in supplies.DEFAULT_AVAILABLE.items()}}
         alt = supplies.plan(route, st, more, end_ap=end_ap)
-        if not (alt["cost"][0] or alt["cost"][1]):
+        if supplies.feasible(alt):
             need = ", ".join(f"{n} × {supplies.ITEMS[k].label}" for k, n in alt["used"].items())
             notes.append(f"Feasible with: {need} ({sum(alt['used'].values())} slots)"
                          + (f", you have {slots}." if sum(alt['used'].values()) > slots else "."))
@@ -792,7 +792,7 @@ async def plan_expedition_supplies(
             notes.append("Not feasible even with the default set of items: shorten the route.")
     options = None
     if not available.strip() and any(k in supplies.EXTRAS for k in result["used"]) \
-            and not (result["cost"][0] or result["cost"][1]):
+            and supplies.feasible(result):
         options = supplies.extra_options(route, st, items, end_ap=end_ap, slots=fitted["departure_slots"],
                                          stock=fata.expedition_extras(data["bank"]))
     pick_verdict, pick_notes, extra_warn = "", None, [p.warning for p in picks if p.warning]

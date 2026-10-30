@@ -29,6 +29,7 @@ player-facing version is in knowledge/tactics/expedition-planning.md.
 
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import NamedTuple
 
 from .geo import EP_MIN_KM, MAX_PATH_AP, TOWN, fmt_xy, km
 from .risk import CP_PER_CITIZEN, platform_level, teleport_range
@@ -129,11 +130,35 @@ class Start:
 # AP left at arrival, negated (EP are worth nothing in town: Second Wind or coffee goes
 # where its EP still pay for moves)
 ZERO = (0,) * 11
+THIRST_KEY = slice(0, 5)   # the part of a cost that is the thirst outcome (death, moves short, dehydration)
+SUPPLY_KEY = slice(0, 6)   # ... and the items carried
+WASTE = 9                  # index of the AP wasted
 PREMIUM = {"food7": 1, "twinoid": 2}  # a Twinoid is rarer than a 7 AP food
 
 
 def _add(a, b):
     return tuple(x + y for x, y in zip(a, b))
+
+
+def feasible(result: dict) -> bool:
+    """The plan reaches the end: nobody dies, no move short."""
+    cost = result["cost"]
+    return not (cost[0] or cost[1])
+
+
+class State(NamedTuple):
+    """A point of the search: next move index, AP, EP, thirst counter and level, what was
+    done today, and how many of each item (ORDER) were used."""
+    i: int
+    ap: int
+    ep: int
+    cnt: int
+    th: int
+    drank: bool
+    ate: bool
+    drugged: bool
+    drunk: bool
+    used: tuple
 
 
 def carried(used: dict[str, int]) -> int:
@@ -207,7 +232,7 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
         # the day's heroic action (Heroic Return, ...).
         cost = (0, 0, 0, 0, 0, 0.5 if it.kind == "hero" else 1, it.kind == "alcohol", it.kind == "drug",
                 PREMIUM.get(k, 0), waste, 0)
-        return (i, ap, ep, cnt, th, drank, ate, drugged, drunk, used), cost
+        return State(i, ap, ep, cnt, th, drank, ate, drugged, drunk, used), cost
 
     def move(state):
         i, ap, ep, cnt, th, drank, ate, drugged, drunk, used = state
@@ -223,7 +248,7 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
         if cnt > THIRST_STEP:
             th, cnt = th + 1, 0
             dehyd = th == 2
-        return (i + 1, ap, ep, cnt, th, drank, ate, drugged, drunk, used), dehyd
+        return State(i + 1, ap, ep, cnt, th, drank, ate, drugged, drunk, used), dehyd
 
     @lru_cache(maxsize=None)
     def best(state):
@@ -239,7 +264,7 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
             m = move(state)
             if m is not None:
                 nxt, dehyd = m
-                if nxt[4] >= 3:
+                if nxt.th >= 3:
                     options.append(((1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), "move"))
                 else:
                     options.append((_add(best(nxt)[0], (0, 0, 0, dehyd, 0, 0, 0, 0, 0, 0, 0)), "move"))
@@ -252,35 +277,35 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
                 options.append((_add(best(nxt)[0], c), k))
         return min(options, key=lambda o: o[0])
 
-    state = (0, start.ap, ep0, start.counter, start.thirst, start.drank, start.ate,
-             start.drugged, start.no_alcohol, (0,) * len(ORDER))
+    state = State(0, start.ap, ep0, start.counter, start.thirst, start.drank, start.ate,
+                  start.drugged, start.no_alcohol, (0,) * len(ORDER))
     cost = best(state)[0]
 
     # Replay the best choices into rows.
     steps = []
     while True:
         _, choice = best(state)
-        i = state[0]
+        i = state.i
         if choice in ("end", "stuck"):
             break
         if choice == "move":
             nxt, _ = move(state)
-            if nxt[4] >= 3:
+            if nxt.th >= 3:
                 steps.append({"kind": "dead", "zone": route[i + 1]})
                 break
-            paid = "EP" if nxt[2] < state[2] else "AP"
-            steps.append({"kind": "move", "zone": route[i + 1], "paid": paid, "ap": nxt[1],
-                          "ep": nxt[2], "counter": nxt[3], "thirst": nxt[4], "move": i + 1})
+            paid = "EP" if nxt.ep < state.ep else "AP"
+            steps.append({"kind": "move", "zone": route[i + 1], "paid": paid, "ap": nxt.ap,
+                          "ep": nxt.ep, "counter": nxt.cnt, "thirst": nxt.th, "move": i + 1})
             state = nxt
         else:
             nxt, c = use(state, choice)
-            steps.append({"kind": "use", "item": choice, "zone": route[i], "ap_before": state[1],
-                          "ap": nxt[1], "ep": nxt[2], "counter": nxt[3], "thirst": nxt[4],
-                          "waste": c[9], "move": i})
+            steps.append({"kind": "use", "item": choice, "zone": route[i], "ap_before": state.ap,
+                          "ap": nxt.ap, "ep": nxt.ep, "counter": nxt.cnt, "thirst": nxt.th,
+                          "waste": c[WASTE], "move": i})
             state = nxt
     best.cache_clear()
-    used = {k: n for k, n in zip(ORDER, state[9]) if n}
-    return {"cost": cost, "steps": steps, "used": used, "final": state, "stuck_at": state[0]}
+    used = {k: n for k, n in zip(ORDER, state.used) if n}
+    return {"cost": cost, "steps": steps, "used": used, "final": state, "stuck_at": state.i}
 
 
 EXTRA_SETS = (("steroid",), ("alcohol",), ("twinoid",), ("steroid", "alcohol"), ("alcohol", "twinoid"))
@@ -297,13 +322,13 @@ def extra_options(route: list[tuple[int, int]], start: Start, available: dict[st
         avail = {k: n for k, n in available.items() if k not in EXTRAS}
         avail.update({k: 1 for k in keys})
         r = plan(route, start, avail, end_ap=end_ap, slots=slots)
-        if r["cost"][0] or r["cost"][1]:
+        if not feasible(r):
             continue
         final, used = r["final"], r["used"]
         name = " + ".join(ITEMS[k].label for k in keys)
         bank = ", ".join(f"{STOCK_LABEL[k]} {stock.get(k, 0)}" for k in keys) if stock is not None else ""
         out.append(f"{name}: {carried(used)} slots ({used.get('water', 0)} water), arrives "
-                   f"{THIRST[final[4]]} with {final[1]} AP" + (f" (bank: {bank})" if bank else ""))
+                   f"{THIRST[final.th]} with {final.ap} AP" + (f" (bank: {bank})" if bank else ""))
     return out
 
 
@@ -575,8 +600,8 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
                    f" ({fmt_xy(route[result['stuck_at']])}) — "
                    "carry more AP items, or plan a shorter route.")
     else:
-        th = final[4]
-        verdict = (f"Arrives **{THIRST[th]}** with {final[1]} AP, {final[2]} EP left"
+        th = final.th
+        verdict = (f"Arrives **{THIRST[th]}** with {final.ap} AP, {final.ep} EP left"
                    f" · {waste} AP wasted")
     lines.append(verdict)
     if pick_verdict:

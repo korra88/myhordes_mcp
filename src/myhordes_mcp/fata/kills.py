@@ -707,13 +707,13 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
     free = slots - kit
     # slots=0 means no limit: with no slot left, plan freely and say how many are missing.
     result = supplies.plan(route, st, items, end_ap=end_ap, slots=max(0, free))
-    failed = result["cost"][0] or result["cost"][1]
+    failed = not supplies.feasible(result)
     if failed:
         # The goal sets a kill route, not the AP: plan it with every booster it needs
         # (one drug, one alcohol at most), in any number of slots, and check the slots below.
         more = {**items, **{k: max(items.get(k, 0), n) for k, n in supplies.DEFAULT_AVAILABLE.items()}}
         alt = supplies.plan(route, st, more, end_ap=end_ap)
-        if not (alt["cost"][0] or alt["cost"][1]):
+        if supplies.feasible(alt):
             added = {k: n - items.get(k, 0) for k, n in alt["used"].items() if n > items.get(k, 0)}
             if added:   # else only the slots were short: the check below says so
                 notes.append("**Needs more than the items given** (" + (available.strip() or "default") + "): "
