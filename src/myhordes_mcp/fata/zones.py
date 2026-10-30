@@ -2,7 +2,7 @@
 
 from ..utils.clock import data_updated
 from .bank import summary_lines
-from .geo import km, moves, xy
+from .geo import fmt_xy, km, moves, xy
 from .risk import (
     DANGER_LEVELS,
     _build_spread_map,
@@ -245,7 +245,7 @@ def format_zone_path(
             zone_map[c] = z
     spread_map = _build_spread_map(zone_map, current_day if isinstance(current_day, int) else None)
 
-    header_parts = [f"## Zone Path [{x1}|{y1}] → [{x2}|{y2}] — {town} Day {day}"]
+    header_parts = [f"## Zone Path {fmt_xy((x1, y1))} → {fmt_xy((x2, y2))} — {town} Day {day}"]
     if max_ap is not None:
         header_parts.append(f"AP budget: {max_ap}")
     lines = [" | ".join(header_parts), data_updated(meta), ""]

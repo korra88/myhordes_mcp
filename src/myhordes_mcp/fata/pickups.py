@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass, field
 
 from .pathing import reach_indices
-from .geo import xy
+from .geo import fmt_xy, xy
 from .risk import is_defense
 
 GUARDIAN_CP_LOSS = 2
@@ -94,11 +94,11 @@ def resolve(data: dict, entries: list[tuple[tuple[int, int], str, int]]) -> list
             blueprint = "blueprint" in key and z.get("ruin")
             if not blueprint:
                 if taken:
-                    p.warning = (f"Pickup {spec} at [{zone[0]}|{zone[1]}]: Fata saw only {len(taken)} of "
+                    p.warning = (f"Pickup {spec} at {fmt_xy(zone)}: Fata saw only {len(taken)} of "
                                  f"{count} there{seen_day}; the other {short} assumed "
                                  f"{'heavy' if key == 'heavy' else 'light'}.")
                 else:
-                    p.warning = (f"Pickup {spec} at [{zone[0]}|{zone[1]}]: not seen there by Fata{seen_day}; "
+                    p.warning = (f"Pickup {spec} at {fmt_xy(zone)}: not seen there by Fata{seen_day}; "
                                  f"assumed {'heavy' if key == 'heavy' else 'light'}.")
         out.append(p)
     return out
@@ -128,7 +128,7 @@ def heavy_check(picks: list[Pickup], *, bike: bool, trolley: bool, guardian: boo
         if not p.heavy:
             continue
         held += [f"{(p.names or [p.spec])[min(i, len(p.names) - 1)] if p.names else p.spec} "
-                 f"at [{p.zone[0]}|{p.zone[1]}]" for i in range(p.heavy)]
+                 f"at {fmt_xy(p.zone)}" for i in range(p.heavy)]
         most = max(most, len(held))
         if len(held) > cap:
             return too_many()
@@ -208,7 +208,7 @@ def verdict(fitted: dict, slots: int, heavy: dict) -> str:
     if fitted["missing"]:
         worst = max(rows, key=lambda r: r["over"])
         z = worst["pickup"].zone
-        return (f"**Pickups NOT FEASIBLE:** at [{z[0]}|{z[1]}] the rucksack needs {worst['used']} slots "
+        return (f"**Pickups NOT FEASIBLE:** at {fmt_xy(z)} the rucksack needs {worst['used']} slots "
                 f"({_supplies(worst['supplies'])} left + {worst['picked']} picked) of {slots} free: "
                 f"{fitted['missing']} more slot(s) needed (supplies are not dropped to make room).")
     text = (f"**Pickups feasible:** rucksack peaks at {peak}/{slots} slots"

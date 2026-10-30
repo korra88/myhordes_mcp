@@ -4,7 +4,7 @@ import heapq
 from dataclasses import dataclass, field
 
 from ..utils.clock import data_updated
-from .geo import km, moves, xy
+from .geo import fmt_xy, km, moves, xy
 from .risk import (
     DANGER_LEVELS,
     DANGER_MAX_EST,
@@ -575,7 +575,7 @@ def find_safe_path(
             shortest = None
 
     # -- Format output --
-    chain = " → ".join(f"[{x}|{y}]" for x, y in points)
+    chain = " → ".join(fmt_xy(c) for c in points)
     lines = [f"## Pathfinding {chain} — {town} Day {current_day}", data_updated(meta)]
     params = [f"Group CP: {group_cp}"]
     if scout_mode:
@@ -598,7 +598,7 @@ def find_safe_path(
         for p in path[1:]:
             cc = cell_class.get(p)
             if cc and cc.get("zombies"):
-                parts.append(f"[{p[0]}|{p[1]}] {'' if cc.get('fresh') else '~'}{cc['zombies']}")
+                parts.append(f"{fmt_xy(p)} {'' if cc.get('fresh') else '~'}{cc['zombies']}")
         unknown = sum(1 for p in path[1:] if p not in cell_class)
         out = "zombies on route: " + (", ".join(parts) if parts else "none")
         return out + (f"; {unknown} never-explored zones" if unknown else "")
@@ -643,7 +643,7 @@ def find_safe_path(
         flash_counter: list[int] | None = None,
     ) -> str:
         z = zone_map.get((px, py))
-        coord_str = f"[{px}|{py}]"
+        coord_str = fmt_xy((px, py))
         zom_str = _format_zom_str(z, px, py)
 
         # CP status tag
@@ -699,7 +699,7 @@ def find_safe_path(
             how = (f"the Observation Platform (level {back['level']}) teleports you home from here "
                    f"if the gate is open: {back['saved_ap']} AP saved")
         elif tele:
-            how = (f"walk {walk} AP to [{tele[0]}|{tele[1]}], then the Observation Platform "
+            how = (f"walk {walk} AP to {fmt_xy(tele)}, then the Observation Platform "
                    f"(level {back['level']}) teleports you home if the gate is open: "
                    f"{back['saved_ap']} AP saved")
         else:
@@ -713,7 +713,7 @@ def find_safe_path(
                 f"Retracing the way out would cost {back['retrace_ap']} AP."]
         if back["reused"]:
             head.append("Walks again (avoiding them costs more moves): "
-                        + ", ".join(f"[{x}|{y}]" for x, y in back["reused"]) + " — already dug today.")
+                        + ", ".join(fmt_xy(c) for c in back["reused"]) + " — already dug today.")
         rows = [_format_step(i, px, py) for i, (px, py) in enumerate(back["route"], start=out_ap)]
         return head + rows + [""]
 

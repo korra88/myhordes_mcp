@@ -53,6 +53,7 @@ Field meanings checked against the game with players in town 8212:
 from datetime import datetime
 
 from ..utils.clock import GAME_TZ
+from .geo import fmt_xy
 from .parse import DEATH_TYPES, JOB_NAMES
 
 # /towndata job keys (icon names) → display name; legacy keys stay in JOB_NAMES.
@@ -240,7 +241,7 @@ def _parse_citizens(raw: list[dict], roles: dict, rel) -> list[dict]:
             "id": c["citizen_id"],
             "name": c.get("name", "Unknown"),
             "job": _job(c.get("job", "")),
-            "coords": f"[{rx}|{ry}]",
+            "coords": fmt_xy((rx, ry)),
             "inside_town": rx == 0 and ry == 0 and not c.get("out"),
             "is_shaman": c["citizen_id"] == shaman_id,
             "is_guide": c["citizen_id"] == guide_id,
@@ -263,7 +264,7 @@ def _parse_deaths(raw: list[dict], rel) -> list[dict]:
         deaths.append({
             "name": c.get("name", "Unknown"),
             "cause": DEATH_TYPES.get(dtype, f"Unknown ({dtype})"),
-            "last_coords": f"[{rx}|{ry}]",
+            "last_coords": fmt_xy((rx, ry)),
             "day": (c.get("survival_day") or 0) + 1,
         })
     deaths.sort(key=lambda d: d["day"], reverse=True)
@@ -379,7 +380,7 @@ def _parse_scout(maps: list[dict], rel, who) -> list[dict]:
             continue
         rx, ry = rel(m["x"], m["y"])
         out.append({
-            "coords": f"[{rx}|{ry}]",
+            "coords": fmt_xy((rx, ry)),
             "zombies": int(m.get("scout_zombies") or 0),
             "scouted_by": who(upd.get("user")) or "Unknown",
             "scouted_day": upd.get("day"),
@@ -503,7 +504,7 @@ def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who
 
         scav = m.get("scav_zone_level") or 0
         zones.append({
-            "coords": f"[{rx}|{ry}]",
+            "coords": fmt_xy((rx, ry)),
             "zombies": z,
             "zombies_max": zmax,
             "danger": danger,

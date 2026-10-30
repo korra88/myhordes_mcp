@@ -32,7 +32,7 @@ import re
 from dataclasses import dataclass
 
 from .pathing import loop_return
-from .geo import xy
+from .geo import fmt_xy, xy
 from .risk import (GROWTH_AVG, GROWTH_MAX, respawn_check, respawn_totals,
                    zombie_growth, zone_is_today)
 from .towndata import expand_route
@@ -556,7 +556,7 @@ MAX_LISTED = 12
 
 def _zones_text(zones: list[Cell]) -> str:
     zs = sorted(zones, key=lambda c: (c[1], c[0]))
-    shown = " ".join(f"[{x}|{y}]" for x, y in zs[:MAX_LISTED])
+    shown = " ".join(fmt_xy(c) for c in zs[:MAX_LISTED])
     return shown + (f" +{len(zs) - MAX_LISTED}" if len(zs) > MAX_LISTED else "")
 
 
@@ -700,7 +700,7 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
             route = out + back["route"][1:]
             if back["teleport_from"]:
                 x, y = back["teleport_from"]
-                notes.append(f"Observation Platform level {back['level']}: teleport home from [{x}|{y}] "
+                notes.append(f"Observation Platform level {back['level']}: teleport home from {fmt_xy((x, y))} "
                              f"({back['saved_ap']} AP saved; needs the gate open).")
             elif route[-1] == (0, 0):
                 route, end_ap, note = supplies.end_requirements(data, route, (0, 0))
@@ -794,7 +794,7 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
         for row in a["rows"]:
             e, (x, y) = row["est"], row["zone"]
             src = e["source"] + (f", {e['killed_today']} killed today" if e.get("killed_today") else "")
-            lines.append(f"| {row['step']} | [{x}|{y}] | {_range(e)} | {src} | {row['pairs']} | {row['singles']} |")
+            lines.append(f"| {row['step']} | {fmt_xy((x, y))} | {_range(e)} | {src} | {row['pairs']} | {row['singles']} |")
     else:
         lines += ["", "No zone with zombies on this route."]
     avg, lo, hi = tot["avg"], tot["min"], tot["max"]
@@ -807,10 +807,10 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
               "Kill every zombie of every zone: one left alive infects the clean zones around it tonight."]
     if a["unknown"]:
         lines.append("Never visited, no infected zone known around (counted 0, scout first): "
-                     + " ".join(f"[{c[0]}|{c[1]}] (step {s})" for s, c in a["unknown"]))
+                     + " ".join(f"{fmt_xy(c)} (step {s})" for s, c in a["unknown"]))
     if a["banded"]:
         lines.append("Danger band only, left out of the totals (past day): "
-                     + " ".join(f"[{c[0]}|{c[1]}] ~{_fmt(e['min'])}–{_fmt(e['max'])}" for _, c, e in a["banded"]))
+                     + " ".join(f"{fmt_xy(c)} ~{_fmt(e['min'])}–{_fmt(e['max'])}" for _, c, e in a["banded"]))
     if a["rows"] or given is not None:
         kl, kslots, kit_used = kit_lines(a, data.get("bank", []), given, slots)
         lines += [""] + kl
@@ -821,13 +821,13 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
         warns.insert(0, gap)
     blocked = [r for r in a["rows"] if r["est"]["max"] > group_cp]
     if blocked:
-        zs = ", ".join(f"[{r['zone'][0]}|{r['zone'][1]}] ({_fmt(r['est']['max'])})" for r in blocked[:MAX_LISTED])
+        zs = ", ".join(f"{fmt_xy(r['zone'])} ({_fmt(r['est']['max'])})" for r in blocked[:MAX_LISTED])
         warns.append(f"Zones with more zombies than the group's {group_cp} CP block it there until they are "
                      f"killed: {zs}" + (f" +{len(blocked) - MAX_LISTED}" if len(blocked) > MAX_LISTED else "")
                      + ". Kill everything before leaving the zone; an empty weapon means stuck.")
     for step, text in sorted(instructions.items()):
         c = path[step - 1] if 0 < step <= len(path) else None
-        warns.append(f"Route note, step {step}" + (f" [{c[0]}|{c[1]}]" if c else "") + f": {text}")
+        warns.append(f"Route note, step {step}" + (f" {fmt_xy(c)}" if c else "") + f": {text}")
     if any(k.startswith(("machete:", "knife:")) for k in kit_used):
         warns.append("Machete and Serrated Knife need AP left (not Exhausted) and healthy hands: "
                      "kill with them before using your last AP.")

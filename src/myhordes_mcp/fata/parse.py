@@ -3,6 +3,8 @@
 import json
 import re
 
+from .geo import fmt_xy
+
 
 # dtype int → human-readable cause of death
 DEATH_TYPES = {
@@ -119,7 +121,7 @@ def _parse_citizens(js_data: dict, sys_data: dict) -> list[dict]:
             "id": int(cid),
             "name": c.get("name", "Unknown"),
             "job": JOB_NAMES.get(c.get("job", ""), c.get("job", "unknown")),
-            "coords": f"[{rx}|{ry}]",
+            "coords": fmt_xy((rx, ry)),
             "inside_town": inside,
             "is_shaman": str(cid) == str(shaman_id),
             "last_update_day": c.get("lastUpdateDay"),
@@ -341,7 +343,7 @@ def _parse_scout(js_data: dict) -> list[dict]:
         rel_x = abs_x - ox
         rel_y = oy - abs_y
         zones.append({
-            "coords": f"[{rel_x}|{rel_y}]",
+            "coords": fmt_xy((rel_x, rel_y)),
             "zombies": int(info.get("zom", 0)),
             "scouted_by": info.get("updatedBy", "Unknown"),
             "scouted_day": info.get("updatedOnDay"),
@@ -430,7 +432,7 @@ def _parse_map(js_data: dict) -> list[dict]:
                 z = -1
 
             entry = {
-                "coords": f"[{rx}|{ry}]",
+                "coords": fmt_xy((rx, ry)),
                 "zombies": z,
                 "zombies_max": zm if zm >= 0 else None,
                 "danger": danger,

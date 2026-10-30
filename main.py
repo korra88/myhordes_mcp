@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from myhordes_mcp import fata, gesthordes  # noqa: E402
 from myhordes_mcp.fata import pickups as pick_mod, supplies  # noqa: E402
+from myhordes_mcp.fata.geo import fmt_xy  # noqa: E402
 from myhordes_mcp.fata.pathing import dig_weight, loop_return, route_risks, safest_route  # noqa: E402
 from myhordes_mcp.knowledgebase import curated, wiki  # noqa: E402
 from myhordes_mcp.utils.clock import data_updated  # noqa: E402
@@ -684,7 +685,7 @@ async def plan_expedition_supplies(
         return zones
     for (x, y), (_, what, _) in zip(zones, entries):
         if (x, y) not in wanted:
-            return (f"Error: pickup '{what}' at [{x}|{y}]: that zone is not one of the waypoints. "
+            return (f"Error: pickup '{what}' at {fmt_xy((x, y))}: that zone is not one of the waypoints. "
                     "Add it to waypoints too (the route only goes where the waypoints say).")
 
     data = await fata.fetch_town_data(tid)
@@ -718,7 +719,7 @@ async def plan_expedition_supplies(
         if back["teleport_from"]:
             tx, ty = back["teleport_from"]
             end_ap = 0
-            note = (f"Observation Platform level {back['level']}: teleport home from [{tx}|{ty}] "
+            note = (f"Observation Platform level {back['level']}: teleport home from {fmt_xy((tx, ty))} "
                     f"({back['saved_ap']} AP saved; needs the gate open).")
         else:
             route, end_ap, note = supplies.end_requirements(data, route, points[-1])
@@ -759,17 +760,17 @@ async def plan_expedition_supplies(
     if avoid:
         again = _walked_again(route)
         if again:
-            note = (f"Walks again (already dug today): {', '.join(f'[{x}|{y}]' for x, y in again)}. "
+            note = (f"Walks again (already dug today): {', '.join(fmt_xy(c) for c in again)}. "
                     f"{note}").strip()
-    path = " → ".join(f"[{x}|{y}]" for x, y in points)
+    path = " → ".join(fmt_xy(c) for c in points)
     cp_label = None
     if heavy["drop_from"] is None:
         cp_text = f"Route safety computed for {group_cp} CP."
     else:
         low = max(0, group_cp - pick_mod.GUARDIAN_CP_LOSS)
         cause = heavy["at_pickup"]
-        where = (f"from the start ([{points[0][0]}|{points[0][1]}])" if cause is None
-                 else f"after the pickup at [{cause.zone[0]}|{cause.zone[1]}]")
+        where = (f"from the start ({fmt_xy(points[0])})" if cause is None
+                 else f"after the pickup at {fmt_xy(cause.zone)}")
         cp_text = (f"Route safety computed for {group_cp} CP, then {low} CP {where} "
                    f"(2nd heavy item: the Guardian lowers the shield).")
         cp_label = f"{group_cp} CP, {low} CP {where}"

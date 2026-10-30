@@ -30,7 +30,7 @@ player-facing version is in knowledge/tactics/expedition-planning.md.
 from dataclasses import dataclass
 from functools import lru_cache
 
-from .geo import km
+from .geo import fmt_xy, km
 from .risk import teleport_range
 
 EP_MIN_KM = 3
@@ -333,7 +333,7 @@ def end_requirements(data: dict, route: list[tuple[int, int]], end: tuple[int, i
             z = route[cut]
             return (route[:cut + 1], 0,
                     f"Observation Platform level {platform.get('level')}: teleport home from "
-                    f"[{z[0]}|{z[1]}] ({len(route) - 1 - cut} moves saved; needs the gate open).")
+                    f"{fmt_xy(z)} ({len(route) - 1 - cut} moves saved; needs the gate open).")
     if "labyrinth" in built:
         return route, 1, "Labyrinth built: entering town from [0|0] costs 1 AP."
     return route, 0, ""
@@ -374,8 +374,8 @@ def _ranges(moves: list[int]) -> str:
 def _zones_label(r: dict) -> str:
     zs = r.get("zones") or [r["zone"]]
     if len(zs) == 1:
-        return f"[{zs[0][0]}|{zs[0][1]}]"
-    return f"[{zs[0][0]}|{zs[0][1]}] to [{zs[-1][0]}|{zs[-1][1]}] ({len(zs)} zones)"
+        return fmt_xy(zs[0])
+    return f"{fmt_xy(zs[0])} to {fmt_xy(zs[-1])} ({len(zs)} zones)"
 
 
 def _risk_what(r: dict, cp: int) -> str:
@@ -567,7 +567,7 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
         verdict = "**DIES of dehydration on the way** — the route is too long for the water available."
     elif short:
         verdict = (f"**NOT FEASIBLE:** {short} more point(s) needed from move {result['stuck_at']}"
-                   f" ([{route[result['stuck_at']][0]}|{route[result['stuck_at']][1]}]) — "
+                   f" ({fmt_xy(route[result['stuck_at']])}) — "
                    "carry more AP items, or plan a shorter route.")
     else:
         th = final[4]
