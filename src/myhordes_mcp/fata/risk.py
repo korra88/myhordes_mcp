@@ -405,12 +405,19 @@ def zone_reach(data: dict, x: int, y: int) -> list[str]:
 # NightlyHandler::advance_day increments it before stage3_zones.
 RESPAWN_PER_DAY = {"small": 15}
 DEFAULT_RESPAWN_PER_DAY = 25
-_DANGER_MIN = {0: 0, 1: 1, 2: 3, 3: 6}  # DANGER_LEVELS lower bounds
 
 
-# Upper bounds of the danger bands (DANGER_LEVELS) for trap checks: "6+" has no top,
-# so it counts as 9 — above any single citizen's 8 CP.
-DANGER_MAX_EST = {0: 0, 1: 2, 2: 5, 3: 9}
+# The danger levels (DANGER_LEVELS) as zombie counts (min, max). "6+" has no top, so it
+# counts as 9: above any single citizen's 8 CP. An unknown level has no band: callers pick
+# their own fallback (kills: the top band; pathing: none for a zone known only by its band).
+DANGER_BAND = {0: (0, 0), 1: (1, 2), 2: (3, 5), 3: (6, 9)}
+DANGER_TOP = DANGER_BAND[3]
+_DANGER_MIN = {d: lo for d, (lo, _) in DANGER_BAND.items()}
+
+
+def danger_band(danger, default=None):
+    """(min, max) zombies of a danger level, `default` if the level is unknown."""
+    return DANGER_BAND.get(danger, default)
 
 
 def zone_is_today(zone: dict, day) -> bool:

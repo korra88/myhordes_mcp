@@ -4,15 +4,15 @@ import heapq
 from dataclasses import dataclass, field
 
 from ..utils.clock import data_updated
-from .geo import (NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km, map_bounds, moves,
-                  zone_map)
+from .geo import (NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km, map_bounds, moves, zone_map)
 from .risk import (
     DANGER_LEVELS,
-    DANGER_MAX_EST,
+    DANGER_TOP,
     _build_spread_map,
     _spread_risk_for_clear,
     _staleness_tag,
     _zombie_max_estimate,
+    danger_band,
     fmt_items,
     platform_level,
     teleport_range,
@@ -96,7 +96,7 @@ def _classify_cell(
 
     if zone.get("danger_today"):
         # Today's danger estimate (Observation Platform radius): current, not exact.
-        est = DANGER_MAX_EST.get(zone.get("danger", 0), DANGER_MAX_EST[3])
+        est = danger_band(zone.get("danger", 0), DANGER_TOP)[1]
         tag = "TRAP_RISK" if est > group_cp else ("CLEAR" if est == 0 else "SAFE")
         return {"tag": tag, "zombies": est, "fresh": True, "age": 0}
 
@@ -105,7 +105,8 @@ def _classify_cell(
     # Explored but unscouted — only danger level available
     if zm < 0:
         danger = zone.get("danger", 0)
-        est = DANGER_MAX_EST.get(danger)
+        band = danger_band(danger)   # unknown level: no estimate (not the top band, unlike kills)
+        est = band[1] if band else None
         tag = "TRAP_RISK" if est is not None and est > group_cp else "STALE"
         return {"tag": tag, "zombies": est, "fresh": False, "age": -1}
 

@@ -33,13 +33,12 @@ from dataclasses import dataclass
 
 from .pathing import loop_return
 from .geo import NEIGHBOURS8, Cell, fmt_xy, in_bounds, map_bounds, xy, zone_map
-from .risk import (GROWTH_AVG, GROWTH_MAX, never_visited, respawn_check, respawn_totals,
-                   zombie_growth, zone_is_today)
+from .risk import (DANGER_TOP, GROWTH_AVG, GROWTH_MAX, danger_band, never_visited,
+                   respawn_check, respawn_totals, zombie_growth, zone_is_today)
 from .towndata import expand_route
 from . import supplies
 from ..utils.clock import data_updated
 
-_DANGER_BAND = {0: (0, 0), 1: (1, 2), 2: (3, 5), 3: (6, 9)}  # risk.DANGER_LEVELS, "6+" capped at 9
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +63,7 @@ def zone_estimate(zone: dict | None, day, zmap: dict[Cell, dict], *, final: bool
     upd, danger = zone.get("updated_day"), zone.get("danger", 0)
     nights = day - upd if isinstance(day, int) and upd is not None else 0
     if zone.get("danger_today"):
-        lo, hi = _DANGER_BAND.get(danger, (6, 9))
+        lo, hi = danger_band(danger, DANGER_TOP)
         return _est(lo, (lo + hi) / 2, hi, f"danger {danger} today" if danger else "clear today")
     if z >= 0 and zone_is_today(zone, day):
         if zmax and zmax > z:
@@ -81,7 +80,7 @@ def zone_estimate(zone: dict | None, day, zmap: dict[Cell, dict], *, final: bool
         return _est(0, GROWTH_AVG * nights if near else 0, GROWTH_MAX * nights if near else 0, src)
     if z >= 0:
         return _est(z, z, z, f"day {upd}" if upd is not None else "counted")
-    lo, hi = _DANGER_BAND.get(danger, (6, 9))
+    lo, hi = danger_band(danger, DANGER_TOP)
     if danger and nights > 0:
         return _est(lo, (lo + hi) / 2 + GROWTH_AVG * nights, hi + GROWTH_MAX * nights,
                     f"danger {danger} (+{nights} night{'s' if nights > 1 else ''})")
