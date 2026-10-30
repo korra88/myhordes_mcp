@@ -197,6 +197,26 @@ def with_boosters(route: list[tuple[int, int]], start: Start, items: dict[str, i
     return alt, {k: n - items.get(k, 0) for k, n in alt["used"].items() if n > items.get(k, 0)}
 
 
+def not_feasible_line(route: list[tuple[int, int]], result: dict, available: str,
+                      added: dict[str, int] | None, free: int) -> str:
+    """The line that opens a plan made with more than the player gave: why `result` (the
+    plan with the items as given, `free` rucksack slots) fails, and what the plan below adds.
+    added None = not even the boosters (one drug, one alcohol) make the route feasible."""
+    cost, at = result["cost"], min(result["stuck_at"], len(route) - 1)
+    where = f"move {at} {fmt_xy(route[at])}"
+    # A plan that dies has no reliable stuck_at (the search ends where the thirst kills it).
+    why = "dies of dehydration on the way" if cost[0] else f"{cost[1]} more AP needed from {where}"
+    given = available.strip() or "the default items"
+    if added is None:
+        return (f"**Not feasible as asked:** {why} with {given}, and not with every booster "
+                "(one drug, one alcohol) either. Plan a shorter route or split it into trips.")
+    if not added:
+        return (f"**Not feasible as asked:** {why} with {given} in {free} free slot(s); "
+                "the plan below needs more slots than that.")
+    return (f"**Not feasible as asked:** {why} with {given}; the plan below adds "
+            + ", ".join(f"+{n} × {ITEMS[k].label}" for k, n in added.items()) + ".")
+
+
 def wants_extra_options(available: str, result: dict) -> bool:
     """The player gave no items and the feasible plan needs a drug or alcohol: offer the
     other ways to cover it."""
@@ -617,11 +637,13 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
                 risks: list[dict] | None = None, cp: int = CP_PER_CITIZEN,
                 waypoints: list[tuple[int, int]] | None = None, options: list[str] | None = None,
                 pick_verdict: str = "", pick_notes: dict[int, str] | None = None,
-                extra_warn: list[str] | None = None, cp_label: str | None = None) -> str:
+                extra_warn: list[str] | None = None, cp_label: str | None = None,
+                lead: list[str] | None = None) -> str:
     """generic_extras: the player didn't list their items, so drugs/alcohol are extras to find.
     waypoints: zones to flag when reached. options: other ways to cover the extras.
     pick_verdict / pick_notes / extra_warn: the pickups' feasibility line, their rucksack
-    lines by route move, and their warnings. cp_label: CP text for the risks header."""
+    lines by route move, and their warnings. cp_label: CP text for the risks header.
+    lead: lines right after the title (the plan is not what the player asked for)."""
     cost, steps, used = result["cost"], result["steps"], result["used"]
     names = labels(used, generic_extras)
     dead, short, end_dehyd, n_dehyd, end_thirsty, _, n_alc, n_drugs, _, waste, _ = cost
@@ -631,7 +653,7 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
     moves = len(route) - 1
     final = result["final"]
 
-    lines = [f"## {title}",
+    lines = [f"## {title}", *(lead or []),
              f"{moves} moves · start {start.ap} AP, "
              f"{start.max_ep if start.ep is None else start.ep} EP, thirst counter {start.counter}, "
              f"{THIRST[start.thirst]} · max AP {start.max_ap}, max EP {start.max_ep}"]

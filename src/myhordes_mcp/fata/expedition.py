@@ -45,6 +45,22 @@ def day_budget_error(start_ap: int) -> str | None:
 
 
 
+def _rucksack_line(result: dict, rows: list[dict], slots: int) -> str:
+    """"Does not fit in the rucksack" when the supplies at departure, or the supplies still to
+    use plus the items picked up, need more than `slots` (the worst moment is named)."""
+    need = supplies.carried(result["used"])
+    peak, what = need, f"supplies {need}"
+    for r in rows:
+        if r["used"] > peak:
+            peak = r["used"]
+            what = (f"at {fmt_xy(r['pickup'].zone)}: {pick_mod._supplies(r['supplies'])} still to use + "
+                    f"{r['picked']} picked up")
+    if peak <= slots:
+        return ""
+    return (f"**Does not fit in the rucksack:** {what} = {peak} slots, {slots} free: {peak - slots} short. "
+            "Bring a bag (more slots), pick up less, or split the route into trips.")
+
+
 async def plan_supplies(
     tid: int,
     waypoints: str,
@@ -192,15 +208,21 @@ async def plan_supplies(
         notes.append(supplies.ASSUMED_DEFAULT_NOTE)
     if slots == 5:
         notes.append("Assumed: 5 free slots.")
+    lead, fits = [], ""
     if not supplies.feasible(result):
-        # Not feasible: what would make it work (default items, no slot limit)?
-        alt, _ = supplies.with_boosters(route, st, items, end_ap)
+        # The items (or slots) given are not enough: plan again with every booster the route
+        # needs, in any number of slots, and say so first. The rucksack is checked below.
+        alt, added = supplies.with_boosters(route, st, items, end_ap)
+        lead.append(supplies.not_feasible_line(route, result, available, added if alt else None, slots))
         if alt:
-            need = ", ".join(f"{n} × {supplies.ITEMS[k].label}" for k, n in alt["used"].items())
-            notes.append(f"Feasible with: {need} ({sum(alt['used'].values())} slots)"
-                         + (f", you have {slots}." if sum(alt['used'].values()) > slots else "."))
-        else:
-            notes.append("Not feasible even with the default set of items: shorten the route.")
+            rows = pick_mod.timeline(route, points, picks, alt, slots) if picks else []
+            fitted = {"result": alt, "rows": rows, "departure_slots": slots,
+                      "missing": max((r["over"] for r in rows), default=0)}
+            result = alt
+    if supplies.feasible(result):
+        fits = _rucksack_line(result, fitted["rows"], slots)
+        if fits:
+            lead.append(fits)
     options = None
     if supplies.wants_extra_options(available, result):
         options = supplies.extra_options(route, st, items, end_ap=end_ap, slots=fitted["departure_slots"],
@@ -208,7 +230,7 @@ async def plan_supplies(
     pick_verdict, pick_notes, extra_warn = "", None, [p.warning for p in picks if p.warning]
     if picks:
         if fitted["rows"]:
-            pick_verdict = pick_mod.verdict(fitted, slots, heavy)
+            pick_verdict = "" if fits else pick_mod.verdict(fitted, slots, heavy)
             pick_notes = pick_mod.pickup_lines(fitted, slots)
         else:
             pick_verdict = "Pickups not checked: the supplies plan is not feasible."
@@ -220,4 +242,4 @@ async def plan_supplies(
                                 teleport=teleport, generic_extras=not available.strip(),
                                 risks=risks, cp=group_cp, waypoints=points[1:-1], options=options,
                                 pick_verdict=pick_verdict, pick_notes=pick_notes,
-                                extra_warn=extra_warn, cp_label=cp_label)
+                                extra_warn=extra_warn, cp_label=cp_label, lead=lead)

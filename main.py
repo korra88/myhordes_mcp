@@ -570,6 +570,10 @@ async def plan_expedition_supplies(
     Find the zones first (get_zone_details); do not guess slots or heavy items yourself.
     If the plan needs drugs or alcohol it reports them as "extra needed"
     (one 6 AP extra = steroids or alcohol, either; two extras or a Twinoid are named).
+    When `available` or `slots` are too little, the output starts with "Not feasible as
+    asked" and then gives the full plan with the items it adds (and a "Does not fit in the
+    rucksack" line when the slots are short): tell the player that first, then offer the
+    plan as a proposal, never as if it met their request.
 
     Args:
         waypoints: Zones to visit in order, town-relative, e.g. "-7,5" or "-7,5; -3,8".
@@ -659,7 +663,9 @@ async def plan_kill_route(
     goal sets the route, not the AP. Never drop zones to fit the AP, and leave `available`
     empty: the supplies plan adds every booster the route needs. When the output says it
     does not fit (AP or rucksack slots), propose trips that each reach the edge (e.g. one
-    column per trip) and call this tool again for each.
+    column per trip) and call this tool again for each. If the supplies section starts with
+    "Not feasible as asked" (the `available` given fall short), tell the player that first,
+    then offer the plan with what it adds as a proposal.
 
     Modes:
     - route="SpecialAgent3": a route drawn on Fata's map, by name (case-insensitive, exact

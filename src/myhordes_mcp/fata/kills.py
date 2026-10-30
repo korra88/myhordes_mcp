@@ -693,19 +693,14 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
     # slots=0 means no limit: with no slot left, plan freely and say how many are missing.
     result = supplies.plan(route, st, items, end_ap=end_ap, slots=max(0, free))
     failed = not supplies.feasible(result)
+    lead: list[str] = []
     if failed:
         # The goal sets a kill route, not the AP: plan it with every booster it needs
         # (one drug, one alcohol at most), in any number of slots, and check the slots below.
         alt, added = supplies.with_boosters(route, st, items, end_ap)
+        lead.append(supplies.not_feasible_line(route, result, available, added if alt else None, max(0, free)))
         if alt:
-            if added:   # else only the slots were short: the check below says so
-                notes.append("**Needs more than the items given** (" + (available.strip() or "default") + "): "
-                             + ", ".join(f"+{n} × {supplies.ITEMS[k].label}" for k, n in added.items())
-                             + ". The plan below uses them.")
             result, failed = alt, False
-        else:
-            notes.append("Not feasible even with every booster (one drug, one alcohol): split the route "
-                         "into trips.")
     need = supplies.carried(result["used"])
     if not failed and need > free:
         notes.append(f"**Does not fit in the rucksack:** kit {kit} + supplies {need} = {kit + need} slots, "
@@ -723,7 +718,7 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
                                 notes=[n for n in notes if n], slots=max(free, 0) if need <= free else 0,
                                 end_ap=end_ap,
                                 teleport=leg.teleport_from is not None,
-                                generic_extras=not available.strip(), cp=group_cp, options=options)
+                                generic_extras=not available.strip(), cp=group_cp, options=options, lead=lead)
     return text.split("\n")
 
 

@@ -37,8 +37,9 @@ math by hand, and never guess a value no tool gave you.
   `plan_expedition_supplies` with `start_ap=6` (never `start_ap=N`) and say what makes up
   the budget: `available` ("water=1, food6=1" for 18; "water=1, food7=1" for 19; add
   "steroid=1" for 24) and `scout=True` for 20/21. N AP walks N moves at most, food and
-  water included: never add a drink or a meal on top of N. Say your reading in one line.
-  Kill runs are the exception: see `plan_kill_route` below.
+  water included. Say your reading in one line. If the tool starts with "Not feasible as
+  asked", N AP is not enough: say so first, then offer its plan (it lists what it adds) as a
+  proposal. Kill runs: see `plan_kill_route` below.
 
 ## Thirst
 
@@ -138,7 +139,8 @@ For a kill run (cleaning the zoo, a SpecialAgent route, kills along a route), ca
 `plan_kill_route`: it counts the zombies, picks the weapons and plans the supplies; do not
 count or pick weapons by hand. A zoo side or strip always goes **to the map edge**: the
 goal sets the route, not the AP budget. Never cut zones to fit the AP; leave `available`
-empty so the plan adds every booster needed. If the tool says it does not fit (AP or
+empty so the plan adds every booster needed (if it starts with "Not feasible as asked",
+say that first, then offer the plan as a proposal). If the tool says it does not fit (AP or
 rucksack slots), split it into trips that each reach the edge (e.g. one column per trip).
 
 For an expedition, call `find_expedition_path` then `plan_expedition_supplies`. When the

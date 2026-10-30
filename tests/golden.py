@@ -191,6 +191,12 @@ CASES = [
     ("supplies_pickup_kinds", "plan_expedition_supplies", {"waypoints": "4,-3; 1,-5; 1,-10", "pickups": "4,-3: defense; 1,-5: projector; 1,-10: 2 battery", "guardian": True, "slots": 3}),
     ("kill_other_respawn", "plan_kill_route", {"town_id": OTHER, "waypoints": "1,0; 1,-3"}),
     ("kill_day2_loop", "plan_kill_route", {"waypoints": "-3,0; -3,4", "day": 2}),
+    # Plans made with more than the player gave: "Not feasible as asked" first.
+    ("supplies_asked_short", "plan_expedition_supplies", {"waypoints": "-3,0; -3,9; -2,9; -2,1", "start_ap": 6, "available": "water=1, food6=1"}),
+    ("supplies_asked_dies", "plan_expedition_supplies", {"waypoints": "-3,9", "thirst_counter": 30, "thirst": "dehydrated", "available": "food7=1"}),
+    ("supplies_asked_slots", "plan_expedition_supplies", {"waypoints": "-3,9", "slots": 2}),
+    ("supplies_asked_pickup_slots", "plan_expedition_supplies", {"waypoints": "1,-5; 1,-10", "pickups": "1,-5: heavy; 1,-10: 2 battery", "available": "water=1, food6=1", "slots": 3}),
+    ("supplies_asked_ok", "plan_expedition_supplies", {"waypoints": "-3,9", "available": "water=2, food7=1, steroid=1"}),
     # Evening (alerts), estimations rebuilt from the archive, town log writing, a repeat
     # after other towns and days (no stale cache across them).
     ("overview_evening", "get_town_overview", {}, {"clock": "23:10"}),
