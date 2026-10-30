@@ -92,6 +92,25 @@ def parse_available(text: str) -> dict[str, int] | str:
     return out
 
 
+SLOTS_ERROR = "Error: slots is the number of free rucksack slots at departure, at least 1."
+ASSUMED_DEFAULT_NOTE = "Assumed: water and one 7 AP food; drugs/alcohol only as extras if needed."
+
+
+def parse_supplies(available: str, second_wind: int) -> tuple[dict[str, int], int, int] | str:
+    """(items, Second Wind AP, Second Wind EP) from `available` and the Enduring level
+    (0 = none), or an "Error: ..." text. With a level, items gets 'secondwind': 1."""
+    items = parse_available(available)
+    if isinstance(items, str):
+        return items
+    sw_ap = sw_ep = 0
+    if second_wind:
+        if second_wind - 1 not in SECOND_WIND:
+            return "Error: second_wind is the Enduring level, 1 to 4 (0 = none)."
+        sw_ap, sw_ep = SECOND_WIND[second_wind - 1]
+        items["secondwind"] = 1
+    return items, sw_ap, sw_ep
+
+
 @dataclass(frozen=True)
 class Start:
     ap: int = 6
@@ -164,6 +183,25 @@ class State(NamedTuple):
 def carried(used: dict[str, int]) -> int:
     """Rucksack slots the used supplies take (Second Wind is an action, not an item)."""
     return sum(n for k, n in used.items() if k != "secondwind")
+
+
+def with_boosters(route: list[tuple[int, int]], start: Start, items: dict[str, int],
+                  end_ap: int) -> tuple[dict | None, dict[str, int]]:
+    """The plan when `items` fall short: raised to the default set (water, one 7 AP food, one
+    drug, one alcohol), in any number of slots. (plan, what it adds to `items`), or
+    (None, {}) when even that is not feasible."""
+    more = {**items, **{k: max(items.get(k, 0), n) for k, n in DEFAULT_AVAILABLE.items()}}
+    alt = plan(route, start, more, end_ap=end_ap)
+    if not feasible(alt):
+        return None, {}
+    return alt, {k: n - items.get(k, 0) for k, n in alt["used"].items() if n > items.get(k, 0)}
+
+
+def wants_extra_options(available: str, result: dict) -> bool:
+    """The player gave no items and the feasible plan needs a drug or alcohol: offer the
+    other ways to cover it."""
+    return (not available.strip() and feasible(result)
+            and any(k in EXTRAS for k in result["used"]))
 
 
 def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
@@ -367,6 +405,36 @@ def end_requirements(data: dict, route: list[tuple[int, int]], end: tuple[int, i
     if any(b["name"].lower() == "labyrinth" for b in data.get("buildings", []) if b.get("built")):
         return route, 1, f"Labyrinth built: entering town from {fmt_xy(TOWN)} costs 1 AP."
     return route, 0, ""
+
+
+class HomeLeg(NamedTuple):
+    """The whole route with its way home: AP needed after the last move, the note for
+    the plan, and the zone the Observation Platform teleports from (None = walks home)."""
+    route: list
+    end_ap: int
+    note: str
+    teleport_from: tuple[int, int] | None
+
+
+def _town_entry(data: dict, route: list[tuple[int, int]]) -> HomeLeg:
+    """end_requirements() of a route as a HomeLeg (its teleport cuts the route short)."""
+    cut, end_ap, note = end_requirements(data, route, route[-1])
+    return HomeLeg(cut, end_ap, note, cut[-1] if len(cut) < len(route) else None)
+
+
+def home_leg(data: dict, out: list[tuple[int, int]], back: dict | None = None) -> HomeLeg:
+    """`out` plus the way home. back: pathing.loop_return() of `out` (a loop ending on the
+    best teleport zone); without it `out` is taken as the whole route and only the
+    town-entry rules (end_requirements) apply."""
+    if back is None:
+        return _town_entry(data, out)
+    route = out + back["route"][1:]
+    if back["teleport_from"]:
+        tx, ty = back["teleport_from"]
+        return HomeLeg(route, 0, f"Observation Platform level {back['level']}: teleport home from "
+                       f"{fmt_xy((tx, ty))} ({back['saved_ap']} AP saved; needs the gate open).",
+                       back["teleport_from"])
+    return _town_entry(data, route)
 
 
 def labels(used: dict[str, int], generic: bool) -> dict[str, str]:

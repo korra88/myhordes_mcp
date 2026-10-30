@@ -670,17 +670,12 @@ async def plan_expedition_supplies(
     level = {"none": 0, "ok": 0, "thirsty": 1, "dehydrated": 2}.get(thirst.strip().lower())
     if level is None:
         return "Error: thirst must be 'none', 'thirsty' or 'dehydrated'."
-    items = supplies.parse_available(available)
-    if isinstance(items, str):
-        return items
-    sw_ap = sw_ep = 0
-    if second_wind:
-        if second_wind - 1 not in supplies.SECOND_WIND:
-            return "Error: second_wind is the Enduring level, 1 to 4 (0 = none)."
-        sw_ap, sw_ep = supplies.SECOND_WIND[second_wind - 1]
-        items["secondwind"] = 1
+    parsed = supplies.parse_supplies(available, second_wind)
+    if isinstance(parsed, str):
+        return parsed
+    items, sw_ap, sw_ep = parsed
     if slots < 1:
-        return "Error: slots is the number of free rucksack slots at departure, at least 1."
+        return supplies.SLOTS_ERROR
     if err := _day_budget_error(start_ap):
         return err
     entries = pick_mod.parse(pickups)
@@ -709,27 +704,20 @@ async def plan_expedition_supplies(
     # Legs after the first avoid zones already walked: their one dig of the day is used.
     avoid = len(points) >= 3
     rw = dig_weight(dig)
-    back = None
+    leg = None
     if avoid and points[-1] == points[0]:
         # Round trip: the way back is a loop ending on the best Observation Platform
         # teleport zone, as find_expedition_path.
         out = safest_route(data, points[:-1], cps[:-1], avoid_revisits=True, revisit_weight=rw)
         back = loop_return(data, out, cps[-1], dig=dig) if out else None
-    if back is not None:
-        route = out + back["route"][1:]
-        note = ""
-        if back["teleport_from"]:
-            tx, ty = back["teleport_from"]
-            end_ap = 0
-            note = (f"Observation Platform level {back['level']}: teleport home from {fmt_xy((tx, ty))} "
-                    f"({back['saved_ap']} AP saved; needs the gate open).")
-        else:
-            route, end_ap, note = supplies.end_requirements(data, route, points[-1])
-    else:
+        leg = supplies.home_leg(data, out, back) if back is not None else None
+    if leg is None:
         route = safest_route(data, points, cps, avoid_revisits=avoid, revisit_weight=rw)
         if route is None:
             return f"Error: no route found between the given zones ({MAX_PATH_AP} AP cap per leg)."
-        route, end_ap, note = supplies.end_requirements(data, route, points[-1])
+        leg = supplies.home_leg(data, route)
+    route, end_ap, note = leg.route, leg.end_ap, leg.note
+    teleport = leg.teleport_from is not None
     risks = route_risks(data, route, points, cps, avoid_revisits=avoid, revisit_weight=rw)
     st = supplies.Start(
         ap=start_ap, ep=None if start_ep < 0 else start_ep, counter=thirst_counter, thirst=level,
@@ -746,7 +734,8 @@ async def plan_expedition_supplies(
         # among those, the one walking the fewest zones again.
         alt_route = safest_route(data, points, cps, avoid_revisits=True, revisit_weight=dig_weight(False))
         if alt_route is not None:
-            alt_route, alt_end, alt_note = supplies.end_requirements(data, alt_route, points[-1])
+            alt_leg = supplies.home_leg(data, alt_route)
+            alt_route, alt_end, alt_note = alt_leg.route, alt_leg.end_ap, alt_leg.note
             alt_fit = pick_mod.fit(alt_route, points, picks, slots,
                                    lambda n: supplies.plan(alt_route, st, items, end_ap=alt_end, slots=n))
             alt = alt_fit["result"]
@@ -755,6 +744,7 @@ async def plan_expedition_supplies(
                 why = ("not feasible with these supplies" if not supplies.feasible(result)
                        else "needs more supplies")
                 route, end_ap, result, note, fitted = alt_route, alt_end, alt, alt_note, alt_fit
+                teleport = alt_leg.teleport_from is not None
                 risks = route_risks(data, route, points, cps, avoid_revisits=True,
                                     revisit_weight=dig_weight(False))
                 note = (f"Going over zones still to dig would be {extra} AP longer and {why}. "
@@ -778,22 +768,20 @@ async def plan_expedition_supplies(
         cp_label = f"{group_cp} CP, {low} CP {where}"
     notes = [data_updated(data["meta"]), note, cp_text + (" " + "; ".join(breakdown) if breakdown else "")]
     if not available.strip():
-        notes.append("Assumed: water and one 7 AP food; drugs/alcohol only as extras if needed.")
+        notes.append(supplies.ASSUMED_DEFAULT_NOTE)
     if slots == 5:
         notes.append("Assumed: 5 free slots.")
     if not supplies.feasible(result):
         # Not feasible: what would make it work (default items, no slot limit)?
-        more = {**items, **{k: max(items.get(k, 0), n) for k, n in supplies.DEFAULT_AVAILABLE.items()}}
-        alt = supplies.plan(route, st, more, end_ap=end_ap)
-        if supplies.feasible(alt):
+        alt, _ = supplies.with_boosters(route, st, items, end_ap)
+        if alt:
             need = ", ".join(f"{n} × {supplies.ITEMS[k].label}" for k, n in alt["used"].items())
             notes.append(f"Feasible with: {need} ({sum(alt['used'].values())} slots)"
                          + (f", you have {slots}." if sum(alt['used'].values()) > slots else "."))
         else:
             notes.append("Not feasible even with the default set of items: shorten the route.")
     options = None
-    if not available.strip() and any(k in supplies.EXTRAS for k in result["used"]) \
-            and supplies.feasible(result):
+    if supplies.wants_extra_options(available, result):
         options = supplies.extra_options(route, st, items, end_ap=end_ap, slots=fitted["departure_slots"],
                                          stock=fata.expedition_extras(data["bank"]))
     pick_verdict, pick_notes, extra_warn = "", None, [p.warning for p in picks if p.warning]
@@ -808,7 +796,7 @@ async def plan_expedition_supplies(
                               "until the night raises it).")
     return supplies.format_plan(route, st, result, title=f"Supplies plan {path}", notes=notes,
                                 slots=slots, end_ap=end_ap, step_table=step_table,
-                                teleport="teleport" in note, generic_extras=not available.strip(),
+                                teleport=teleport, generic_extras=not available.strip(),
                                 risks=risks, cp=group_cp, waypoints=points[1:-1], options=options,
                                 pick_verdict=pick_verdict, pick_notes=pick_notes,
                                 extra_warn=extra_warn, cp_label=cp_label)

@@ -668,35 +668,20 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
     """The supplies plan on the exact route out (town to path[-1]) and the way home. An error
     text (str) on bad input, else the plan lines. Repairs cost 1 AP each: those done in town
     come off the departure AP, those carried are kept as AP to spare along the way."""
-    items = supplies.parse_available(available)
-    if isinstance(items, str):
-        return items
-    sw_ap = sw_ep = 0
-    if second_wind:
-        if second_wind - 1 not in supplies.SECOND_WIND:
-            return "Error: second_wind is the Enduring level, 1 to 4 (0 = none)."
-        sw_ap, sw_ep = supplies.SECOND_WIND[second_wind - 1]
-        items["secondwind"] = 1
+    parsed = supplies.parse_supplies(available, second_wind)
+    if isinstance(parsed, str):
+        return parsed
+    items, sw_ap, sw_ep = parsed
     out = [(0, 0)] + path
     notes = []
-    end_ap = 0
-    if out[-1] == (0, 0):
-        route, end_ap, note = supplies.end_requirements(data, out, (0, 0))
-        notes.append(note)
+    back = loop_return(data, out, group_cp) if out[-1] != (0, 0) else None
+    if out[-1] != (0, 0) and back is None:
+        leg = supplies.HomeLeg(out, 0, f"No way home found from the last zone ({MAX_PATH_AP} AP cap): "
+                                       "supplies cover the way out only.", None)
     else:
-        back = loop_return(data, out, group_cp)
-        if back is None:
-            route = out
-            notes.append(f"No way home found from the last zone ({MAX_PATH_AP} AP cap): supplies cover the way out only.")
-        else:
-            route = out + back["route"][1:]
-            if back["teleport_from"]:
-                x, y = back["teleport_from"]
-                notes.append(f"Observation Platform level {back['level']}: teleport home from {fmt_xy((x, y))} "
-                             f"({back['saved_ap']} AP saved; needs the gate open).")
-            elif route[-1] == (0, 0):
-                route, end_ap, note = supplies.end_requirements(data, route, (0, 0))
-                notes.append(note)
+        leg = supplies.home_leg(data, out, back)
+    route, end_ap = leg.route, leg.end_ap
+    notes.append(leg.note)
     if repairs_town:
         start_ap -= repairs_town
         notes.append(f"Departure AP {start_ap}: {repairs_town} AP spent repairing in town.")
@@ -711,10 +696,8 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
     if failed:
         # The goal sets a kill route, not the AP: plan it with every booster it needs
         # (one drug, one alcohol at most), in any number of slots, and check the slots below.
-        more = {**items, **{k: max(items.get(k, 0), n) for k, n in supplies.DEFAULT_AVAILABLE.items()}}
-        alt = supplies.plan(route, st, more, end_ap=end_ap)
-        if supplies.feasible(alt):
-            added = {k: n - items.get(k, 0) for k, n in alt["used"].items() if n > items.get(k, 0)}
+        alt, added = supplies.with_boosters(route, st, items, end_ap)
+        if alt:
             if added:   # else only the slots were short: the check below says so
                 notes.append("**Needs more than the items given** (" + (available.strip() or "default") + "): "
                              + ", ".join(f"+{n} × {supplies.ITEMS[k].label}" for k, n in added.items())
@@ -729,18 +712,17 @@ def _supplies_block(data: dict, path: list[Cell], *, start_ap: int, slots: int, 
                      f"{slots} free: {kit + need - slots} short. Bring a bag (more slots), take a kit with "
                      "fewer slots (kit=), or split the route into trips.")
     if not available.strip():
-        notes.append("Assumed: water and one 7 AP food; drugs/alcohol only as extras if needed.")
+        notes.append(supplies.ASSUMED_DEFAULT_NOTE)
     notes.append(f"Slots: {slots} free at departure, minus {kit} for the kit = {free}.")
     options = None
-    if not available.strip() and any(k in supplies.EXTRAS for k in result["used"]) \
-            and not failed and free >= need:
+    if supplies.wants_extra_options(available, result) and not failed and free >= need:
         from .bank import expedition_extras
         options = supplies.extra_options(route, st, items, end_ap=end_ap, slots=free,
                                          stock=expedition_extras(data["bank"]))
     text = supplies.format_plan(route, st, result, title="Supplies plan, the route as given",
                                 notes=[n for n in notes if n], slots=max(free, 0) if need <= free else 0,
                                 end_ap=end_ap,
-                                teleport=any("teleport home" in n for n in notes),
+                                teleport=leg.teleport_from is not None,
                                 generic_extras=not available.strip(), cp=group_cp, options=options)
     return text.split("\n")
 
@@ -756,7 +738,7 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
     if zoo or not (route.strip() or waypoints):
         return format_zoo(data)
     if slots < 1:
-        return "Error: slots is the number of free rucksack slots at departure, at least 1."
+        return supplies.SLOTS_ERROR
     given = None
     if kit.strip():
         given = parse_kit(kit)
