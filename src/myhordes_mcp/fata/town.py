@@ -7,6 +7,8 @@ from .risk import (
     _staleness_tag,
     defense_alert,
     defense_status,
+    dried_coords,
+    dried_line,
     gate_line,
     night_alerts,
     outside_alert,
@@ -182,14 +184,17 @@ def format_citizens(data: dict, cp_log: dict | None = None) -> str:
         roster_line(data),
         f"{len(citizens)} alive — {len(inside)} inside, {len(outside)} outside",
         *([a] if (a := outside_alert(data)) else []),
+        *([d] if (d := dried_line(data)) else []),
         "",
     ]
 
     if outside:
         lines.append("### Outside the town:")
+        dried = dried_coords(data)
         for c in outside:
             cp = cp_label(cp_log, c["id"]) if cp_log else ""
-            lines.append(f"  {_who(c)} at {c['coords']}{_stale(c, meta)}{cp}")
+            tag = " (dried)" if c["coords"] in dried else ""
+            lines.append(f"  {_who(c)} at {c['coords']}{tag}{_stale(c, meta)}{cp}")
     else:
         lines.append("Everyone is inside the town.")
 

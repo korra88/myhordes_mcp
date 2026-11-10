@@ -10,6 +10,7 @@ import re
 from .cp import citizen_key
 from .geo import moves, xy
 from ..utils.fmt import header, plural
+from .risk import dried_coords
 
 # Forum icons per Fata job display name (towndata.JOB_NAMES values).
 CLASS_ICONS = {
@@ -101,15 +102,18 @@ def format_roster(data: dict, listed: str = "") -> str:
         lines.append(f"{n_out} outside: {plural(len(r['scrappers']), 'scrapper')} (distance 1), "
                      f"{n_out - len(r['scrappers'])} at distance ≥2")
         lines.append("")
+    dried = dried_coords(data)
     if r["groups"]:
         lines.append("### Outside at distance ≥2, by exact tile")
         for g in r["groups"]:
             ruin = f" — {g['ruin']}" if g["ruin"] else ""
+            tag = " (dried)" if g["coords"] in dried else ""
             members = ", ".join(f"{c['icon']} {c['name']}" for c in g["members"])
-            lines.append(f"  {g['coords']} ({g['distance']} AP){ruin}: {members}")
+            lines.append(f"  {g['coords']}{tag} ({g['distance']} AP){ruin}: {members}")
         lines.append("")
     if r["scrappers"]:
         tiles = sorted({c["coords"] for c in r["scrappers"]})
+        tiles = [f"{t} (dried)" if t in dried else t for t in tiles]
         lines.append(f"Scrappers (distance 1, not on list): {len(r['scrappers'])} on {', '.join(tiles)}")
     lines.append("Class icons from live job data; :sham: = elected shaman. Items (bikes, kits) are not visible here.")
     return "\n".join(lines)

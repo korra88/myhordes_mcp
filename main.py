@@ -103,7 +103,9 @@ async def get_citizen_positions(day: int = 0, town_id: int = 0) -> str:
     Fetches citizen positions from Fata Morgana — who is inside the town,
     who is outside (and where), and the list of dead citizens with cause of death.
     Each citizen shows their last known CP (Control Points) when one was read.
-    Use this when the user asks who is outside, who is camping, or about deaths.
+    A position on a depleted zone (no dig left) is marked "(dried)", with a count line.
+    Use this when the user asks who is outside, who is camping, who is on a
+    depleted zone, or about deaths.
     For a CP table of the whole town use get_citizen_cp instead.
 
     Args:
@@ -743,6 +745,8 @@ async def get_zone_details(
       grouped like the bank (water, food, drugs, defense items, metal, wood,
       weapons...), the ruins nearest first (blueprint, digs left, depletion), and
       who is outside where. Use for "what is out there", "where are the ruins".
+      Its "(dried)" covers ruins only, not plain zones: for who stands on a
+      depleted zone use get_citizen_positions.
     - item="<name>": the zones where items matching that name lie, nearest first
       (e.g. "wrought iron", "battery"). Use for "where can I find X".
     - x1/y1/x2/y2: every zone of that box, sorted by AP cost, with ruin, items,

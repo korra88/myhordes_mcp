@@ -54,6 +54,25 @@ def gate_line(data: dict, at: datetime | None = None) -> str:
     return gate_alert(data, at) or "Gate: open (normal by day; closed after 23:00, before 23:59)"
 
 
+def dried_coords(data: dict) -> set[str]:
+    """Coords of depleted zones (no dig left). A citizen's position line carries
+    this so "who is outside on depleted zones" needs one tool: measured
+    2026-11-10, Haiku 5.5 read depletion only from the desert overview, which
+    marks ruins and not plain zones, and answered "none" (4/4) while 5 citizens
+    stood on the dried [1|0]."""
+    return {z["coords"] for z in data.get("zones", []) if z.get("dried")}
+
+
+def dried_line(data: dict) -> str | None:
+    """'N outside on depleted zones: names', or None."""
+    dried = dried_coords(data)
+    names = [c["name"] for c in data.get("citizens", [])
+             if not c["inside_town"] and c["coords"] in dried]
+    if not names:
+        return None
+    return f"{len(names)} outside on depleted zones (dried: no dig left): {', '.join(sorted(names))}"
+
+
 def outside_alert(data: dict, at: datetime | None = None, farthest: int = 5) -> str | None:
     """Citizens still outside from 22:00, farthest first (moves = AP to walk home)."""
     out = [c for c in data.get("citizens", []) if not c["inside_town"] and xy(c)]
