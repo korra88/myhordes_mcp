@@ -85,6 +85,7 @@ assert "full" in store.remember("one more")
 assert len(mem.read_text().splitlines()) == 41
 # forget
 assert "nothing matched" in store.forget("zzz-nope")
+assert "at least 3 characters" in store.forget("ab")  # a 1-2 char text would match almost every line
 assert len(mem.read_text().splitlines()) == 41
 assert store.forget("GUARDIAN") == "forgot 1 line(s)."
 assert "guardian" not in mem.read_text().lower()

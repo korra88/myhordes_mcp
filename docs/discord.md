@@ -113,7 +113,7 @@ in `../discord_mcp/README.md` ("Sessions that fit the cache", "Direct messages")
   mention of the `maintainer` id) and the bot answers only after they add the check
   mark. What they wrote while waiting is answered as one turn, as in a thread.
   Removing the check mark silences
-  the bot. In a DM the bot can write `towns/_bot/` (memory, feedback) like in a thread.
+  the bot. Memory exists only in DMs (see below).
   The check mark is a conscious step, so the bot never adds it.
 - **Sessions**: a thread or DM idle for 55+ minutes whose context reached 128000
   tokens is not resumed. A thread gets a fixed English notice asking for a new thread;
@@ -125,24 +125,26 @@ in `../discord_mcp/README.md` ("Sessions that fit the cache", "Direct messages")
 
 ## Memory and feedback log
 
-Both live in `towns/_bot/`, inside the listener's write permission (`towns/**`), so
-they need no extra permission and, if `towns/` is a git repo, get history and backup
-with the town logs.
+Both live in `towns/_bot/` and are written only through MCP tools of this server
+(`src/myhordes_mcp/bot/store.py`), never by the bot's own `Write`: the path, the format
+and the author id (from `LISTENER_USER_ID`, set by the listener) are fixed in the
+server. That is what lets the public tier run without `Write`/`Edit`.
 
-- **Memory** (`memory.md`, always on). Facts readers ask the bot to keep across
-  threads, e.g. which in-game player a Discord user is. The listener pastes it into
-  the first prompt of each thread (`first_turn_files` in the toml), so it costs no
-  tool call and does not touch the cached system prompt. The bot writes it only on
-  an explicit "remember"/"forget". Rules and line format: `prompts/discord.md`,
-  "Memory".
+- **Memory** (`memory/<discord id>.md`, one file per person, **DMs only**). Facts a
+  reader asks the bot to keep, e.g. which in-game player they are. Tools `remember` /
+  `forget`, refused by the server unless `LISTENER_CONTEXT=dm`. The listener pastes the
+  reader's file into the first prompt of a DM session (`[dm] memory_file`), so it costs
+  no tool call; threads get no memory. Cap 40 lines, one line per fact. Rules:
+  `prompts/discord.md`, "Memory". The old shared `memory.md` is moved once with
+  `make bot-memory-migrate` (idempotent; leaves `memory.md.migrated`).
 - **Feedback log** (`feedback/`, opt-in). Add `prompts/discord-feedback.md` to
-  `append_system_prompt_files` and restart the listener. The bot then writes one file
-  per complaint, correction, missing tool or tool problem; it never reads them back,
-  so an entry cannot steer it. Review them in the terminal with `/review-bot-feedback`,
-  which proposes prompt and tool changes and moves processed entries to
-  `feedback/reviewed/`.
+  `append_system_prompt_files` and `mcp__myhordes__log_feedback` to `allowed_tools`, then
+  restart the listener. The bot logs one entry per complaint, correction, missing tool
+  or tool problem with `log_feedback`; it never reads them back, so an entry cannot
+  steer it. Review them in the terminal with `/review-bot-feedback`, which proposes
+  prompt and tool changes and moves processed entries to `feedback/reviewed/`.
 
-Memory is the one place where text from a thread comes back in later threads: keep
-`allow_users` to people you trust, and check it now and then (`/review-bot-feedback`
-does). The bot edits `memory.md` itself: if you edit it by hand on another machine,
-commit and push right away so the two copies do not diverge.
+A memory file is the one place where text from a conversation comes back later, and
+only in that person's own DMs. Check the files now and then (`/review-bot-feedback`
+does). The bot edits them itself: if you edit one by hand on another machine, commit
+and push right away so the two copies do not diverge.

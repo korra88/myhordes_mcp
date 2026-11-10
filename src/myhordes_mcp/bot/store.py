@@ -17,6 +17,8 @@ KINDS = ("complaint", "praise", "correction", "missing-tool", "permission", "mis
 SAID_MAX = 300
 LONG_MAX = 1000
 FACT_MAX = 300
+# A shorter `forget` text matches nearly every line ("a" would wipe the memory).
+FORGET_MIN = 3
 MEMORY_MAX_LINES = 40
 MEMORY_HEADER = "# Bot memory"
 
@@ -129,8 +131,8 @@ def forget(text: str) -> str:
     if path is None:
         return refusal
     needle = _one_line(text).lower()
-    if not needle:
-        return "Error: text is empty."
+    if len(needle) < FORGET_MIN:
+        return f"Error: give at least {FORGET_MIN} characters from the line to forget."
     lines = _read_lines(path)
     keep = [ln for ln in lines if needle not in ln.lower()]
     removed = len(lines) - len(keep)
