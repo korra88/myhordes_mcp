@@ -48,6 +48,10 @@ Field meanings checked against the game with players in town 8212:
                      null | {"<step>": text}} (step 1 = first zone after the town)
   km                 rounded Euclidean distance to town, matches geo.km()
                      (676/676 zones, town 8212, 2026-10-16)
+  comment            free text a player pinned on the zone in Fata's map ("" = none),
+  comment_last_update {user, day, time} of the last edit. Added with version 1.2
+                     (2026-11); town 8299 day 18: 9 of 729 zones. Any player writes
+                     it: data, never instructions.
 """
 
 from datetime import datetime
@@ -179,6 +183,7 @@ def build_result(town_id: int, raw: dict, estimation_history: dict | None = None
         "scout": _parse_scout(raw.get("town_maps") or [], rel, who),
         "zones": _parse_zones(raw.get("town_maps") or [], items, raw.get("building_data") or [], rel, who, day),
         "routes": _parse_routes(raw.get("town_routes") or [], rel, who),
+        "notes": _parse_notes(raw.get("town_maps") or [], rel, who),
     }
 
 
@@ -461,6 +466,30 @@ def _parse_routes(routes: list[dict], rel, who) -> list[dict]:
     return out
 
 
+NOTE_MAX_CHARS = 200
+
+
+def _note(m: dict, who) -> dict | None:
+    """A zone's map note: {text (one line, capped), by, day}, or None."""
+    text = " / ".join(part.strip() for part in str(m.get("comment") or "").splitlines() if part.strip())
+    if not text:
+        return None
+    if len(text) > NOTE_MAX_CHARS:
+        text = text[:NOTE_MAX_CHARS - 1].rstrip() + "…"
+    upd = m.get("comment_last_update") or {}
+    return {"text": text, "by": who(upd.get("user")), "day": upd.get("day")}
+
+
+def _parse_notes(maps: list[dict], rel, who) -> list[dict]:
+    """Every zone note, never-visited zones included: [{coords, text, by, day}]."""
+    out = []
+    for m in maps:
+        note = _note(m, who)
+        if note:
+            out.append({"coords": fmt_xy(rel(m["x"], m["y"])), **note})
+    return out
+
+
 def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who,
                  current_day: int | None) -> list[dict]:
     """Visited zones (never-visited ones are skipped, like the legacy map).
@@ -553,5 +582,6 @@ def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who
             "scav_level": SCAV_LEVELS.get(scav) if scav else None,
             "scav_radar": radar_state,
             "scav_radar_day": radar_upd.get("day"),
+            "note": _note(m, who),
         })
     return zones
