@@ -47,8 +47,8 @@ fetch of the current day also stores a small snapshot under `cache/snapshots/`, 
 **CP log.** Fata reports CP per zone (game data, items and status included), not per
 citizen. A citizen's CP is recorded when they stand alone on a zone, or derived from a
 group when the others were read alone the same day. The log keeps the last and the
-best value, since CP drops with status (drugs, drunk, thirsty, guardian without
-shield); 0 is kept, since terrorised citizens have none. Limit: Fata does not say who
+best value, since CP drops with status (drugs, drunk, thirsty with the Expert skill, guardian
+without shield); 0 is kept, since terrorised citizens have none. Limit: Fata does not say who
 was on the zone at the update, so a citizen who left afterwards can inflate a reading.
 The log only grows when tools fetch the town (no polling).
 

@@ -170,7 +170,7 @@ def fit(route: list[tuple[int, int]], points: list[tuple[int, int]], picks: list
     """The supplies plan that leaves room for the pickups. plan_fn(departure_slots) → plan.
 
     Tries `slots`, then one fewer ... (never more than the pickups need): a plan that
-    does worse than the first one (dies, runs out of AP, ends Dehydrated or Thirsty: it
+    does worse than the first one (dies, runs out of AP, ends Dehydrated: it
     dropped a supply the trip needs) is never accepted to make room. Returns {'result',
     'rows', 'departure_slots', 'missing'}; missing > 0 = no plan fits (the one with the
     least overflow is returned); rows is empty when there are no pickups or the supplies

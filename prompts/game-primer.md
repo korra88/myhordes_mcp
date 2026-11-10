@@ -56,7 +56,7 @@ math by hand, and never guess a value no tool gave you.
 - **EP** (exploration points, scouts / shoes / bike) are spent before AP when leaving a
   zone at 3+ km.
 - **Control Points:** zombie = 1 CP, citizen = 2 CP (up to 8 with boosts, **0 when
-  Terrorised**, −1 when Drunk or Thirsty). If zombies have more CP than the citizens in a
+  Terrorised**, −1 when Drunk; Thirsty only cancels a skill's +1, unknown by default). If zombies have more CP than the citizens in a
   zone, everyone there is **Trapped**: cannot move or search, fleeing wounds. A lone
   citizen with no boosts is trapped by 3 zombies. `get_citizen_cp` has each citizen's CP.
 - **Heavy items: one per citizen.** The big defensive objects (Old Door, Sheet Metal,

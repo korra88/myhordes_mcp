@@ -76,7 +76,7 @@ Ranges from standard 40-citizen town formula. Actual attack each night = random 
 |---|---|---|
 | Took drugs | −1 CP | Permanent |
 | Drunk | −1 CP | Temporary |
-| Thirsty | −1 CP | Temporary |
+| Thirsty / Dehydrated | −1 CP only with Prepared (Expert): it cancels that skill's +1. No loss without the skill | Temporary |
 | Guardian takes off the shield | −2 CP | Temporary |
 
 So a citizen's CP seen in one zone is not their maximum. Track both **max CP** (best seen)

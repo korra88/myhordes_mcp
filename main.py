@@ -550,9 +550,10 @@ async def plan_expedition_supplies(
     AP (with `dig`, up to 1 more AP each unless that needs more supplies); a round trip
     from town with the Observation Platform level 3+ ends on the best teleport zone. The
     output names the zones walked again. Accounts for the Labyrinth's 1 AP.
-    The plan minimises, in order: death, running out of AP, ending Dehydrated, ending
-    Thirsty, items carried (slots), alcohol, drugs, premium items (Twinoid, 7 AP food),
-    AP wasted. At most one drug and one alcohol (warned about). Output: items to bring
+    The plan minimises, in order: death, running out of AP, ending Dehydrated, alcohol,
+    drugs, premium items (Twinoid, 7 AP food), items carried (slots), ending Thirsty (water
+    beyond the AP need is carried only against Dehydrated: arriving Thirsty is warned, not
+    avoided), AP wasted. At most one drug and one alcohol (warned about). Output: items to bring
     with slot count, the other ways to cover drugs/alcohol with the bank stock, warnings,
     route risks (zones where the group may get blocked: zombies above its CP, or never
     scouted — each with the extra AP to go around it or the zombies to kill), and a

@@ -143,15 +143,17 @@ class Start:
 
 
 # Cost, compared lexicographically (lower is better):
-# dead, moves short, dehydrated at the end, times dehydrated, thirsty at the end,
-# items, alcohol, drugs (alcohol is the last resort, after one drug), premium items
-# (7 AP food, Twinoid: kept for when they are needed), AP wasted (only a tiebreak between
+# dead, moves short, dehydrated at the end, times dehydrated, alcohol, drugs (alcohol is
+# the last resort, after one drug; both only when water and food fall short), premium items
+# (7 AP food, Twinoid: kept for when they are needed, never spent to save a ration's slot),
+# items, thirsty at the end (a ration is carried to avoid or cure Dehydrated, never only to
+# arrive not Thirsty: that is warned), AP wasted (only a tiebreak between
 # feasible plans: keeping a Twinoid beats an AP lost while arriving with AP to spare),
 # AP left at arrival, negated (EP are worth nothing in town: Second Wind or coffee goes
 # where its EP still pay for moves)
 ZERO = (0,) * 11
-THIRST_KEY = slice(0, 5)   # the part of a cost that is the thirst outcome (death, moves short, dehydration)
-SUPPLY_KEY = slice(0, 6)   # ... and the items carried
+THIRST_KEY = slice(0, 4)   # the part of a cost that is the thirst outcome (death, moves short, dehydration)
+SUPPLY_KEY = slice(0, 8)   # ... and the boosters, premium and items carried
 WASTE = 9                  # index of the AP wasted
 PREMIUM = {"food7": 1, "twinoid": 2}  # a Twinoid is rarer than a 7 AP food
 
@@ -297,8 +299,8 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
         used = tuple(n + (1 if o == k else 0) for o, n in zip(ORDER, used))
         # Second Wind costs less than an item (no slot) but is kept when not needed: it is
         # the day's heroic action (Heroic Return, ...).
-        cost = (0, 0, 0, 0, 0, 0.5 if it.kind == "hero" else 1, it.kind == "alcohol", it.kind == "drug",
-                PREMIUM.get(k, 0), waste, 0)
+        cost = (0, 0, 0, 0, it.kind == "alcohol", it.kind == "drug", PREMIUM.get(k, 0),
+                0.5 if it.kind == "hero" else 1, 0, waste, 0)
         return State(i, ap, ep, cnt, th, drank, ate, drugged, drunk, used), cost
 
     def move(state):
@@ -324,9 +326,9 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
         options = []
         if i == last:
             if ap >= end_ap:
-                options.append(((0, 0, th == 2, 0, th == 1, 0, 0, 0, 0, 0, -ap), "end"))
+                options.append(((0, 0, th == 2, 0, 0, 0, 0, 0, th == 1, 0, -ap), "end"))
             else:
-                options.append(((0, end_ap - ap, th == 2, 0, th == 1, 0, 0, 0, 0, 0, 0), "stuck"))
+                options.append(((0, end_ap - ap, th == 2, 0, 0, 0, 0, 0, th == 1, 0, 0), "stuck"))
         else:
             m = move(state)
             if m is not None:
@@ -336,7 +338,7 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
                 else:
                     options.append((_add(best(nxt)[0], (0, 0, 0, dehyd, 0, 0, 0, 0, 0, 0, 0)), "move"))
             else:
-                options.append(((0, last - i + end_ap, th == 2, 0, th == 1, 0, 0, 0, 0, 0, 0), "stuck"))
+                options.append(((0, last - i + end_ap, th == 2, 0, 0, 0, 0, 0, th == 1, 0, 0), "stuck"))
         for k in ORDER:
             r = use(state, k)
             if r is not None:
@@ -655,7 +657,7 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
     lead: lines right after the title (the plan is not what the player asked for)."""
     cost, steps, used = result["cost"], result["steps"], result["used"]
     names = labels(used, generic_extras)
-    dead, short, end_dehyd, n_dehyd, end_thirsty, _, n_alc, n_drugs, _, waste, _ = cost
+    dead, short, end_dehyd, n_dehyd, n_alc, n_drugs, _, _, end_thirsty, waste, _ = cost
     n_items = carried(used)
     hero = used.get("secondwind")
     used = {k: n for k, n in used.items() if k != "secondwind"}
@@ -711,7 +713,8 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
     if ok and end_dehyd:
         warn.append("Arrives DEHYDRATED: needs 2 rations at arrival, or dies tonight.")
     elif ok and end_thirsty:
-        warn.append("Arrives Thirsty: needs a ration at arrival (not enough water, or no way to avoid it).")
+        warn.append("Arrives Thirsty: drink a ration at arrival (a ration more on the trip is carried only "
+                    "against Dehydrated).")
     if n_dehyd and not end_dehyd and ok:
         warn.append("Gets Dehydrated on the way: drink as soon as possible (one ration only makes Thirsty).")
     for s in steps:
