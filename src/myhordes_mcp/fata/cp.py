@@ -18,6 +18,7 @@ Stored per town in towns/{town}/citizens-cp.json, updated on every fetch.
 """
 
 import json
+import os
 import re
 import time
 
@@ -128,7 +129,7 @@ def update_cp_log(town_id: int, data: dict) -> None:
     log["town_id"] = town_id
     log["updated"] = int(time.time())
     path = tdir / CP_FILE
-    tmp = path.with_suffix(".tmp")
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")  # one per writer, see archive.save_towndata
     tmp.write_text(json.dumps(log, ensure_ascii=False, indent=1), encoding="utf-8")
     tmp.replace(path)
 

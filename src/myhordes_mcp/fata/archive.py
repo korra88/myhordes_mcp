@@ -13,6 +13,7 @@ Layout:
 
 import gzip
 import json
+import os
 import re
 import unicodedata
 from pathlib import Path
@@ -132,7 +133,10 @@ def save_towndata(town_id: int, day: int, raw: dict, *, live: bool, current: boo
         _save_meta(cache_dir, town_id, ti.get("name", "Unknown"), ti.get("season"))
     _save_estimation(cache_dir, day, ti.get("estimation_today"), final=not live)
     path = _towndata_file(cache_dir, day, live)
-    tmp = path.with_suffix(".tmp")
+    # One tmp name per writer: every Claude session runs its own server
+    # process, and a shared name lets one writer's replace() steal another's
+    # file (measured: ENOENT on rename with three parallel sessions).
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
     with gzip.open(tmp, "wt", encoding="utf-8") as f:
         json.dump(raw, f, ensure_ascii=False)
     tmp.replace(path)
