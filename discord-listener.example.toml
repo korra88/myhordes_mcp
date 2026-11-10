@@ -30,9 +30,19 @@ maintainer = "YOUR_DISCORD_USER_ID"    # replaces {maintainer} in the text with 
 # A DM has no new thread to go to: a session the [sessions] rule cuts restarts by itself,
 # carrying this much of the latest talk (estimated tokens; 0 = none).
 carry_tokens = 4000
+# Memory exists only in DMs: one file per person, written by the remember/forget MCP
+# tools (refused outside a DM) and pasted by the listener into the first prompt of that
+# person's DM session. The listener also denies every tier reading any memory file.
+# Move the old shared towns/_bot/memory.md once with `make bot-memory-migrate`.
+memory_file = "towns/_bot/memory/{user}.md"
+# With [public] on, the gateway rings when anybody DMs the bot; their DM is then read
+# for this many minutes after the latest ring, at most max_public_open DMs at once.
+public_window_minutes = 60
+max_public_open = 20
 
 # Slash commands: run by the listener itself, without Claude (no tokens, no prompt
-# injection). Only allow_users may use them. The listener registers them at start and
+# injection). Only allow_users may use them; with [public] on, everybody may: declare
+# nothing a stranger must not run. The listener registers them at start and
 # listens for them over a gateway connection (needs the applications.commands scope on
 # the server and no Interactions Endpoint URL in the Developer Portal).
 # Details: ../discord_mcp/README.md ("Slash commands"), docs/discord.md ("Slash commands").
@@ -68,8 +78,6 @@ model = "sonnet"
 # Add "prompts/discord-feedback.md" to log feedback in towns/_bot/feedback/ for
 # /review-bot-feedback (docs/discord.md, "Memory and feedback log").
 append_system_prompt_files = ["persona.md", "prompts/game-primer.md", "prompts/discord.md"]
-# Pasted into the first prompt of each thread (bot memory, prompts/discord.md).
-first_turn_files = ["towns/_bot/memory.md"]
 mcp_config = ["discord-listener.mcp.json"]   # copy from discord-listener.mcp.example.json
 # Read-only game and wiki tools, by name. Never mcp__myhordes__*.
 allowed_tools = [
@@ -95,6 +103,10 @@ allowed_tools = [
   "mcp__myhordes__search_wiki",
   "mcp__myhordes__list_wiki_categories",
   "mcp__myhordes__search_knowledge",
+  # The bot's own files (towns/_bot/): feedback log, and memory in DMs only.
+  "mcp__myhordes__log_feedback",
+  "mcp__myhordes__remember",
+  "mcp__myhordes__forget",
   # inspect-town and close-day write the town logs. Writes stay in towns/.
   "Write(./towns/**)",
   "Edit(./towns/**)",
@@ -107,8 +119,60 @@ deny = [
   "Edit(./towns/_current_town)",
 ]
 # Lifts the baseline deny on writes so the allows above can apply. Acceptable for a
-# few trusted users, given the Write/Edit allows cover only ./towns/** (memory, the
-# bot's feedback log, per-user default towns); revisit before opening allow_users.
+# few trusted users, given the Write/Edit allows cover only ./towns/** (town logs,
+# per-user default towns). Everybody else goes to [public], which never writes.
 unsafe_allow = ["Write", "Edit"]
 timeout_seconds = 600
 max_budget_usd = 100   # the maximum: on the subscription this is an equivalent, not a charge
+
+# Everybody not in allow_users, in the same channels and (with [dm] on) in DMs.
+# Absent or enabled = false: the bot answers allow_users only, as before.
+# A turn runs at the lowest tier among its authors: one public person in a thread makes
+# that turn public (the thread's session is resumed with this model and these tools).
+[public]
+enabled = false
+max_turns_per_user_per_hour = 10
+
+# A whole [claude] table, nothing inherited. Refused at start: unsafe_allow,
+# first_turn_files, and Write/Edit/Bash/NotebookEdit in allowed_tools. cwd must be the
+# same as [claude]'s. Use the full model id: the CLI alias "haiku" is Haiku 4.5.
+[public.claude]
+cwd = "."
+model = "claude-haiku-5-5"
+append_system_prompt_files = ["persona.md", "prompts/game-primer.md", "prompts/discord.md", "prompts/discord-feedback.md"]
+mcp_config = ["discord-listener.mcp.json"]
+allowed_tools = [
+  "mcp__myhordes__get_bank_inventory",
+  "mcp__myhordes__get_town_overview",
+  "mcp__myhordes__get_citizen_positions",
+  "mcp__myhordes__get_citizen_cp",
+  "mcp__myhordes__get_defense_status",
+  "mcp__myhordes__get_buildings",
+  "mcp__myhordes__get_build_options",
+  "mcp__myhordes__get_blueprint_order",
+  "mcp__myhordes__get_construction_history",
+  "mcp__myhordes__get_town_changes",
+  "mcp__myhordes__get_night_report",
+  "mcp__myhordes__get_expedition_roster",
+  "mcp__myhordes__get_scout_map",
+  "mcp__myhordes__find_expedition_path",
+  "mcp__myhordes__plan_expedition_supplies",
+  "mcp__myhordes__plan_kill_route",
+  "mcp__myhordes__get_zone_details",
+  "mcp__myhordes__get_attack_distribution",
+  "mcp__myhordes__get_attack_forecast",
+  "mcp__myhordes__search_wiki",
+  "mcp__myhordes__list_wiki_categories",
+  "mcp__myhordes__search_knowledge",
+  "mcp__myhordes__log_feedback",
+  "mcp__myhordes__remember",
+  "mcp__myhordes__forget",
+]
+# personal/: private notes on other players. towns/_bot/: the feedback log quotes
+# other readers, sometimes from their DMs.
+deny = [
+  "Read(./personal/**)",
+  "Read(./towns/_bot/**)",
+]
+timeout_seconds = 600
+max_budget_usd = 100
