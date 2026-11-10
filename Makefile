@@ -32,7 +32,7 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 .PHONY: kb fetch process clean-kb clean-all help advisor persona town discord-listen discord-listen-once \
 	discord-service-install discord-service-disable discord-service-uninstall \
 	towns-commit towns-commit-install towns-commit-disable towns-commit-uninstall \
-	golden golden-update golden-freeze golden-anyseed
+	golden golden-update golden-freeze golden-anyseed bot-memory-migrate
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -163,3 +163,6 @@ golden-freeze: ## Copy the fixture towns from towns/ and fetch the Gest'Hordes s
 
 golden-anyseed: ## Golden check with a random string-hash seed (finds set order leaking into outputs)
 	@.venv/bin/python tests/golden.py --any-seed
+
+bot-memory-migrate: ## One-off: move towns/_bot/memory.md to per-user towns/_bot/memory/<id>.md (idempotent; run on the Pi)
+	@PYTHONPATH=src .venv/bin/python -m myhordes_mcp.bot.migrate $(BOT_DIR)
