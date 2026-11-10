@@ -21,7 +21,8 @@ towns/
     day-NN.md                 #   the skills (inspect-town, close-day) add judgment on top
     notes.md
   _bot/                       # Discord bot (docs/discord.md, "Memory and feedback log")
-    memory.md                 #   facts kept across threads, written by the bot
+    memory/<discord id>.md    #   one person's facts, DM only (remember/forget tools)
+    memory.md.migrated        #   the old shared memory, after make bot-memory-migrate
     feedback/                 #   one file per feedback entry, when the log is on
       reviewed/               #   moved here by /review-bot-feedback
 ```

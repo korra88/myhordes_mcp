@@ -21,7 +21,9 @@ server over stdio can use it. What the listener does, and another bot should too
   Loading all of `knowledge/tactics/*.md` instead costs ~16k tokens and carries
   terminal-only instructions (town logs, `personal/`).
 - **Allow only the read-only tools.** List them by name (see `allowed_tools` in
-  `discord-listener.example.toml`); never a wildcard, so a new tool is opt-in.
+  `discord-listener.example.toml`); never a wildcard, so a new tool is opt-in. The
+  three bot tools (`log_feedback`, `remember`, `forget`) write only fixed files in
+  `towns/_bot/` and need `LISTENER_USER_ID` (and `LISTENER_CONTEXT=dm` for memory).
 - **Town per conversation:** pass `town_id` to every tool when the conversation is
   about a given town; without it the tools use the default town. A bot that sets
   `LISTENER_USER_ID=<discord id>` in the server's environment gets per-person
@@ -29,6 +31,25 @@ server over stdio can use it. What the listener does, and another bot should too
 - **Answer only on demand** (a mention or a message to the bot), never on a timer:
   the game forbids scheduled polling, and Fata agreed to on-demand use only.
 - **Limit who can use it** and how often, since every turn costs model usage.
+
+## Two tiers: trusted and public
+
+The bot answers everybody in its channels, at two levels (`[public]` in
+`discord-listener.toml`; mechanism in `../discord_mcp/README.md`):
+
+| | trusted (`allow_users`) | public (everybody else) |
+| --- | --- | --- |
+| model | `sonnet` | `claude-haiku-5-5` (full id: the CLI alias `haiku` is Haiku 4.5) |
+| turns per person per hour | 60 | 10 (`[public] max_turns_per_user_per_hour`) |
+| writes | town logs (`inspect-town`, `close-day`) via `Write(./towns/**)` | none: `Write`/`Edit` stay denied; only the bot tools |
+| DMs | yes | yes, found by the gateway when they write (see below) |
+
+A turn runs at the **lowest tier among its authors**: one public person in a thread
+makes that turn public (same session, resumed with the public model and tools), so a
+public person cannot have a trusted thread write files for them. Both tiers share the
+system prompt; `prompts/discord.md` "Other players" forbids verdicts on real players
+(traitor, thief, lazy), measured necessary on Haiku. Why Haiku, with the numbers: the
+2026-11-10 benchmark (`../claude-ollama-protocol/experiments/hordes-advisor/RESULTS.md`).
 
 ## Configure the listener
 
@@ -96,8 +117,9 @@ itself, without Claude (mechanism: `../discord_mcp/README.md`, "Slash commands")
 | `/set-my-town <town>` | Sets the caller's default town (`towns/_user_towns/<id>`) through `scripts/set_town.py --user`. Answers with the town name, season and day when `towns/` holds that town, and the previous ID when it changed. |
 | `/new` | DMs only, built into the listener (not in the toml; there whenever `[dm]` is on): starts a fresh DM conversation. Its answer stays visible in the DM, as the start of the new session. |
 
-Answers are visible only to the person who ran the command (except `/new`). Only `allow_users` may use
-them; anyone else is told "You are not on this bot's list; ask @<maintainer> to be added."
+Answers are visible only to the person who ran the command (except `/new`). With `[public]`
+on, everybody may use every declared command: declare nothing a stranger must not run.
+Without it only `allow_users` may use them; anyone else is told "You are not on this bot's list; ask @<maintainer> to be added."
 (`[dm] maintainer`), so `/help` doubles as "am I allowed?". To change the help, edit `prompts/discord-help.md` and restart the listener (the
 file is read once at start); the text is not read by the model, so keep it in step with
 what the bot can do. The server needs the `applications.commands` scope, and the
@@ -108,7 +130,9 @@ Developer Portal must have no Interactions Endpoint URL.
 Both are configured in `discord-listener.toml` (`[dm]`, `[sessions]`) and explained
 in `../discord_mcp/README.md` ("Sessions that fit the cache", "Direct messages").
 
-- **DMs** are off by default. When on, each person in `allow_users` sees the text of
+- **DMs** are off by default. When on, each person in `allow_users` (and, with
+  `[public]` on, anybody who writes to the bot: the gateway rings, the listener then
+  reads that DM for `public_window_minutes`, at most `max_public_open` at once) sees the text of
   `prompts/discord-dm-disclaimer.md` on their first DM (`{maintainer}` becomes a
   mention of the `maintainer` id) and the bot answers only after they add the check
   mark. What they wrote while waiting is answered as one turn, as in a thread.
@@ -122,6 +146,14 @@ in `../discord_mcp/README.md` ("Sessions that fit the cache", "Direct messages")
   outside the repo.
 - Add `[sessions]` and `[dm]` by hand to the local `discord-listener.toml` on the Pi
   (it is gitignored), and restart the listener: prompts and toml changed.
+
+## Old threads
+
+Discord does not apply `auto_archive_duration` (measured: threads still active after
+14 and 24 idle days), so the listener archives **its own** threads idle for
+`[threads] archive_after_days` (default 7, `0` = off), once an hour. Archived, not
+locked: writing in one reopens it and the bot answers as usual. Threads opened by
+people are left alone. Log lines: `thread.archived`, `thread.archive_failed`.
 
 ## Memory and feedback log
 

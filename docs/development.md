@@ -11,6 +11,7 @@ myhordes_mcp/
 ├── src/myhordes_mcp/
 │   ├── utils/               # .env config, town ID, single-flight TTL cache, game clock
 │   ├── fata/                # Fata Morgana: client (only HTTP entry), parsers, formatters, pathfinding, CP log
+│   ├── bot/                 # Discord bot's own files: feedback log, DM-only per-person memory
 │   ├── gesthordes/          # Gest'Hordes attack/defence statistics
 │   ├── myhordes/            # Official MyHordes API (disabled)
 │   └── knowledgebase/       # Wiki search (wiki/processed/) + curated knowledge/ search
@@ -40,7 +41,8 @@ myhordes_mcp/
 |---|---|
 | `main.py` | MCP server, tool definitions (thin wrappers) |
 | `src/myhordes_mcp/fata/client.py` | Single entry point for Fata Morgana requests (`/towndata`): coalesced + cached (`FATA_CACHE_TTL`, default 180 s), disk archive for past days. |
-| `src/myhordes_mcp/fata/` | `towndata.py` (`/towndata` → dict, field meanings), `parse.py` (legacy spy-page archives → dict), `cp.py` (per-citizen CP log), `townlog.py` (automatic town log files), `town.py` / `bank.py` / `buildings.py` / `zones.py` (formatters), `pathing.py` (expedition Dijkstra), `supplies.py` (consumables along a route), `expedition.py` (the plan_expedition_supplies logic), `planning.py` (build options, construction history), `blueprints.py` (blueprint reading order), `geo.py` (coordinates: parse/format `[x\|y]`, moves, km, neighbours, map bounds, zone map), `risk.py` (shared zone helpers: danger bands, freshness, platform reach, gate/outside/defense evening alerts, respawn check), `kills.py` (kill runs), `pickups.py` (items picked up on a route), `archive.py` (disk archive). Which game rules live in code: [mechanics-in-code.md](mechanics-in-code.md) |
+| `src/myhordes_mcp/fata/` | `towndata.py` (`/towndata` → dict, field meanings), `parse.py` (legacy spy-page archives → dict), `cp.py` (per-citizen CP log), `townlog.py` (automatic town log files), `town.py` / `bank.py` / `buildings.py` / `zones.py` (formatters), `pathing.py` (expedition Dijkstra), `supplies.py` (consumables along a route), `expedition.py` (the plan_expedition_supplies logic), `planning.py` (build options, construction history), `blueprints.py` (blueprint reading order), `geo.py` (coordinates: parse/format `[x\|y]`, moves, km, neighbours, map bounds, zone map), `risk.py` (shared zone helpers: danger bands, freshness, platform reach, gate/outside/defense evening alerts, respawn check, depleted `(dried)` tiles for positions and roster), `kills.py` (kill runs), `pickups.py` (items picked up on a route), `archive.py` (disk archive). Which game rules live in code: [mechanics-in-code.md](mechanics-in-code.md) |
+| `src/myhordes_mcp/bot/` | `store.py` (`log_feedback`, `remember`, `forget`: fixed paths under `towns/_bot/`, author from `LISTENER_USER_ID`, memory only with `LISTENER_CONTEXT=dm`), `migrate.py` (one-off `memory.md` → `memory/<id>.md`, `make bot-memory-migrate`). Tests: `tests/bot_tools.py` (plain script, `.venv/bin/python tests/bot_tools.py`). |
 | `src/myhordes_mcp/gesthordes/` | Gest'Hordes stats client + formatters |
 | `src/myhordes_mcp/myhordes/official_api.py` | *(disabled)* Official API client placeholder |
 | `src/myhordes_mcp/knowledgebase/` | `wiki.py` (indexes `wiki/processed/`), `curated.py` (searches `knowledge/`) |
