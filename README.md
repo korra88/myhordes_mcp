@@ -9,7 +9,7 @@ Live town data comes from [Fata Morgana](https://fatamorgana.md26.eu) (no accoun
 ## Quick start
 
 You need Python 3.10+, [Claude Code](https://claude.com/claude-code) and your town's Fata Morgana ID
-(the number in your town's Fata link, e.g. `https://beta.fatamorgana.md26.eu/map/12345`).
+(the number in your town's Fata link, e.g. `https://fatamorgana.md26.eu/map/12345`).
 
 ```bash
 # 1. Install

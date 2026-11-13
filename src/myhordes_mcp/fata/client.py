@@ -32,7 +32,7 @@ from .parse import _build_result
 from .snapshot import snapshot
 from .towndata import build_result, is_towndata
 
-FATA_TOWNDATA_URL = os.getenv("FATA_TOWNDATA_URL", "https://beta.fatamorgana.md26.eu/towndata")
+FATA_TOWNDATA_URL = os.getenv("FATA_TOWNDATA_URL", "https://fatamorgana.md26.eu/towndata")
 
 CACHE_TTL = env_int("FATA_CACHE_TTL", 180)  # seconds
 
@@ -89,7 +89,7 @@ async def _load(town_id: int, day: int | None) -> dict:
     if day is not None:
         params["day"] = day
     try:
-        async with httpx.AsyncClient(timeout=30.0, headers={"user-agent": USER_AGENT}) as client:
+        async with httpx.AsyncClient(timeout=30.0, headers={"user-agent": USER_AGENT}, follow_redirects=True) as client:
             resp = await client.get(FATA_TOWNDATA_URL, params=params)
             resp.raise_for_status()
             raw = resp.json()

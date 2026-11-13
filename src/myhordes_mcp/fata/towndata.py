@@ -1,6 +1,6 @@
 """Parse the Fata Morgana `/towndata` JSON into the standard result dict.
 
-`GET https://beta.fatamorgana.md26.eu/towndata?town={id}[&day={n}]` — public,
+`GET https://fatamorgana.md26.eu/towndata?town={id}[&day={n}]` — public,
 read-only, OK'd by the Fata developer for this MCP (2026-10-15). No day = the
 latest day; `day=n` = that day as it was at its end. Not affected by the
 nightly attack or game downtime.
