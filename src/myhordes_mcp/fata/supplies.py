@@ -685,7 +685,8 @@ def format_plan(route: list[tuple[int, int]], start: Start, result: dict, *,
             lines.append(f"**Extra needed:** {more} → **{plural(sum(used.values()), 'slot')} in total**"
                          + (f" of {slots} free" if slots else ""))
         if used.get("water", 0) >= 2:
-            lines.append("  (a Water Cooler Bottle holds up to 3 rations in one slot)")
+            lines.append("  (a Water Cooler Bottle holds up to 3 rations in one slot, but it is heavy:"
+                         " one per citizen, two for a Guardian with the shield lowered)")
     elif not (short or dead):
         lines.append("**Bring:** nothing — the route fits in the starting AP/EP.")
     if hero:

@@ -70,7 +70,9 @@ Used at 0 AP they give the most.
 
 - Max AP 6, **5 when wounded** (7 AP food then gives 6).
 - Second drug the same day → **addict** (permanent; an addict not drugged at night dies).
-- Each item takes a rucksack slot; a Water Cooler Bottle holds 3 rations in one slot.
+- Each item takes a rucksack slot; a Water Cooler Bottle holds 3 rations in one slot but
+  is a **heavy** item (`heavy(true)`, any fill level): one per citizen, two for a Guardian
+  with the shield lowered (see Heavy items below).
 
 ## Rucksack capacity
 
