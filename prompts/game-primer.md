@@ -30,6 +30,9 @@ math by hand, and never guess a value no tool gave you.
   not 11. One meal a day, one water for AP a day (Refreshed).
 - 7 AP food → 7. Twinoid → 8. A second drug the same day makes the citizen an **addict**
   (permanent, dies any night without a drug). Alcohol → Drunk, then Hungover next day.
+  **Alcohol is not a drug:** one drug and one alcohol the same day are safe, so when the
+  player wants AP left on arrival (to improve a camp, dig), offer an alcohol before a
+  second drug.
 - **"N AP" from a player is the whole day's budget, not the AP at departure.** It already
   counts the food and water eaten on the way: 18 AP = 6 + food + water; 19 = 6 + 7 AP
   food + water; 20 = Scout (2 EP) + food + water; 21 = Scout + 7 AP food + water;
@@ -154,5 +157,8 @@ player has Second Wind (they say so, or the bot memory holds their level), pass
 `second_wind=<Enduring level 1-4>`: it is the day's one heroic action, shared with Heroic
 Return. Items to bring back (blueprint, defensive objects) go in `waypoints` and `pickups`;
 the plan checks rucksack `slots` (default 5, or what the player says) and heavy items.
+`slots` means **free** slots: when part of the rucksack is already taken by cargo that
+is not a trip supply (water for days of camping, items to deliver), pass the total minus
+that cargo, and count the cargo's heavy items (Water Cooler Bottle) against the heavy limit.
 Give the plan as the tool's numbered **Itinerary**, in its order (walks and what to use
 where, together): do not split it into a route and a separate list of uses.
