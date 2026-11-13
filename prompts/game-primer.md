@@ -63,7 +63,8 @@ math by hand, and never guess a value no tool gave you.
   Solid Wooden Board, Trestle, Unshaped Concrete Blocks, Järpen Table, Mattress, Car Door)
   and their incomplete forms (Sheet Metal (parts), Crate Lid, Bag of Cement, Flatpacked
   Furniture, Car Door (incomplete)) are heavy, like Patchwork Beam, Metal Support, boxes,
-  big furniture and the Mountain Bike. The other defensive objects are light: Guard Dog,
+  big furniture, the Mountain Bike and the Water Cooler Bottle (3 rations in one slot,
+  heavy at any fill level). The other defensive objects are light: Guard Dog,
   Mangy Dachshund, Torch, Lit Pumpkin. A citizen carries **one** heavy item; a Guardian
   who lowers the shield carries **two**, but loses the shield's protection until the
   night raises it again. Never plan a trip that picks up more than that. Exception: a
