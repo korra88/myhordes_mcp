@@ -122,6 +122,15 @@ Many buildings require blueprint before construction. Four rarities: Common (C),
 - One blueprint per ruin per town — second camping yields nothing.
 - Survivalists only class reaching 100% survival chance; all others cap at 90% (99% with Reclusive R4). Always send Survivalists for blueprint runs.
 - Buried buildings do NOT drop blueprints while buried, but if uncovered after hiding, blueprint obtained.
+- **Water for a stay of several days: one ration every two days.** Checked in the game code
+  (`NightlyHandler`, `CitizenHandler::increaseThirstLevel`): at midnight, only a citizen who
+  did not drink that day goes up one thirst level (none → Thirsty → Dehydrated → death).
+  Drinking while Thirsty clears it. So drink, skip, drink…: the citizen is Thirsty every
+  other day but never Dehydrated. Budget N/2 rations rounded up for N days; a skipped drink
+  also means no water AP that day (Thirsty costs −1 CP only with the Prepared skill). Two
+  dry days in a row → Dehydrated (needs two rations), three → death. To carry more water
+  per slot: Water Cooler Bottle, 3 rations in one slot but **heavy** (one per citizen, two
+  for a Guardian with the shield lowered).
 
 ### Reading priority — critical
 Read explorable-ruin blueprints before normal ones of the same rarity; a ruin blueprint with nothing reachable is consumed for nothing. Order, odds and what to hold: `get_blueprint_order` (rules in `strategy-quirks.md`).

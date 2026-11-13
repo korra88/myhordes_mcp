@@ -48,6 +48,11 @@ math by hand, and never guess a value no tool gave you.
 - **Overnight:** no water during the day → thirst goes up one level at midnight.
   Dehydrated at midnight → death. A Dehydrated citizen needs two rations.
 - Thirsty and Refreshed are separate statuses: coming home Thirsty but Refreshed is safe.
+- **Days outside (camping): one ration every two days is enough.** A dry day only makes
+  the citizen Thirsty at midnight; the next day's drink clears it. Two dry days in a row
+  → Dehydrated, three → death. Water for N days = N/2 rations rounded up (each skipped
+  drink is also 6 AP less that day). More water per slot: Water Cooler Bottle (3 rations,
+  heavy).
 
 ## Desert
 
