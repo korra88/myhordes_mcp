@@ -59,17 +59,49 @@ from datetime import datetime
 from ..utils.clock import GAME_TZ
 from .geo import fmt_xy
 
-# dtype int → human-readable cause of death
+# death_type → cause of death. The game's CauseOfDeath ids (myhordes
+# src/Entity/CauseOfDeath.php), which Fata passes through: in the cached towns
+# (2026-11-14) type 5 is only ever outside and type 6 is the mass in-town deaths
+# of attack nights (town 7365 night 22: 17 deaths, newspaper 29 → 12 alive).
 DEATH_TYPES = {
-    1: "Dehydrated",
-    2: "Eaten by zombies",
-    3: "Suicide by cyanide",
-    4: "Vanished",
-    5: "Disappeared into the outside world",
-    6: "Nuclear",
-    7: "Infection",
-    8: "Ghoul purge",
+    1: "Dehydration",
+    2: "Strangled",
+    3: "Cyanide",
+    4: "Hanged",
+    5: "Vanished outside at night",
+    6: "Killed in the night attack",
+    7: "Drug withdrawal",
+    8: "Infection",
+    9: "Headshot",
+    10: "Unknown cause",
+    11: "Poisoned",
+    12: "Eaten by a ghoul",
+    13: "Ghoul shot while attacking",
+    14: "Ghoul starved",
+    15: "Flesh cage",
+    16: "Crucifixion",
+    17: "Explosive doormat",
+    18: "Haunted",
+    19: "Radiation",
+    20: "Apocalypse",
+    21: "Liver failure",
+    22: "Rabid dog",
 }
+NIGHT_ATTACK = 6
+
+
+def death_day(survival_day: int | None, dtype: int | None) -> int:
+    """Game day a death belongs to (a night death: the day whose attack it was).
+
+    The game stores survival_day = town day − 1 at the time of death
+    (DeathHandler::kill). The night of day N runs thirst, addiction, infection
+    and vanishing before the day counter moves to N+1, the attack after it
+    (NightlyHandler.php:1824-1835): attack deaths therefore carry N, all others
+    N − 1. The rare post-devastation camping death (stage2_vanish, type 5)
+    also carries N and is filed one day late: it cannot be told apart by type.
+    """
+    s = survival_day or 0
+    return s if dtype == NIGHT_ATTACK and s > 0 else s + 1
 
 
 # Fata job key → display name
@@ -282,8 +314,7 @@ def _parse_citizens(raw: list[dict], roles: dict, rel) -> list[dict]:
 
 
 def _parse_deaths(raw: list[dict], rel) -> list[dict]:
-    """survival_day = nights survived, so the death belongs to game day survival_day + 1
-    (same as the legacy cadavers[] index + 1)."""
+    """`day` = the game day the death belongs to, see death_day()."""
     deaths = []
     for c in raw:
         if not c.get("dead"):
@@ -294,7 +325,7 @@ def _parse_deaths(raw: list[dict], rel) -> list[dict]:
             "name": c.get("name", "Unknown"),
             "cause": DEATH_TYPES.get(dtype, f"Unknown ({dtype})"),
             "last_coords": fmt_xy((rx, ry)),
-            "day": (c.get("survival_day") or 0) + 1,
+            "day": death_day(c.get("survival_day"), dtype),
         })
     deaths.sort(key=lambda d: d["day"], reverse=True)
     return deaths

@@ -3,7 +3,7 @@
 import re
 
 from .geo import fmt_xy
-from .towndata import DEATH_TYPES, JOB_NAMES, link_parents
+from .towndata import DEATH_TYPES, JOB_NAMES, death_day, link_parents
 
 
 def _build_result(town_id: int, js_data: dict) -> dict:
@@ -73,23 +73,25 @@ def _parse_citizens(js_data: dict, sys_data: dict) -> list[dict]:
 
 
 def _parse_deaths(js_data: dict, current_day: int | None) -> list[dict]:
-    """Parse cadaver list. Each entry in cadavers[] is a dict of deaths for one day.
+    """Parse cadaver list. cadavers is a list, or a dict keyed by the index as a
+    string when some indexes are empty (town 7365); each entry is a dict of deaths.
 
-    Index i holds the deaths of game day i+1 (the attack at the end of that day
-    for night deaths): citizens who died in the night 5→6 sit at index 4.
-    "day" below is that game day.
+    The index is the game's survival_day, so "day" = death_day(index, dtype):
+    town 7365 index 22 holds the 17 deaths of the attack at the end of day 22.
     """
     cadavers = js_data.get("cadavers", [])
+    groups = cadavers.items() if isinstance(cadavers, dict) else enumerate(cadavers)
     deaths = []
-    for day_idx, day_group in enumerate(cadavers):
+    for day_idx, day_group in groups:
         if not isinstance(day_group, dict):
             continue
         for pid, c in day_group.items():
+            dtype = c.get("dtype")
             deaths.append({
                 "name": c.get("name", "Unknown"),
-                "cause": DEATH_TYPES.get(c.get("dtype"), f"Unknown ({c.get('dtype')})"),
+                "cause": DEATH_TYPES.get(dtype, f"Unknown ({dtype})"),
                 "last_coords": f"[{c.get('rx', '?')}|{c.get('ry', '?')}]",
-                "day": day_idx + 1,
+                "day": death_day(int(day_idx), dtype),
             })
     # Sort by day descending (most recent first)
     deaths.sort(key=lambda d: d["day"], reverse=True)
