@@ -19,18 +19,16 @@ tests/golden/ holds real town data (player names): it is gitignored, never commi
 import argparse
 import asyncio
 import difflib
-import gzip
-import hashlib
 import json
 import os
 import shutil
 import sys
-import tempfile
-import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tests"))
+from offline import manifest, offline   # noqa: E402
 GOLDEN = ROOT / "tests" / "golden"
 FIXTURES = GOLDEN / "fixtures"
 OUT = GOLDEN / "out"
@@ -273,76 +271,8 @@ def freeze() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Offline run
+# Offline run (the harness is in tests/offline.py)
 # ---------------------------------------------------------------------------
-
-def _fixture_raw(towns_dir: Path, town: int, day: int | None) -> dict | None:
-    for folder, tid in TOWNS:
-        if tid != town:
-            continue
-        cache = towns_dir / folder / "cache"
-        if day is None:
-            day = json.loads((cache / "_meta.json").read_text())["current_day"]
-        for name in (f"day-{day:02d}.towndata.json.gz", f"day-{day:02d}.towndata.live.json.gz"):
-            if (cache / name).exists():
-                return json.loads(gzip.decompress((cache / name).read_bytes()))
-    return None
-
-
-def _install_fakes(towns_dir: Path) -> None:
-    """Point the archive at the temporary copy and serve every HTTP request from fixtures."""
-    import httpx
-
-    class FakeResponse:
-        def __init__(self, url: str, status: int, body: str):
-            self.status_code, self.text = status, body
-            self.request = httpx.Request("GET", url)
-
-        def json(self):
-            return json.loads(self.text)
-
-        def raise_for_status(self):
-            if self.status_code >= 400:
-                raise httpx.HTTPStatusError("fixture", request=self.request, response=self)
-
-    async def fake_get(self, url, params=None, **kw):
-        if "fatamorgana" in str(url):
-            raw = _fixture_raw(towns_dir, int(params["town"]), params.get("day"))
-            return FakeResponse(url, 200, json.dumps(raw)) if raw else FakeResponse(url, 404, "")
-        if "gesthordes" in str(url):   # recorded for the main town only: others get a 404
-            f = FIXTURES / "gesthordes.json"
-            ok = str(url).rstrip("/").endswith(f"/{MAIN}") and f.exists()
-            return FakeResponse(url, 200, f.read_text()) if ok else FakeResponse(url, 404, "")
-        raise httpx.ConnectError(f"offline test: {url}")
-
-    httpx.AsyncClient.get = fake_get
-
-
-def _frozen_now(towns_dir: Path) -> datetime:
-    from myhordes_mcp.fata.towndata import _game_time
-    from myhordes_mcp.utils.clock import data_datetime
-    raw = _fixture_raw(towns_dir, MAIN, None)
-    dt = data_datetime({"data_time": _game_time(raw["town_info"].get("last_game_update"))})
-    return dt + CLOCK_AFTER_DATA
-
-
-def _tree(root: Path) -> dict[str, tuple[int, int]]:
-    """{relative path: (size, mtime_ns)} of every file under root."""
-    return {str(f.relative_to(root)): (f.stat().st_size, f.stat().st_mtime_ns)
-            for f in root.rglob("*") if f.is_file()}
-
-
-def _manifest(towns_dir: Path) -> str:
-    """Every file the run left in the temporary towns/: path and a hash of its content
-    (decompressed for .gz), so a refactoring of archive/cp/snapshot/townlog writes is checked."""
-    lines = []
-    for f in sorted(p for p in towns_dir.rglob("*") if p.is_file()):
-        data = f.read_bytes()
-        if f.suffix == ".gz":
-            data = gzip.decompress(data)
-        lines.append(f"{f.relative_to(towns_dir)}  {hashlib.sha1(data).hexdigest()[:12]}")
-    return "\n".join(lines)
-
 
 def _tool_schemas(main) -> str:
     """Name, description and input schema of every MCP tool: what the bot sees of them."""
@@ -356,102 +286,64 @@ def run_cases(*, full: bool = True) -> dict[str, str]:
     files {path under towns/: text} written for the case, hide [paths under towns/] moved away
     for the case, townlog True (town log on; the .md files it changed are added to the
     output). full: also the pseudo-cases _files (written files) and _tools (tool schemas)."""
-    if not (FIXTURES / "towns").is_dir():
-        sys.exit(f"No fixtures in {FIXTURES.relative_to(ROOT)}: run with --freeze first.")
-    real_towns = ROOT / "towns"
-    before = _tree(real_towns) if real_towns.is_dir() else {}
-    tmp = Path(tempfile.mkdtemp(prefix="golden-"))
-    towns_dir = tmp / "towns"
-    shutil.copytree(FIXTURES / "towns", towns_dir)
-    os.environ["TOWN_LOG_AUTO"] = "0"
-    os.environ["FATA_CACHE_TTL"] = "0"
-    os.environ.pop("LISTENER_USER_ID", None)
-    sys.path.insert(0, str(ROOT))
-    sys.path.insert(0, str(ROOT / "src"))
-    _install_fakes(towns_dir)
+    with offline(FIXTURES, TOWNS, MAIN, clock_after=CLOCK_AFTER_DATA, prefix="golden-") as run:
+        return _run_cases(run, full)
 
-    # Patch config and the clock BEFORE anything else imports them, so every module (also
-    # one added later with `from ..utils.config import TOWNS_DIR`) gets the temporary paths.
-    from myhordes_mcp.utils import clock, config
-    real_now = clock.now
-    config.TOWNS_DIR = towns_dir
-    config.CURRENT_TOWN_FILE = towns_dir / "_current_town"
-    config.USER_TOWNS_DIR = towns_dir / "_user_towns"
-    config.FATAMORGANA_TOWN_ID = None
-    config.TOWN_LOG_AUTO = 0
-    now = {}
-    clock.now = lambda: now["t"]
-    time.time = lambda: now["t"].timestamp()
-    now["t"] = day0 = _frozen_now(towns_dir)   # imports the fata package: after the patches
 
-    import main
+def _run_cases(run, full: bool) -> dict[str, str]:
+    main, towns_dir, tmp, now, day0 = run.main, run.towns_dir, run.tmp, run.now, run.day0
     from myhordes_mcp.fata import townlog
-    leaked = [f"{m.__name__}.{k}" for m in list(sys.modules.values())
-              if getattr(m, "__name__", "").startswith(("myhordes_mcp", "main"))
-              for k, v in vars(m).items() if isinstance(v, Path) and v == real_towns]
-    leaked += [f"{m.__name__}.{k}" for m in list(sys.modules.values())
-               if getattr(m, "__name__", "").startswith(("myhordes_mcp", "main"))
-               for k, v in vars(m).items() if v is real_now]
-    if leaked:
-        sys.exit(f"Not patched (real towns/ or real clock): {', '.join(leaked)}")
 
     def norm(text: str) -> str:
         return text.replace(str(towns_dir), "<towns>").replace(str(tmp), "<tmp>")
 
     out = {}
-    try:
-        for name, tool, kwargs, *rest in CASES:
-            opts = rest[0] if rest else {}
-            if "clock" in opts:
-                h, m = map(int, opts["clock"].split(":"))
-                now["t"] = day0.replace(hour=h, minute=m)
-            env_old = {k: os.environ.get(k) for k in opts.get("env", {})}
-            os.environ.update(opts.get("env", {}))
-            for rel, text in opts.get("files", {}).items():
-                (towns_dir / rel).parent.mkdir(parents=True, exist_ok=True)
-                (towns_dir / rel).write_text(text, encoding="utf-8")
-            hidden = []
-            for rel in opts.get("hide", []):
-                if (towns_dir / rel).exists():
-                    hidden.append(rel)
-                    (towns_dir / rel).rename(towns_dir / (rel + ".hidden"))
-            logs_before = {f: f.read_text() for f in towns_dir.rglob("*.md")}
-            townlog.TOWN_LOG_AUTO = 1 if opts.get("townlog") else 0
-            fn = getattr(main, tool)
-            fn = getattr(fn, "fn", fn)
-            args = {"town_id": MAIN, **kwargs} if "town_id" in fn.__code__.co_varnames else kwargs
-            try:
-                res = fn(**args)
-                if asyncio.iscoroutine(res):
-                    res = asyncio.run(res)
-            except Exception as e:   # a crash is an output too: the golden records it
-                res = f"EXCEPTION {type(e).__name__}: {e}"
-            res = str(res).rstrip("\n")
-            if opts.get("townlog"):
-                for f in sorted(towns_dir.rglob("*.md")):
-                    if logs_before.get(f) != (text := f.read_text()):
-                        res += f"\n\n--- {f.relative_to(towns_dir)} ---\n" + text.rstrip("\n")
-            out[name] = norm(res) + "\n"
-            townlog.TOWN_LOG_AUTO = 0
-            for rel in hidden:
-                (towns_dir / (rel + ".hidden")).rename(towns_dir / rel)
-            for rel in opts.get("files", {}):
-                (towns_dir / rel).unlink(missing_ok=True)
-            for k, v in env_old.items():
-                if v is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = v
-            now["t"] = day0
-        if full:
-            out["_files"] = _manifest(towns_dir) + "\n"
-            out["_tools"] = _tool_schemas(main) + "\n"
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-    after = _tree(real_towns) if real_towns.is_dir() else {}
-    if after != before:
-        changed = sorted(set(after.items()) ^ set(before.items()))
-        sys.exit(f"The run changed the real towns/ (must never happen): {changed[:5]}")
+    for name, tool, kwargs, *rest in CASES:
+        opts = rest[0] if rest else {}
+        if "clock" in opts:
+            h, m = map(int, opts["clock"].split(":"))
+            now["t"] = day0.replace(hour=h, minute=m)
+        env_old = {k: os.environ.get(k) for k in opts.get("env", {})}
+        os.environ.update(opts.get("env", {}))
+        for rel, text in opts.get("files", {}).items():
+            (towns_dir / rel).parent.mkdir(parents=True, exist_ok=True)
+            (towns_dir / rel).write_text(text, encoding="utf-8")
+        hidden = []
+        for rel in opts.get("hide", []):
+            if (towns_dir / rel).exists():
+                hidden.append(rel)
+                (towns_dir / rel).rename(towns_dir / (rel + ".hidden"))
+        logs_before = {f: f.read_text() for f in towns_dir.rglob("*.md")}
+        townlog.TOWN_LOG_AUTO = 1 if opts.get("townlog") else 0
+        fn = getattr(main, tool)
+        fn = getattr(fn, "fn", fn)
+        args = {"town_id": MAIN, **kwargs} if "town_id" in fn.__code__.co_varnames else kwargs
+        try:
+            res = fn(**args)
+            if asyncio.iscoroutine(res):
+                res = asyncio.run(res)
+        except Exception as e:   # a crash is an output too: the golden records it
+            res = f"EXCEPTION {type(e).__name__}: {e}"
+        res = str(res).rstrip("\n")
+        if opts.get("townlog"):
+            for f in sorted(towns_dir.rglob("*.md")):
+                if logs_before.get(f) != (text := f.read_text()):
+                    res += f"\n\n--- {f.relative_to(towns_dir)} ---\n" + text.rstrip("\n")
+        out[name] = norm(res) + "\n"
+        townlog.TOWN_LOG_AUTO = 0
+        for rel in hidden:
+            (towns_dir / (rel + ".hidden")).rename(towns_dir / rel)
+        for rel in opts.get("files", {}):
+            (towns_dir / rel).unlink(missing_ok=True)
+        for k, v in env_old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        now["t"] = day0
+    if full:
+        out["_files"] = manifest(towns_dir) + "\n"
+        out["_tools"] = _tool_schemas(main) + "\n"
     return out
 
 
