@@ -326,7 +326,7 @@ async def get_night_report(day: int = 0, town_id: int = 0) -> str:
     if target < 1:
         return "The town is on day 1: no night has passed yet."
     day_data = await fata.fetch_town_data(tid, day=target)
-    return fata.format_night_report(data, target, gh, day_data)
+    return fata.format_night_report(data, target, gh, day_data, camp_log=fata.load_camping_log(tid))
 
 
 @mcp.tool()
@@ -784,6 +784,79 @@ async def get_zone_details(
     if coords_provided:
         return fata.format_zone_path(data, x1, y1, x2, y2, max_ap=max_ap)
     return fata.format_zones(data, item=item)
+
+
+@mcp.tool()
+async def get_camping_odds(
+    x: int | None = None,
+    y: int | None = None,
+    citizen: str = "",
+    skill: str = "none",
+    camp_level: int = -1,
+    ap: int = 0,
+    defense_items: int = 0,
+    camp_items: int = 0,
+    hidden_before: int = 0,
+    nights: int = -1,
+    tomb: bool = False,
+    vest: bool | None = None,
+    record: bool = True,
+    town_id: int = 0,
+) -> str:
+    """
+    Survival odds of camping (hiding overnight) on a zone, and the best order of camp
+    upgrades to raise them. Use it for "can I camp here?", "what are my camping odds?",
+    "how many upgrades do I build, in which order?". It applies the game's exact formula
+    (verified in the game code) with the zone's ruin, zombies, distance, the Lighthouse and
+    the town type from Fata: do NOT call other tools to work it out, and do not estimate
+    odds yourself.
+
+    Fata cannot know these: ASK the player before calling, and pass what they say. Without
+    them the tool assumes and states the assumption: Reclusive / pro-camper skill, camping
+    nights already survived (each one lowers the odds a lot), the zone's current camp bonus (%),
+    AP to spend on upgrades, defensive items carried (Old Door, Sheet Metal, Trestle,
+    Mattress, Solid Wooden Board, Sheet of Plywood, Järpen Table), camp items in the backpack
+    (Groundsheet, Festering Flesh), citizens already hidden on the zone.
+    Upgrades: improve campsite = +5% camp bonus for 1 AP; install a defensive item = +9% for 1 AP
+    and the item; both only while the camp bonus is below 50%. The camp bonus drops 15% each
+    night and belongs to the zone (all campers share it). The odds freeze when the citizen
+    hides: upgrade first, hide last, after 19:00.
+
+    Output: odds now, the plan (explicit order, AP, items) and the odds after it, the
+    non-zero terms, the assumptions, one line of advice. Report them as given.
+
+    Args:
+        x: Zone X, relative to town. Omit with `citizen` to use that citizen's position.
+        y: Zone Y, relative to town.
+        citizen: Citizen name (case-insensitive): gives the job (Survivalist cap 100%,
+                 Scout vest) and the default position.
+        skill: "none" (default), "procamp" (pro camper), or "reclusive1".."reclusive4"
+               (Reclusive level; level 4 caps at 99%). Ask the player.
+        camp_level: The zone's current camp bonus in % (e.g. 43; the percentage the game shows
+                    for the campsite, 0-60). -1 = unknown: the last recorded bonus minus 15%
+                    per night since, else assumed 0; say which.
+        ap: AP the player can spend on upgrades. 0 = odds only, no plan.
+        defense_items: Defensive items carried for installs (each +9 for 1 AP).
+        camp_items: Groundsheets / Festering Flesh in the backpack (+5 each).
+        hidden_before: Citizens already hidden on the zone before the player (crowd malus).
+        nights: Camping nights the citizen already survived. -1 = from the town's camping log
+                (sure + probable nights, pessimistic; the player can correct it), else assumed 0.
+        tomb: True if the citizen is hidden in a dug grave (+8).
+        vest: Scout vest worn (zombies -3 instead of -7 each). Omit: True for a Scout.
+        record: True (default) stores the camp bonus the player gave and the plan's resulting
+                bonus for this zone, so later questions can start from it. Set False for
+                what-if questions the player does not mean to do.
+        town_id: Fata Morgana town ID. Omit for the player's default town.
+    """
+    got = await _town(town_id)
+    if isinstance(got, str):
+        return got
+    tid, data = got
+    return fata.format_camping_odds(
+        data, x=x, y=y, citizen=citizen, skill=skill, camp_level=camp_level, ap=ap,
+        defense_items=defense_items, camp_items=camp_items, hidden_before=hidden_before,
+        nights=nights, tomb=tomb, vest=vest, record=record, town_id=tid,
+    )
 
 
 # ---------------------------------------------------------------------------

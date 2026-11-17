@@ -132,5 +132,31 @@ Many buildings require blueprint before construction. Four rarities: Common (C),
   per slot: Water Cooler Bottle, 3 rations in one slot but **heavy** (one per citizen, two
   for a Guardian with the shield lowered).
 
+### Camping odds and camp upgrades
+Checked in the game code (`CitizenHandler::getCampingValues`, details and line numbers in
+`docs/camping-plan.md` §1.2). Use `get_camping_odds`, which applies all of this.
+- **Night outside:** at midnight a citizen outside is either hidden and rolls the odds
+  (survived: +1 to their camping counter) or dies (Vanished). The odds are **frozen when
+  the citizen hides**: upgrades, zombies, other campers and the clock count as they are then.
+- **Odds** = sum of these, capped at 90% (Survivalist 100%, Reclusive 4 99%):
+  - nights already camped: 0 → +80%, 1 → +60%, 2 → +35%, 3 → +15%, 4 → 0, then −50%, −100%,
+    −200%… With any Reclusive level (first 6 nights) or Pro camper: +80, +70, +60, +40,
+    +30, +20, 0. Pandemonium: +50, +30, +20, +10, 0 and −30% town malus;
+  - zone camp bonus (the upgrades), 1:1;
+  - ruin: its own bonus (−50%…+50%) while there is room inside (1–5 places, or unlimited);
+    buried ruin +15%; no ruin or ruin full −25%;
+  - zombies on the zone −7% each (−3% with the Scout's vest worn);
+  - citizens hidden there before you: 2 → −10%, 3 → −30%, 4 → −50%, 5+ → −70%;
+  - Lighthouse built +25%; Groundsheet / Festering Flesh in the rucksack +5% each;
+    dug grave (tomb) +8%; hiding between 19:00 and 06:59 +10%;
+  - distance: 0 km −100%, 1 −75%, 2 −50%, 3 −25%, 4 −10%, 5–11 0, 12 +5%, 13 +7%,
+    14 +10%, 15 +15%, 16+ +20%; devastated town −50%.
+- **Camp upgrades** raise the zone's camp bonus: improve the campsite +5% (1 AP), install
+  a defensive item +9% (1 AP + the item: Old Door, Sheet Metal, Trestle, Mattress, Solid
+  Wooden Board, Sheet of Plywood, Järpen Table). Allowed only while the bonus is below
+  50%, so the last action can cross it: from 0, 8 improves then 2 installs = 40 → 49 → 58%.
+  The bonus drops 15% each night (58 → 43; then 1 improve + 1 install = 57%) and belongs to
+  the zone: every camper there shares it.
+
 ### Reading priority — critical
 Read explorable-ruin blueprints before normal ones of the same rarity; a ruin blueprint with nothing reachable is consumed for nothing. Order, odds and what to hold: `get_blueprint_order` (rules in `strategy-quirks.md`).

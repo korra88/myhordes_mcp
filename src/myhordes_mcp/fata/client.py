@@ -14,7 +14,7 @@ legacy spy page (before 2026-10-15) are still read through parse.py.
 
 Every parsed result also feeds the per-citizen CP log (cp.py) and, for the
 current day, the intraday snapshots (snapshot.py) and the town log files
-(townlog.py, TOWN_LOG_AUTO). A log update leaves a one-line note in
+(townlog.py, TOWN_LOG_AUTO) and the camping log (camplog.py). A log update leaves a one-line note in
 meta["log_note"], which the first tool header that formats the result shows.
 
 The endpoint is not affected by the nightly attack (Fata developer, 2026-10-15).
@@ -27,7 +27,7 @@ import httpx
 
 from ..utils.cache import TTLCache
 from ..utils.config import USER_AGENT, env_int
-from . import archive, cp, townlog
+from . import archive, camplog, cp, townlog
 from .parse import _build_result
 from .snapshot import snapshot
 from .towndata import build_result, is_towndata
@@ -129,6 +129,11 @@ async def _load(town_id: int, day: int | None) -> dict:
     cp.update_cp_log(town_id, result)
     if day is None and result_day is not None:
         archive.save_snapshot(town_id, result_day, snapshot(result))
+        try:
+            if camplog.AUTO:   # one writer for the shared towns/ repo (the Pi)
+                camplog.update_camping_log(town_id, result_day)
+        except Exception as e:  # a log failure must never break a tool call
+            logging.getLogger(__name__).warning("camping log update failed: %s", e)
         try:
             parts = townlog.update_town_log(
                 town_id, result, lambda d: _from_archive(town_id, d, final_only=False))

@@ -17,6 +17,8 @@ towns/
       estimations.json        #   attack estimate per day, for the defense history
       snapshots/              #   intra-day snapshots for get_town_changes
     citizens-cp.json          # CP log per citizen (last / max), written by the server
+    camping-log.json          # who spent which night outside (sure / probable / died), fata/camplog.py
+    camp-zones.json           # last camp bonus (%) known per zone, written by get_camping_odds
     daily-log.md              # kept by the server (townlog.py), started from templates/town/;
     day-NN.md                 #   the skills (inspect-town, close-day) add judgment on top
     notes.md
@@ -51,6 +53,19 @@ best value, since CP drops with status (drugs, drunk, thirsty with the Expert sk
 without shield); 0 is kept, since terrorised citizens have none. Limit: Fata does not say who
 was on the zone at the update, so a citizen who left afterwards can inflate a reading.
 The log only grows when tools fetch the town (no polling).
+
+**Camping log.** `camping-log.json` (`fata/camplog.py`): a citizen outside at the end of
+day N and alive on day N+1 camped night N. Judged from the day N and day N+1 archives:
+*sure* when the next day's position update is still on the same zone, *probable* when
+the last day-N update is from 19:00 on and Fata shows nothing newer or the citizen back in
+town (earlier updates without confirmation are day trips, not counted),
+plus citizens that vanished outside (death type 5). Probable nights are never reported as
+confirmed; `get_camping_odds` counts sure + probable (pessimistic) and says so. Updated on
+live fetches, only where `TOWN_LOG_AUTO` is on (the Pi: one writer for the shared towns/ repo), a night is recomputed only when its two archive files changed. Backfill missing
+past days (one Fata request each, user-run): `make camp-log-backfill TOWN=8299 [FROM=1]`.
+`camp-zones.json`: per zone the camp bonus a player reported or the tool's own plan
+reached (`reported` / `planned`), decayed 15% a night when used; written by `get_camping_odds`
+(`record=False` skips it).
 
 **Town log.** Every live fetch of the current day also updates `daily-log.md` and
 `day-NN.md` (`fata/townlog.py`): it opens the current day, closes past days from Fata

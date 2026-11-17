@@ -7,6 +7,7 @@ position, defense vs the attack, alive before/after.
 from ..gesthordes.format import at_day, atk_series
 from ..utils.clock import data_updated
 from ..utils.fmt import est_status, estimate, plural, town_name
+from . import camplog
 from .geo import TOWN, fmt_xy
 from .planning import alive_by_day
 
@@ -47,7 +48,8 @@ def night_report(data: dict, day: int, gh: dict | None = None, day_data: dict | 
     }
 
 
-def format_night_report(data: dict, day: int, gh: dict | None = None, day_data: dict | None = None) -> str:
+def format_night_report(data: dict, day: int, gh: dict | None = None, day_data: dict | None = None,
+                        camp_log: dict | None = None) -> str:
     if data.get("error"):
         return f"Error: {data['error']}"
     r = night_report(data, day, gh, day_data)
@@ -69,6 +71,9 @@ def format_night_report(data: dict, day: int, gh: dict | None = None, day_data: 
     before, after = r["alive_before"], r["alive_after"]
     if before is not None and after is not None:
         lines.append(f"Alive: {before} at day start → {after} next morning ({len(r['deaths'])} died on day {day})")
+    camped = camplog.night_line(camp_log, day) if camp_log else None
+    if camped:
+        lines.append(camped)
     lines.append("")
     if r["deaths"]:
         lines.append(f"### Deaths ({len(r['deaths'])})")

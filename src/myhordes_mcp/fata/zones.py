@@ -29,6 +29,71 @@ def _by_day(zs: list[dict], fmt) -> list[str]:
             for d in sorted(days, key=lambda d: -(d if d is not None else -1))]
 
 
+# Wind refill (docs/camping-plan.md 1.2; NightlyHandler.php, BuildingQueryListener.php): each
+# night one sector; zones in it farther than WIND_DISTANCE km regain digs with this chance by
+# Searchtower level (0 = none), x WIND_NOT_DEPLETED if the zone is not depleted.
+WIND_REFILL = {0: 0.25, 1: 0.37, 2: 0.49, 3: 0.61, 4: 0.73, 5: 0.85}
+WIND_DISTANCE = 2
+WIND_NOT_DEPLETED = 0.33
+
+
+def _last_wind(data: dict) -> dict | None:
+    """Wind of the night that led into the data's day (None = no entry)."""
+    day = data["meta"].get("day")
+    return (data.get("winds") or {}).get(day) if isinstance(day, int) else None
+
+
+def _wind_chance(wind: dict) -> int:
+    return round(100 * WIND_REFILL[max(0, min(5, wind["level"]))])
+
+
+def wind_line(data: dict) -> str | None:
+    """Scout-map note: last night's wind sector and the refill chance."""
+    w = _last_wind(data)
+    if not w:
+        return None
+    d = w["direction"]
+    return (f"Last night's wind: {d} (Searchtower level {w['level']}): depleted zones {d} beyond "
+            f"{WIND_DISTANCE} km: {_wind_chance(w)}% chance to have refilled. "
+            "Fata's depleted flags lag until a player passes.")
+
+
+def zone_wind_line(data: dict, z: dict | None) -> str | None:
+    """Zone-details note when the zone lies in last night's wind sector (beyond 2 km)."""
+    w = _last_wind(data)
+    if not w or not z or z.get("direction") != w["direction"]:
+        return None
+    c = xy(z)
+    if c is None or km(*c) <= WIND_DISTANCE:
+        return None
+    pct = _wind_chance(w)
+    return (f"Wind: in last night's wind sector {w['direction']} (Searchtower level {w['level']}): "
+            f"refill chance {pct}% if depleted ({round(pct * WIND_NOT_DEPLETED)}% if not)"
+            + ("; Fata still flags it depleted until a player passes" if z.get("dried") else ""))
+
+
+def _signed(n: int) -> str:
+    return f"{n:+d}"
+
+
+def camping_line(z: dict | None) -> str | None:
+    """Ruin camping data of a zone: bonus, room for hidden citizens, buried case."""
+    r = z.get("ruin") if z else None
+    if not r:
+        return None
+    boost, slots = r.get("camp_boost"), r.get("camp_slots")
+    known = boost is not None and slots is not None
+    room = ""
+    if known:
+        room = ("room for any number hidden" if slots < 0 else f"room for {slots} hidden")
+    if int(r.get("digs_remaining") or 0) > 0:
+        then = f" (then ruin bonus {_signed(boost)}, {room})" if known else ""
+        return "Camping: buried ruin, +15 until uncovered" + then
+    if not known:
+        return None
+    return f"Camping: ruin bonus {_signed(boost)}, {room}"
+
+
 def format_scout(data: dict) -> str:
     """Zombie picture of the map: today's readings first, then older counts by day.
 
@@ -66,6 +131,9 @@ def format_scout(data: dict) -> str:
         f"{older_clear} clear, {no_info} no data",
         "",
     ]
+    wind = wind_line(data)
+    if wind:
+        lines += [wind, ""]
     respawn = respawn_check(data)
     if respawn:
         lines += respawn + [""]
@@ -262,7 +330,9 @@ def format_zone_path(
         header_parts.append(f"AP budget: {max_ap}")
     lines = [" | ".join(header_parts), data_updated(meta), ""]
     if (x1, y1) == (x2, y2) != (0, 0):
-        lines += ["### From town"] + [f"  {line}" for line in zone_reach(data, x1, y1)] + [""]
+        lines += ["### From town"] + [f"  {line}" for line in zone_reach(data, x1, y1)]
+        here = next((z for z in zones if xy(z) == (x1, y1)), None)
+        lines += [f"  {t}" for t in (zone_wind_line(data, here), camping_line(here)) if t] + [""]
 
     if not in_range:
         lines.append("No explored zones in this area.")

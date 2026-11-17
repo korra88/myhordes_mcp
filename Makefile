@@ -166,3 +166,7 @@ golden-anyseed: ## Golden check with a random string-hash seed (finds set order 
 
 bot-memory-migrate: ## One-off: move towns/_bot/memory.md to per-user towns/_bot/memory/<id>.md (idempotent; run on the Pi)
 	@PYTHONPATH=src .venv/bin/python -m myhordes_mcp.bot.migrate $(BOT_DIR)
+
+.PHONY: camp-log-backfill
+camp-log-backfill: ## Fetch missing past-day archives (one request each) and rebuild the camping log: TOWN=<id> [FROM=<day>]
+	@PYTHONPATH=src .venv/bin/python -m myhordes_mcp.fata.camplog backfill --town $(TOWN) $(if $(FROM),--from $(FROM))

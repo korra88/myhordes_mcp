@@ -4,6 +4,8 @@ Every request goes through client.fetch_town_data(); the other modules only
 parse or format its result.
 """
 
+from .camping import format_camping_odds
+from .camplog import load_log as load_camping_log
 from .changes import get_town_changes
 from .dump import format_dump_mapping
 from .night import format_night_report
@@ -21,8 +23,10 @@ from .zones import format_scout, format_zone_path, format_zones
 
 __all__ = [
     "fetch_town_data",
+    "format_camping_odds",
     "format_cp_log",
     "load_cp_log",
+    "load_camping_log",
     "party_cp",
     "resolve_group_cp",
     "expedition_extras",

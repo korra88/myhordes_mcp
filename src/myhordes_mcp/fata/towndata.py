@@ -18,6 +18,15 @@ Shape (town 8212, day 7: 814 KB raw, 128 KB gzipped):
                   constructions {bid: {paCurrent, rarityCurrent, resourcesCurrent,
                                        constructionLog [{constructedDay, destructionDay?}],
                                        votingLog [{voteLevel, day}]}}  # = unlocked blueprints
+                  winds {"<day>": {level, direction, source}} from day 8 on (from the
+                         day the Searchtower stands, "source" user = a player's report).
+                         Parsed into result["winds"] = {int day: {"direction", "level"}}.
+                         Key N = the wind of the night N-1 -> N (town 8299: day 20 final ->
+                         day 21, the only refilled zone is SE, winds["21"] = SE). `level`
+                         = Searchtower (small_gather_#02) level at that night: checked on
+                         towns 8299 (levels 1-5, days 8-12) and one more (days 5-13): winds
+                         level of day N = highest voteLevel with day <= N-1. Game rules:
+                         docs/camping-plan.md section 1.2 (Wind).
                   last_game_update (ISO, UTC)
     town_maps     one row per zone (absolute x/y), see _parse_zones
     town_citizens citizen_id, name, job, x/y, out, dead, survival_day, death_type,
@@ -46,6 +55,13 @@ Field meanings checked against the game with players in town 8212:
                      source, route [{x, y}, ...] (absolute corners; the first one is
                      the town, straight segments between them), instructions
                      null | {"<step>": text}} (step 1 = first zone after the town)
+  direction          zone sector "N", "NE", ... (game Zone::getDirection), kept as
+                     zone["direction"]; the zone in the wind of a night is in that sector
+  camp_boost/camp_slots (building_data, ruin catalogue) ruin camping bonus (-50..50,
+                     game ZonePrototype.campingLevel) and how many can hide inside
+                     (-1 unlimited, 1..5, ZonePrototype.capacity); None for the buried
+                     placeholder (id -1). Kept as ruin["camp_boost"] / ruin["camp_slots"].
+                     building_digs > 0 = buried ruin (ruin["digs_remaining"]).
   km                 rounded Euclidean distance to town, matches geo.km()
                      (676/676 zones, town 8212, 2026-10-16)
   comment            free text a player pinned on the zone in Fata's map ("" = none),
@@ -212,11 +228,25 @@ def build_result(town_id: int, raw: dict, estimation_history: dict | None = None
         "bank": _parse_bank(ti.get("bank") or [], items),
         "buildings": _parse_buildings(ti.get("constructions") or {}, raw.get("construction_data") or [], items,
                                       hardcore=bool(ti.get("hard"))),
+        "winds": _parse_winds(ti.get("winds")),
         "scout": _parse_scout(raw.get("town_maps") or [], rel, who),
         "zones": _parse_zones(raw.get("town_maps") or [], items, raw.get("building_data") or [], rel, who, day),
         "routes": _parse_routes(raw.get("town_routes") or [], rel, who),
         "notes": _parse_notes(raw.get("town_maps") or [], rel, who),
     }
+
+
+def _parse_winds(winds) -> dict[int, dict]:
+    """{int day: {"direction", "level"}}; key N = wind of the night N-1 -> N."""
+    out = {}
+    for k, w in (winds or {}).items() if isinstance(winds, dict) else []:
+        try:
+            day = int(k)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(w, dict) and w.get("direction"):
+            out[day] = {"direction": str(w["direction"]), "level": int(w.get("level") or 0)}
+    return out
 
 
 def _map_bounds(zones: int, rel) -> tuple[int, int, int, int] | None:
@@ -322,6 +352,8 @@ def _parse_deaths(raw: list[dict], rel) -> list[dict]:
         rx, ry = rel(c.get("x", 0), c.get("y", 0))
         dtype = c.get("death_type")
         deaths.append({
+            "id": c.get("citizen_id"),
+            "type": dtype,
             "name": c.get("name", "Unknown"),
             "cause": DEATH_TYPES.get(dtype, f"Unknown ({dtype})"),
             "last_coords": fmt_xy((rx, ry)),
@@ -403,6 +435,7 @@ def _parse_buildings(constructions: dict, catalogue: list[dict], items: dict, *,
         buildings.append({
             "id": bid,
             "name": _name(c, f"Building {bid}"),
+            "uid": c.get("uid"),
             "defense": c.get("def", 0),
             "ap_cost": ap_cost,
             "temporary": bool(c.get("temporary")),
@@ -555,6 +588,8 @@ def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who
                 "digs_remaining": int(m.get("building_digs") or 0),
                 "blueprint_available": btype > 0 and not m.get("building_camped"),
                 "dried": int(bool(m.get("building_dried"))),
+                "camp_boost": (ruins.get(btype) or {}).get("camp_boost"),
+                "camp_slots": (ruins.get(btype) or {}).get("camp_slots"),
             }
 
         danger = int(m.get("danger") or 0)
@@ -595,6 +630,7 @@ def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who
         scav = m.get("scav_zone_level") or 0
         zones.append({
             "coords": fmt_xy((rx, ry)),
+            "direction": m.get("direction") or None,
             "zombies": z,
             "zombies_max": zmax,
             "danger": danger,

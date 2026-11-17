@@ -243,6 +243,22 @@ CASES += [
     ("dump_lookup", "map_bank_to_dump_sheet",
      {"sheet_items": "Battery\nUnshaped Concre\nOverhead Proj\netal\nWater P\nzzz\nWater Ration"}),
 ]
+# Camping odds (rules verified in the game source: docs/camping-plan.md section 1.2).
+CASES += [
+    ("camping_ruin_plan", "get_camping_odds",
+     {"x": 1, "y": -5, "skill": "reclusive4", "camp_level": 0, "nights": 1, "ap": 6, "defense_items": 2}),
+    ("camping_ruin_odds_only", "get_camping_odds", {"x": 1, "y": -5, "nights": 0, "camp_level": 10}),
+    ("camping_buried_ruin", "get_camping_odds", {"x": 0, "y": 7, "ap": 4, "defense_items": 1, "hidden_before": 1}),
+    ("camping_no_ruin_citizen", "get_camping_odds",
+     {"x": -3, "y": 9, "citizen": "korra", "ap": 8, "defense_items": 3, "camp_items": 1, "hidden_before": 2}),
+    ("camping_citizen_position", "get_camping_odds", {"citizen": "Korra", "ap": 2}),
+    ("camping_other_town_procamp", "get_camping_odds",
+     {"town_id": OTHER, "x": 2, "y": -3, "skill": "procamp", "nights": 7, "tomb": True, "vest": True}),
+    ("camping_err_zone", "get_camping_odds", {}),
+    ("camping_err_town", "get_camping_odds", {"x": 0, "y": 0}),
+    ("camping_err_skill", "get_camping_odds", {"x": 1, "y": 1, "skill": "ninja"}),
+    ("camping_err_citizen", "get_camping_odds", {"x": 1, "y": 1, "citizen": "Nobody"}),
+]
 CASES += [(f"notown_{t}", t, {"town_id": 0, **_REQUIRED.get(t, {})}) for t in _TOWN_TOOLS]
 CASES += [(f"noday_{t}", t, {"day": 4, **_REQUIRED.get(t, {})}) for t in _DAY_TOOLS]
 
@@ -292,7 +308,8 @@ def run_cases(*, full: bool = True) -> dict[str, str]:
 
 def _run_cases(run, full: bool) -> dict[str, str]:
     main, towns_dir, tmp, now, day0 = run.main, run.towns_dir, run.tmp, run.now, run.day0
-    from myhordes_mcp.fata import townlog
+    from myhordes_mcp.fata import camplog, townlog
+    camplog.AUTO = 1   # the camping log runs in every case (it is off where TOWN_LOG_AUTO=0)
 
     def norm(text: str) -> str:
         return text.replace(str(towns_dir), "<towns>").replace(str(tmp), "<tmp>")
