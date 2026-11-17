@@ -8,6 +8,7 @@
 #   make clean-kb     Remove processed output (keeps raw wiki)
 #   make clean-all    Remove everything (raw wiki + processed)
 #   make discord-listen  Answer Discord mentions (../discord_mcp listener)
+#   make bot-eval-freeze  Freeze one bot-eval fixture: ID=7365-d22 ARGS="--town 7365 --day 22" (tests/bot_eval/freeze.py)
 #   make golden       Check every tool's output against the recorded goldens (tests/golden.py)
 
 -include .env
@@ -32,7 +33,7 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 .PHONY: kb fetch process clean-kb clean-all help advisor persona town discord-listen discord-listen-once \
 	discord-service-install discord-service-disable discord-service-uninstall \
 	towns-commit towns-commit-install towns-commit-disable towns-commit-uninstall \
-	golden golden-update golden-freeze golden-anyseed bot-memory-migrate
+	golden golden-update golden-freeze golden-anyseed bot-memory-migrate bot-eval-freeze
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -160,6 +161,9 @@ golden-update: ## Record the current tool outputs as the goldens (review the cha
 
 golden-freeze: ## Copy the fixture towns from towns/ and fetch the Gest'Hordes stats once
 	@.venv/bin/python tests/golden.py --freeze
+
+bot-eval-freeze: ## Freeze a bot-eval fixture into towns/_eval/ (ID=<fixture-id> ARGS="--town T --day N [--with-day M] [--source DIR]")
+	@.venv/bin/python tests/bot_eval/freeze.py $(ID) $(ARGS)
 
 golden-anyseed: ## Golden check with a random string-hash seed (finds set order leaking into outputs)
 	@.venv/bin/python tests/golden.py --any-seed

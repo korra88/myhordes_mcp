@@ -1,7 +1,15 @@
 # Bot evaluation suite — plan
 
-Status: **design only** (2026-11-14). Nothing here is implemented. Written so that an
-agent with no prior context can implement it phase by phase (section 8).
+Status (2026-11-17): phases 0–2 done and committed. Written so that an agent with no
+prior context can implement it phase by phase (section 8).
+
+| Phase | State |
+|---|---|
+| 0 decisions | done, section 9 |
+| G1/G2 fixes | committed b3bf081, deployed on the Pi |
+| 1 `tests/offline.py` | committed 9130e8f |
+| 2 `tests/bot_eval/freeze.py`, `make bot-eval-freeze`, 14 fixtures in `towns/_eval/fixtures/`, `towns/.gitignore` negations | done and reviewed, committed 2026-11-17 (both repos) |
+| 3 offline MCP server + expectations | next; `offline()` sets no default town: write `_current_town` in the fixture copy or always pass `town_id` |
 
 Goal: a small, offline, reproducible set of real-town scenarios that scores the Discord
 advisor's answers, so a change to `prompts/game-primer.md`, `prompts/discord.md`,
@@ -401,6 +409,11 @@ Limits found:
   replayed only by making it the fixture's current day — which is what the layout does.
 - The CP log is empty for towns never fetched live (7365, 6741, 7493): `party=` counts
   2 CP per citizen there.
+- Done (phase 2, 2026-11-14): `freeze.py` cuts `citizens-cp.json` at the fixture's data
+  time (`data_cutoff`: last game update or last zone update, whichever is later) — the
+  live log keeps growing, `8299-d3` held readings up to day 21 before the cut. CP logs of
+  7365 / 6741 came only from the plan's own probes and were dropped (no fixture of those
+  towns has a CP log). 14 fixtures, 2.8 MB, 0 Fata requests.
 
 Fixtures needed (13) and their cost: `8299-d3`, `-d6`, `-d7`, `-d18`, `-d22` (+ day 21),
 `8212-d13` → local copies, except 8299 day 22 (1 request once day 22 is over, or reuse a
