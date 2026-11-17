@@ -1,0 +1,15 @@
+# Two fixed refreshes of the active town a day (docs/camping-plan.md, Phase F):
+# 00:25 = end state of the day (the attack blocks updates), 01:30 = the new day if Fata has it.
+# The only scheduled Fata requests of this project, approved by the Fata developer.
+# Persistent=false: fixed times only, a run missed while the machine was off is skipped.
+
+[Unit]
+Description=Refresh the active MyHordes town files at 00:25 and 01:30 (Paris time)
+
+[Timer]
+OnCalendar=*-*-* 00:25:00 Europe/Paris
+OnCalendar=*-*-* 01:30:00 Europe/Paris
+Persistent=false
+
+[Install]
+WantedBy=timers.target

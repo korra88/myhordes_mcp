@@ -1,0 +1,11 @@
+# One run of `make town-refresh`, started by town-refresh.timer.
+# Installed by `make town-refresh-install`, which fills in the @...@ paths.
+# Logs: journalctl --user-unit town-refresh
+
+[Unit]
+Description=Refresh the active MyHordes town files from Fata Morgana (one request)
+
+[Service]
+Type=oneshot
+WorkingDirectory=@MCP_DIR@
+ExecStart=/usr/bin/make -s town-refresh

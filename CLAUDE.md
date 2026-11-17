@@ -7,7 +7,7 @@ Read-only MCP server in Python for **MyHordes** (browser survival game, Eternalt
 ## Hard constraints — never violate
 
 - **Read-only only.** Never implement write/action endpoints (no moving, no taking items, no spending AP). Game has strict anti-botting policies.
-- **No automated API polling.** Every API call must result from a user query. No cron, no background refresh. Official game rule — see `docs/game-rules-for-external-apps.md`.
+- **No automated polling of the MyHordes API, ever.** Official game rule — see `docs/game-rules-for-external-apps.md`. Towards Fata the only scheduled requests are the two fixed daily refreshes of the active town (`town-refresh.timer`, 00:25 and 01:30 Paris, approved by the Fata developer); every other request must result from a user query. No other cron or background refresh.
 - **No secrets in code.** API keys (`MYHORDES_USER_KEY`, `MYHORDES_APP_KEY`) come from `.env` only. Never hardcode, log, or include in tool responses.
 
 ## Architecture
@@ -15,7 +15,7 @@ Read-only MCP server in Python for **MyHordes** (browser survival game, Eternalt
 - **Entry point:** `main.py` — FastMCP server, runs over stdio. Tool declarations only; logic lives in `src/myhordes_mcp/`.
 - **Data source:** `src/myhordes_mcp/fata/` — Fata Morgana public JSON `/towndata?town=…[&day=N]` (main site since 2026-11-12, was beta; OK'd by the Fata dev for this MCP; not blocked by the nightly attack). Shape and field meanings: `fata/towndata.py`. Days archived from the legacy spy page are still parsed by `fata/parse.py`. No auth needed, just a town ID, resolved by `utils/config.py:resolve_town_id`: explicit `town_id`, else `towns/_user_towns/<LISTENER_USER_ID>` (Discord listener only: the person who opened the conversation; digits only), else `towns/_current_town` (set with `make town TOWN=…`, re-read every call), else `FATAMORGANA_TOWN_ID` in `.env`.
   Every Fata request goes through `fata/client.py:fetch_town_data()` (single-flight + TTL cache, `FATA_CACHE_TTL` default 180 s). Never add another HTTP path to Fata.
-  Live fetches of the current day also update the town log (`fata/townlog.py`, off with `TOWN_LOG_AUTO=0`).
+  Live fetches of the current day also update the town log (`fata/townlog.py`, off with `TOWN_LOG_AUTO=0`), the CP log and the camping log (`fata/camplog.py`).
 - **Secondary:** `src/myhordes_mcp/gesthordes/` — Gest'Hordes attack stats (same cache pattern).
 - **Disabled:** `src/myhordes_mcp/myhordes/official_api.py` — official JSON v1 API (needs `userkey` + `appkey`), not wired as tools.
 - **Game API:** `https://myhordes.eu/api/x/json/{type}`. Full reference: `docs/external-api-reference.md`.
@@ -23,7 +23,7 @@ Read-only MCP server in Python for **MyHordes** (browser survival game, Eternalt
 
 ## Current state
 
-- Live (Fata): `get_town_overview`, `get_citizen_positions`, `get_citizen_cp`, `get_defense_status`, `get_bank_inventory`, `get_buildings`, `get_scout_map`, `get_zone_details`, `find_expedition_path`, `plan_expedition_supplies`, `plan_kill_route`, `get_build_options`, `get_blueprint_order`, `get_construction_history`, `get_town_changes`, `get_night_report`, `get_expedition_roster`, `map_bank_to_dump_sheet`
+- Live (Fata): `get_town_overview`, `get_citizen_positions`, `get_citizen_cp`, `get_defense_status`, `get_bank_inventory`, `get_buildings`, `get_scout_map`, `get_zone_details`, `find_expedition_path`, `plan_expedition_supplies`, `plan_kill_route`, `get_camping_odds`, `get_build_options`, `get_blueprint_order`, `get_construction_history`, `get_town_changes`, `get_night_report`, `get_expedition_roster`, `map_bank_to_dump_sheet`
 - Live (Gest'Hordes): `get_attack_distribution`, `get_attack_forecast`
 - Live (Discord listener only, write local files in `towns/_bot/`): `log_feedback`, `remember`, `forget` (`bot/store.py`; env `LISTENER_USER_ID`, `LISTENER_CONTEXT`; memory only when `dm`). Migration: `make bot-memory-migrate`
 - Live (offline knowledge): `search_wiki`, `list_wiki_categories`, `search_knowledge`

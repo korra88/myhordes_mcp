@@ -60,7 +60,7 @@ Source: `/jx/help/use_of_external_scripts`
 
 | Rule | Impact | Our compliance |
 |---|---|---|
-| No automated polling (cron) | We must NOT poll the API on a schedule. Requests only on user action. | MCP tools are invoked on-demand by the LLM when the user asks. No background polling. Compliant. |
+| No automated polling (cron) | We must NOT poll the MyHordes API on a schedule. Requests only on user action. | MCP tools are invoked on-demand by the LLM when the user asks; the MyHordes API is never polled. Compliant. The rule covers the game API: the only scheduled requests go to Fata Morgana (see below). |
 | No login credentials | We use `userkey`+`appkey` only, never username/password. | Compliant. |
 | Read-only | Rules explicitly forbid automation of gameplay actions. | Our server is strictly read-only by design. Compliant. |
 | Conservative with server resources | Minimize API calls; don't spam. | We should batch fields via SURLL and consider short-lived caching within a session. |
@@ -71,6 +71,12 @@ Source: `/jx/help/use_of_external_scripts`
 ### Key constraint we hadn't fully accounted for
 
 **No automated/scheduled data polling.** This is the most important rule we hadn't explicitly addressed. Our MCP architecture is naturally compliant (tools fire only when the LLM invokes them in response to user questions), but we must ensure we **never** add background refresh, caching cron, or periodic polling. Every API call must be a direct result of a user query.
+
+**Fata Morgana exception (2026-11-17).** Fata is a third-party site, not the game API. Its
+developer approved two fixed daily refreshes of the active town (`make town-refresh`, run by
+`town-refresh.timer` at 00:25 and 01:30 Paris time; requests carry our user agent). They only
+keep the town files current (town log, camping log); no game action, no message. Nothing
+else is scheduled.
 
 ### Recommendation
 

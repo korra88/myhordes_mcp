@@ -167,6 +167,27 @@ golden-anyseed: ## Golden check with a random string-hash seed (finds set order 
 bot-memory-migrate: ## One-off: move towns/_bot/memory.md to per-user towns/_bot/memory/<id>.md (idempotent; run on the Pi)
 	@PYTHONPATH=src .venv/bin/python -m myhordes_mcp.bot.migrate $(BOT_DIR)
 
+# ─── Town refresh: the active town's files at 00:25 and 01:30 (docs/camping-plan.md, F) ──
+
+.PHONY: town-refresh town-refresh-install town-refresh-disable town-refresh-uninstall
+town-refresh: ## One live Fata fetch of the active town (town log, camping log); run by the timer
+	@PYTHONPATH=src .venv/bin/python -m myhordes_mcp.fata.refresh
+
+town-refresh-install: ## Install the systemd user timer that runs town-refresh at 00:25 and 01:30 Paris time
+	$(call render-unit,town-refresh.service)
+	$(call render-unit,town-refresh.timer)
+	systemctl --user daemon-reload
+	systemctl --user enable --now town-refresh.timer
+	$(check-linger)
+
+town-refresh-disable: ## Stop the town-refresh timer (unit files kept)
+	systemctl --user disable --now town-refresh.timer
+
+town-refresh-uninstall: ## Stop the town-refresh timer and remove its unit files
+	-systemctl --user disable --now town-refresh.timer
+	rm -f $(UNIT_DIR)/town-refresh.service $(UNIT_DIR)/town-refresh.timer
+	systemctl --user daemon-reload
+
 .PHONY: camp-log-backfill
 camp-log-backfill: ## Fetch missing past-day archives (one request each) and rebuild the camping log: TOWN=<id> [FROM=<day>]
 	@PYTHONPATH=src .venv/bin/python -m myhordes_mcp.fata.camplog backfill --town $(TOWN) $(if $(FROM),--from $(FROM))
