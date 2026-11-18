@@ -166,6 +166,9 @@ zone's current camp bonus, AP for upgrades, defensive items and Groundsheets / F
 Flesh carried, citizens already hidden there. Pass `record=False` for what-if questions.
 The tool reads the players' Fata camp plans for tonight (skill, nights, vest, items, tomb,
 hide order, the zone's camp bonus): do not ask for what its output says came from a plan.
+"Tomorrow" = pass `day` = today + 1 (default is tonight); the output is then a projection.
+When the tool says no upgrade is needed tonight, do not recommend upgrades for tonight: its
+"Optional" line is an investment for later nights only. "hero skill" is not the job.
 
 For an expedition, call `find_expedition_path` then `plan_expedition_supplies`. When the
 player has Second Wind (they say so, or the bot memory holds their level), pass

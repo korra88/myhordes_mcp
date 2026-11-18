@@ -17,7 +17,7 @@ towns/
       estimations.json        #   attack estimate per day, for the defense history
       snapshots/              #   intra-day snapshots for get_town_changes
     citizens-cp.json          # CP log per citizen (last / max), written by the server
-    camping-log.json          # who spent which night outside (sure / probable / died), fata/camplog.py
+    camping-log.json          # who spent which night outside (sure / probable / planned / died), fata/camplog.py
     camp-zones.json           # last camp bonus (%) known per zone, written by get_camping_odds
     daily-log.md              # kept by the server (townlog.py), started from templates/town/;
     day-NN.md                 #   the skills (inspect-town, close-day) add judgment on top
@@ -59,8 +59,12 @@ day N and alive on day N+1 camped night N. Judged from the day N and day N+1 arc
 *sure* when the next day's position update is still on the same zone, *probable* when
 the last day-N update is from 19:00 on and Fata shows nothing newer or the citizen back in
 town (earlier updates without confirmation are day trips, not counted),
-plus citizens that vanished outside (death type 5). Probable nights are never reported as
-confirmed; `get_camping_odds` counts sure + probable (pessimistic) and says so. Updated on
+plus *planned*: citizens listed in a Fata camp plan for that night (archives from towndata v1.3 on),
+alive next day, not back in town at 19:00 or later (night 25 of town 8299: 19 in plans, 2 died,
+the older rule logged 5 survivors); plus citizens that vanished outside (death type 5). Probable
+and planned nights are never reported as confirmed; `get_camping_odds` counts sure + probable +
+planned (pessimistic) and says so. Each stored night carries a rules version (`rules`): after a
+rule change the next update recomputes it once. Updated on
 live fetches, only where `TOWN_LOG_AUTO` is on (the Pi: one writer for the shared towns/ repo), a night is recomputed only when its two archive files changed. Backfill missing
 past days (one Fata request each, user-run): `make camp-log-backfill TOWN=8299 [FROM=1]`.
 `camp-zones.json`: per zone the camp bonus a player reported or the tool's own plan

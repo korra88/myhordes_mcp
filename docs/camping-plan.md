@@ -132,6 +132,16 @@ raw shape): `result["camp_plans"]`, `zone["camp_level"]`; helpers `plans_for_day
   zombies, night, devastated, hardcore, lighthouse, ruin, level) reproduces `theoretical_chances` and
   `effective_chances` for all 60 players. `tests/camping_checks.py` checks it on an anonymised
   snippet; `get_camping_odds` prints a `MISMATCH` line when a plan player's numbers differ.
+- **`day` parameter** (get_camping_odds): 0 = tonight, a later day D = projection for the night of
+  D (past day = error). Plans of target_day D; camp bonus: explicit `camp_level` > bonus typed in D's
+  plan (`level_before` of the citizen's plan, or of the zone's plan(s) when they agree) > today's
+  level (Fata estimate, else camp-zones record) minus 15 per night, min 0, "assuming no upgrades
+  until then" > 0; zombies = today's reading; nights = plan of D, else the camping log (nights
+  camped from tonight to D not included, ask the player). Nothing is recorded for a future day.
+- **Cap wording**: at the cap the tool says "no upgrade needed, N points to spare" with the zombie
+  tolerance floor(N/7) (floor(N/3) with the vest); the multi-night max-level plan is a separate
+  "Optional, for later nights only" line, shown only when it leaves more bonus after the night
+  (level - 15) than the minimal plan does.
 
 `get_camping_odds` priorities:
 - **Zone camp level**: explicit `camp_level` > `zone["camp_level"]` (Fata estimate, labelled as such)
@@ -194,21 +204,22 @@ Per citizen alive in M:
 | E: outside on zone Z with `last_update.day == N`, and M: outside on the same Z with `last_update.day == N+1` | **sure** |
 | E: outside with `last_update.day == N`, M: not updated on N+1, or back in town / elsewhere | **probable** |
 | E: outside but `last_update.day < N` (stale position) | not counted |
+| (since 2026-11-18) citizen in a Fata plan with `target_day == N` (plans of E and M united by uid, M wins), alive in M, not sure/probable, and not inside the town at 19:00 or later in their latest day-N record | **planned**, zone = the plan's zone (that of their latest record if several plans, else the first) |
 
 Death type 5 on night N with last position outside: record as "died outside" (failed roll
 or not hidden — Fata cannot tell which).
 
-Record per citizen: `{"nights": [{"night": N, "zone": "[x|y]", "label": "sure|probable"}],
+Record per citizen: `{"nights": [{"night": N, "zone": "[x|y]", "label": "sure|probable|planned"}],
 "died_outside": N|null}`; per town: last night processed. Idempotent (re-running a night
-replaces it). Counter shown as `2 sure (+1 probable)`; the odds tool uses sure + probable as
-the pessimistic count and says so. Rule from the user: ambiguous evidence is never
+replaces it). Counter shown as `2 sure (+1 probable)`; the odds tool uses sure + probable + planned as
+the pessimistic count; every stored night carries a rules version (`camplog.RULES`, 2 = planned) so a rule change recomputes old nights once and says so. Rule from the user: ambiguous evidence is never
 presented as a confirmed camping night.
 
 Backfill: `make camp-log-backfill TOWN=… [FROM=n]` fetches missing `?day=N` finals through
 `fetch_town_data` (one request per missing day, user-run only, prints the count first).
 Not automatic.
 
-Exposure: `get_night_report` adds `Camped: N sure, M probable` with names; the odds tool
+Exposure: `get_night_report` adds `Camped: N sure, M probable, K planned` with names; the odds tool
 (Phase E) reads the count.
 
 ### Phase D — zone camp level record

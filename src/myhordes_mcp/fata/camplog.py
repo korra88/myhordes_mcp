@@ -17,13 +17,20 @@ M = the archive of day N+1 (the current day's live file for the latest night):
   not counted  an outside record from before 19:00 with no M confirmation: most are day
             expeditions back home before night (town 8299 nights 5-6: 19 and 11 such
             citizens from early-day archives);
+  planned   Fata camp plans (towndata v1.3 `town_camping`, kept in the archives; older archives
+            have none) are evidence that a citizen camped: a citizen listed in a plan whose
+            target_day is N (plans of E and M, united by uid, M wins), alive in M, not already
+            sure / probable, and with no contrary evidence (contrary = their latest record
+            dated day N is inside the town at 19:00 or later). Zone = the plan's zone (the
+            one of their latest record if several plans, else the first). Town 8299 night 25:
+            19 campers in plans, 2 died (type 5), the older rule logged only 5 survivors;
   died      dead in M with death type 5 whose death day is N (Fata cannot tell a failed
             roll from not hiding at all).
 
-A probable night is never presented as confirmed. Stored per town in
+A probable or planned night is never presented as confirmed. Stored per town in
 towns/{town}/camping-log.json (only where TOWN_LOG_AUTO is on): per citizen id {name, nights [{night, zone, label}],
-died_outside}; per night the signature of both input files, so a night is recomputed only
-when an input changed. Updated from client._load on live fetches (no polling).
+died_outside}; per night the signature of both input files and the rules version (RULES), so a night is
+recomputed only when an input changed or the rules did. Updated from client._load on live fetches (no polling).
 
 Backfill (user-run, one request per missing day):
     python -m myhordes_mcp.fata.camplog backfill --town N [--from D]
@@ -44,6 +51,7 @@ from .towndata import build_result
 from ..utils.clock import GAME_TZ
 from ..utils.config import TOWN_LOG_AUTO
 
+RULES = 2   # version of the rules above: bump it and every stored night is recomputed once (2: "planned")
 HIDING_FROM_HOUR = 19   # camping odds get the night bonus from 19:00 (TownConf::isNightTime)
 
 LOG_FILE = "camping-log.json"
@@ -65,7 +73,10 @@ def day_view(data: dict) -> dict:
              for c in data.get("citizens", [])}
     dead = {d["id"]: {"name": d["name"], "type": d.get("type"), "day": d["day"], "coords": d["last_coords"]}
             for d in data.get("deaths", []) if d.get("id") is not None}
-    return {"alive": alive, "dead": dead}
+    plans = [{"uid": p.get("uid"), "target_day": p.get("target_day"), "coords": p["coords"],
+              "citizens": [q["citizen_id"] for q in p.get("players", []) if q.get("citizen_id") is not None]}
+             for p in data.get("camp_plans") or []]
+    return {"alive": alive, "dead": dead, "plans": plans}
 
 
 def _evening(ts) -> bool:
@@ -80,12 +91,14 @@ def night_outcome(night: int, e: dict, m: dict) -> tuple[dict, dict]:
     """({citizen id: {name, zone, label}} camped, {citizen id: {name, zone}} died outside)
     for the night `night` -> `night + 1`, from the views of day N (e) and day N+1 (m)."""
     camped, died = {}, {}
+    ends = {}   # citizen id -> their end-of-day-N record
     for cid, mrec in m["alive"].items():
         cands = [(r, tag) for r, tag in ((e["alive"].get(cid), 0), (mrec, 1))
                  if r and r.get("day") == night and r.get("time") is not None]
         if not cands:
             continue
         end = max(cands, key=lambda c: (c[0]["time"], c[1]))[0]   # on a tie M wins
+        ends[cid] = end
         if end["inside"] or end["coords"] == TOWN_COORDS:
             continue
         sure = (mrec.get("day") == night + 1 and not mrec["inside"]
@@ -93,6 +106,22 @@ def night_outcome(night: int, e: dict, m: dict) -> tuple[dict, dict]:
         if not sure and not _evening(end["time"]):
             continue
         camped[cid] = {"name": mrec["name"], "zone": end["coords"], "label": "sure" if sure else "probable"}
+    plans = {}   # uid (or position) -> plan of night N; M overrides E
+    for tag, v in (("e", e), ("m", m)):
+        for i, p in enumerate(v.get("plans") or []):
+            if p.get("target_day") == night:
+                plans[p.get("uid") or f"{tag}{i}"] = p
+    for cid, mrec in m["alive"].items():
+        if cid in camped:
+            continue
+        mine = [p for p in plans.values() if cid in p["citizens"]]
+        if not mine:
+            continue
+        end = ends.get(cid)
+        if end and (end["inside"] or end["coords"] == TOWN_COORDS) and _evening(end["time"]):
+            continue   # back in town after 19:00: contrary evidence
+        pick = next((p for p in mine if end and p["coords"] == end["coords"]), mine[0])
+        camped[cid] = {"name": mrec["name"], "zone": pick["coords"], "label": "planned"}
     for cid, d in m["dead"].items():
         if d["type"] == VANISHED and d["day"] == night and d["coords"] != TOWN_COORDS:
             died[cid] = {"name": d["name"], "zone": d["coords"]}
@@ -118,15 +147,23 @@ def apply_night(log: dict, night: int, camped: dict, died: dict) -> None:
         del cits[k]
 
 
-def counts(log: dict, citizen_id: int) -> tuple[int, int]:
-    """(sure, probable) camping nights of a citizen."""
+LABELS = ("sure", "probable", "planned")
+
+
+def counts(log: dict, citizen_id: int) -> tuple[int, int, int]:
+    """(sure, probable, planned) camping nights of a citizen."""
     nights = (log.get("citizens", {}).get(str(citizen_id)) or {}).get("nights", [])
-    return (sum(n["label"] == "sure" for n in nights), sum(n["label"] == "probable" for n in nights))
+    return tuple(sum(n["label"] == k for n in nights) for k in LABELS)
+
+
+def night_count(log: dict, night: int) -> int:
+    """Citizens logged as camping the night (any label)."""
+    return sum(any(n["night"] == night for n in e.get("nights", [])) for e in log.get("citizens", {}).values())
 
 
 def night_line(log: dict, night: int) -> str | None:
-    """'Camped: 2 sure (A, B), 1 probable (C)' for the night, None when nobody."""
-    groups: dict[str, list[str]] = {"sure": [], "probable": []}
+    """'Camped: 2 sure (A, B), 1 probable (C), 1 planned (D)' for the night, None when nobody."""
+    groups: dict[str, list[str]] = {k: [] for k in LABELS}
     for e in log.get("citizens", {}).values():
         for n in e.get("nights", []):
             if n["night"] == night:
@@ -222,7 +259,7 @@ def update_camping_log(town_id: int, current_day: int | None = None) -> list[int
         if sig_e is None or sig_m is None:
             continue
         rec = log["nights"].get(str(night))
-        if rec and rec.get("e") == sig_e and rec.get("m") == sig_m:
+        if rec and rec.get("e") == sig_e and rec.get("m") == sig_m and rec.get("rules") == RULES:
             continue
         e, m = _view(town_id, files[night], sig_e), _view(town_id, files[night + 1], sig_m)
         if e is None or m is None:
@@ -230,9 +267,8 @@ def update_camping_log(town_id: int, current_day: int | None = None) -> list[int
         camped, died = night_outcome(night, e, m)
         apply_night(log, night, camped, died)
         log["nights"][str(night)] = {
-            "e": sig_e, "m": sig_m,
-            "sure": sum(c["label"] == "sure" for c in camped.values()),
-            "probable": sum(c["label"] == "probable" for c in camped.values()),
+            "e": sig_e, "m": sig_m, "rules": RULES,
+            **{k: sum(c["label"] == k for c in camped.values()) for k in LABELS},
             "died_outside": len(died),
         }
         done.append(night)

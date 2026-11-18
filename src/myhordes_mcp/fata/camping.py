@@ -11,12 +11,17 @@ Fata v1.3 sends the players' saved camp plans (`data["camp_plans"]`) and a camp-
 estimate per zone (`zone["camp_level"]`): see docs/camping-plan.md "Fata camp plans (v1.3)".
 A plan for today on the zone supplies the defaults the caller left open, and `plan_player_odds`
 recomputes Fata's own odds for each camper as a drift check.
+
+`day` picks the night: 0 = tonight (the town's current day), a later day = a projection for
+that night (its plans, the bonus typed in them or today's bonus minus 15 per night, today's
+zombie reading): `format_camping_odds` states every such assumption.
 """
 
 from ..utils.fmt import header, plural, ruin_label
 from . import camp_zones, camplog
 from .cp import citizen_key
 from .geo import fmt_xy, km, xy, zone_map
+from .camp_zones import NIGHTLY_DROP
 from .risk import DANGER_BAND, zone_is_today
 from .towndata import plans_for_citizen, plans_for_zone
 
@@ -45,6 +50,15 @@ TERM_LABELS = {
     "zombies": "zombies", "campers": "crowd", "night": "night", "distance": "distance",
     "devastated": "devastated town",
 }
+
+
+def skill_label(skill: str) -> str:
+    """The hero skill as the player knows it ("" for none)."""
+    if skill == "procamp":
+        return "Pro camper"
+    if skill.startswith("reclusive"):
+        return f"Reclusive {skill[len('reclusive'):]}"
+    return ""
 
 
 def is_pro_camper(skill: str, nights: int) -> bool:
@@ -166,12 +180,12 @@ def plan_player_odds(plan: dict, idx: int) -> tuple[dict[str, int], int, int]:
     return terms, sum(terms.values()), round(camping_odds(terms, odds_cap(q["job"], q["skill"])) * 100)
 
 
-def _plan_block(plans: list[dict], me: dict | None, alive: set) -> list[str]:
+def _plan_block(plans: list[dict], me: dict | None, alive: set, ref: str = "tonight") -> list[str]:
     """The "Fata plan tonight" lines: one per plan, campers in hide order with Fata's odds,
     planned upgrades; a line per camper whose odds our formula does not reproduce."""
     lines = []
     for p in plans:
-        lines.append(f"Fata plan tonight on {p['coords']}" + (f", {p['ruin']['name']}" if p["ruin"] else "")
+        lines.append(f"Fata plan {ref} on {p['coords']}" + (f", {p['ruin']['name']}" if p["ruin"] else "")
                      + f" (by {p['creator'] or '?'}): camp bonus {p['level_before']}% -> {p['level_after']}%"
                      f" (+{p['upgrades_pct']}% planned)")
         campers, drift = [], []
@@ -226,10 +240,22 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
                         skill: str = "none", camp_level: int = -1, ap: int = 0,
                         defense_items: int = 0, camp_items: int = 0, hidden_before: int = 0,
                         nights: int = -1, tomb: bool = False, vest: bool | None = None,
-                        record: bool = True, town_id: int | None = None) -> str:
+                        record: bool = True, town_id: int | None = None, day_arg: int = 0) -> str:
     if data.get("error"):
         return f"Error: {data['error']}"
     meta, day = data["meta"], data["meta"].get("day")
+    target = day   # the night asked for (day N = the night of day N -> N+1)
+    if day_arg and isinstance(day, int):
+        if day_arg < day:
+            return f"Error: day {day_arg} is already over (today is day {day}): ask for today or a later day."
+        target = day_arg
+    future = isinstance(day, int) and target > day
+    if not future:
+        night_ref, night_name = "tonight", "Tonight"
+    elif target == day + 1:
+        night_ref, night_name = "tomorrow night", "Tomorrow night"
+    else:
+        night_ref, night_name = f"the night of day {target}", f"Night of day {target}"
     skill = (skill or "none").strip().lower()
     if skill not in SKILLS:
         return f"Error: skill must be one of {', '.join(SKILLS)}."
@@ -244,11 +270,19 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
         if cit is None:
             return f"Error: '{citizen}' is not a living citizen of this town."
     assumed = []
+    # A future night without a plan of its own: the citizen's latest plan before it (tonight's
+    # first) gives the zone and, assuming they camp as planned until then, the nights.
+    earlier = None
+    if future and cit is not None and not plans_for_citizen(data, cit["id"], target):
+        for d in range(target - 1, day - 1, -1):
+            earlier = max(plans_for_citizen(data, cit["id"], d), key=lambda p: len(p["players"]), default=None)
+            if earlier:
+                break
     if x is None or y is None:
         if cit is None:
             return "Error: give the zone (x, y) or a citizen name."
         cell = xy(cit)
-        own = max(plans_for_citizen(data, cit["id"]), key=lambda p: len(p["players"]), default=None)
+        own = max(plans_for_citizen(data, cit["id"], target), key=lambda p: len(p["players"]), default=None) or earlier
         if own:   # no zone given: the zone of the citizen's own Fata plan for tonight
             cell = xy(own["coords"])
             assumed.append(f"zone {own['coords']}: from {cit['name']}'s Fata plan"
@@ -264,8 +298,10 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
     z = zone_map(data).get(cell)
     ruin = z.get("ruin") if z else None
     zombies, zombie_note = _zombie_reading(z, day)
+    if future:
+        zombie_note += (f"; today's count, {'tomorrow' if target == day + 1 else 'that night'}'s may differ")
     coords = fmt_xy(cell)
-    zone_plans = plans_for_zone(data, coords)
+    zone_plans = plans_for_zone(data, coords, target)
     alive = {c["id"] for c in data.get("citizens", [])}
     mine = me = None   # the citizen's plan on this zone today (the biggest if several) and their entry
     if cit is not None:
@@ -275,24 +311,33 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
             me = next(q for q in mine["players"] if q["citizen_id"] == cit["id"])
             others = [p for p in zone_plans if p is not mine and any(q["citizen_id"] == cit["id"] for q in p["players"])]
             if others:
-                assumed.append(f"{cit['name']} is in {len(others) + 1} Fata plans for this zone tonight: the one with "
+                assumed.append(f"{cit['name']} is in {len(others) + 1} Fata plans for this zone {night_ref}: the one with "
                                f"the most campers ({mine['creator'] or '?'}'s) was used")
         else:
-            elsewhere = [p["coords"] for p in plans_for_citizen(data, cit["id"])]
+            elsewhere = [p["coords"] for p in plans_for_citizen(data, cit["id"], target)]
             if elsewhere:
-                assumed.append(f"{cit['name']} has a Fata plan tonight on {', '.join(elsewhere)}, not on this zone: "
+                assumed.append(f"{cit['name']} has a Fata plan {night_ref} on {', '.join(elsewhere)}, not on this zone: "
                                "its values are not used")
     src = f"{mine['creator'] or 'a player'}'s Fata plan" if mine else ""
-    if me:   # plan values fill in what the caller left at the default; explicit arguments win
-        if skill == "none" and me["skill"] != "none":
-            skill = me["skill"]
-            assumed.append(f"skill {skill}: from {src}")
-        if camp_items == 0 and me["camp_items"]:
-            camp_items = me["camp_items"]
+    # Without a plan for that night, the citizen's own entry in an earlier plan still gives the
+    # hero skill, the vest, camp items and tomb (not the hiding order: another night).
+    entry = me
+    if entry is None and earlier is not None:
+        entry = next(q for q in earlier["players"] if q["citizen_id"] == cit["id"])
+        src = f"{earlier['creator'] or 'a player'}'s Fata plan for day {earlier['target_day']}"
+    if entry:   # plan values fill in what the caller left at the default; explicit arguments win
+        if skill == "none" and entry["skill"] != "none":
+            skill = entry["skill"]
+            assumed.append(f"hero skill {skill_label(skill)}: from {src}")
+        if camp_items == 0 and entry["camp_items"]:
+            camp_items = entry["camp_items"]
             assumed.append(f"{plural(camp_items, 'camp item')}: from {src}")
-        if not tomb and me["tomb"]:
+        if not tomb and entry["tomb"]:
             tomb = True
             assumed.append(f"hidden in a dug grave (tomb +8): from {src}")
+        if vest is None:
+            vest = entry["vest"]
+    if me:
         if hidden_before == 0:
             before = mine["players"][:mine["players"].index(me)]
             hidden_before = sum(1 for q in before if q["citizen_id"] in alive)
@@ -300,29 +345,37 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
             assumed.append(f"{hidden_before} hidden on the zone before the player: from {src}"
                            + (f" ({dead} earlier camper{'s' if dead > 1 else ''} in it died, not counted)" if dead else "")
                            if hidden_before or dead else f"first to hide on the zone: from {src}")
-        if vest is None:
-            vest = me["vest"]
     if vest is None:
         vest = job == "Scout"
     if nights < 0 and me:
         nights = me["nights"]
         assumed.append(f"camping nights survived: {nights}, from {src}")
+    elif nights < 0 and earlier:
+        q = next(q for q in earlier["players"] if q["citizen_id"] == cit["id"])
+        nights = q["nights"] + (target - earlier["target_day"])
+        assumed.append(f"camping nights survived: {nights} = {q['nights']} in {earlier['creator'] or 'a player'}'s "
+                       f"Fata plan for day {earlier['target_day']} + {target - earlier['target_day']}, assuming "
+                       "every night until then is camped as planned (ask the player)")
     elif nights < 0:
         nights = 0
-        sure = prob = 0
+        sure = prob = plnd = 0
         if cit is not None and town_id is not None:
-            sure, prob = camplog.counts(camplog.load_log(town_id), cit["id"])
-        if sure + prob:
-            nights = sure + prob
-            assumed.append(f"camping nights from the log: {sure} sure + {prob} probable = {nights} counted "
-                           "(pessimistic; the player can correct with nights=)")
+            sure, prob, plnd = camplog.counts(camplog.load_log(town_id), cit["id"])
+        if sure + prob + plnd:
+            nights = sure + prob + plnd
+            assumed.append(f"camping nights from the log: {sure} sure + {prob} probable + {plnd} planned = {nights} "
+                           "counted (pessimistic; the player can correct with nights=)")
         elif cit is not None and town_id is not None:
             assumed.append("camping nights survived by this citizen: assumed 0, the camping log shows none, "
                            "ask the player")
         else:
             assumed.append("camping nights survived by this citizen: assumed 0, ask the player")
+        if future and not me:
+            until = "tonight's camping is" if target == day + 1 else f"nights camped from tonight to day {target - 1} are"
+            assumed.append(f"camping nights survived up to now only: {until} not included, ask the player")
     zone_key = coords
-    can_record = record and town_id is not None and isinstance(day, int)
+    can_record = record and town_id is not None and isinstance(day, int) and not future
+    decay = NIGHTLY_DROP * (target - day) if future else 0
     if camp_level >= 0:
         if can_record:
             camp_zones.record_zone(town_id, zone_key, day, camp_level, "reported")
@@ -331,20 +384,46 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
         if town_id is not None and isinstance(day, int):
             est = camp_zones.estimate_level(camp_zones.load_zones(town_id).get(zone_key), day)
         fata_level = z.get("camp_level") if z else None
-        # The camp bonus a plan for tonight starts from, as its author typed it.
+        # The camp bonus a plan for the night starts from, as its author typed it.
         typed = mine or (zone_plans[0] if len({p["level_before"] for p in zone_plans}) == 1 else None)
-        if fata_level is not None:
-            camp_level = fata_level
-            assumed.append(f"camp bonus +{camp_level}%: Fata estimate from the players' plans, not a game reading "
-                           "(the bonus drops 15% every night)")
+        # A future night without a plan on this zone: an earlier plan on it carries over.
+        before = None
+        if future and not typed:
+            for d in range(target - 1, day - 1, -1):
+                ps = plans_for_zone(data, coords, d)
+                if ps and len({p["level_after"] for p in ps}) == 1:
+                    before = ps[0]
+                    break
+        if future and typed:
+            camp_level = typed["level_before"]
+            assumed.append(f"camp bonus +{camp_level}%: the existing bonus typed in "
+                           f"{typed['creator'] or 'a player'}'s Fata plan for day {target}, not a game reading")
+        elif before:
+            nights_left = target - before["target_day"]
+            camp_level = max(0, before["level_after"] - NIGHTLY_DROP * nights_left)
+            assumed.append(f"camp bonus +{camp_level}%: +{before['level_after']}% planned in "
+                           f"{before['creator'] or 'a player'}'s Fata plan for day {before['target_day']} minus "
+                           f"{NIGHTLY_DROP * nights_left}% ({plural(nights_left, 'night')}), if those upgrades are done; "
+                           "no upgrades after it")
+        elif fata_level is not None or est:
+            if fata_level is not None:
+                base = fata_level
+                what = "Fata estimate from the players' plans, not a game reading"
+            else:
+                base, what = est[0], est[1]
+            if future:
+                camp_level = max(0, base - decay)
+                assumed.append(f"camp bonus +{camp_level}%: today's +{base}% ({what}) minus {decay}% "
+                               f"({plural(target - day, 'night')} at {NIGHTLY_DROP}%), assuming no upgrades until then")
+            else:
+                camp_level = base
+                assumed.append(f"camp bonus +{camp_level}%: " + (
+                    f"{what} (the bonus drops 15% every night)" if fata_level is not None else
+                    what + (" (-15% per night since)" if est[1].startswith("reported") and est[2] != day else "")))
         elif typed:
             camp_level = typed["level_before"]
             assumed.append(f"camp bonus +{camp_level}%: the existing bonus typed in "
                            f"{typed['creator'] or 'a player'}'s Fata plan, not a game reading")
-        elif est:
-            camp_level = est[0]
-            assumed.append(f"camp bonus +{camp_level}%: {est[1]}"
-                           + (" (-15% per night since)" if est[1].startswith("reported") and est[2] != day else ""))
         else:
             camp_level = 0
             assumed.append("camp bonus: assumed +0% (no Fata estimate for this zone; it drops 15% every night), ask the player")
@@ -373,18 +452,39 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
     where = coords
     if ruin:
         where += f", {ruin_label(ruin)}"
-    who = f"{cit['name']} ({job})" if cit else "no citizen given"
-    lines = [header("Camping odds", meta), f"Zone {where}, {km_} km. Citizen: {who}. "
-             f"Skill: {skill}. Cap {_pct(cap)}.", ""]
-    lines.append(f"Odds now (camp bonus +{camp_level}%): {_pct(now)}"
+    hero = skill_label(skill)
+    if cit:
+        who = f"{cit['name']} ({job}" + (f", hero skill {hero})" if hero else ")")
+    else:
+        who = "no citizen given" + (f" (hero skill {hero})" if hero else "")
+    if not future:
+        which = f"Night of day {target} (tonight)." if isinstance(day, int) else "Tonight."
+    else:
+        which = (f"Night of day {target} ({'tomorrow' if target == day + 1 else f'in {target - day} days'}): "
+                 "a projection from today's data.")
+    lines = [header("Camping odds", meta), which,
+             f"Zone {where}, {km_} km. Citizen: {who}. Cap {_pct(cap)}.", ""]
+    lines.append(f"Odds {'now' if not future else 'that night'} (camp bonus +{camp_level}%): {_pct(now)}"
                  + (" (cap)" if now >= cap else ""))
 
     plan_used = False
-    if ap > 0:
+    left = (lambda lvl: max(0, lvl - NIGHTLY_DROP))
+    nxt = "tomorrow" if not future else "the next night"
+    spare = round(sum(terms.values())) - round(cap * 100)
+    plan = None
+    if now >= cap:
+        per = 3 if vest else 7
+        k = spare // per
+        lines.append(f"{night_name}: no upgrade needed, odds at the cap with {spare} points to spare "
+                     f"({plural(k, 'extra zombie')} at hide time keep{'s' if k == 1 else ''} the cap, {k + 1} would not)."
+                     if k else
+                     f"{night_name}: no upgrade needed, odds at the cap with {spare} points to spare "
+                     f"(one more zombie at hide time would drop the odds below the cap).")
+        floor_level = camp_level
+    elif ap > 0:
         plan = plan_upgrades(camp_level, base_sum, cap, ap, defense_items)
         if plan["ap"] == 0:
-            lines.append("Plan: nothing to build: odds already at the cap." if now >= cap
-                         else "Plan: no upgrade possible (upgrades only while the camp bonus is below 50%).")
+            lines.append(f"{night_name}: no upgrade possible (upgrades only while the camp bonus is below 50%).")
         else:
             plan_used = True
             extra = ""
@@ -392,21 +492,24 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
                 extra = (f" ({plan['ap']} of {ap} AP are enough: odds capped or the camp bonus reaches 50%)"
                          if plan["odds"] >= cap or plan["level"] >= MAX_LEVEL_TO_ACT
                          else f" ({plan['ap']} of {ap} AP: more items needed to use the rest)")
-            lines.append(f"Plan: {order_text(plan)}: {plan['ap']} AP, "
+            lines.append(f"{night_name}: {order_text(plan)}: {plan['ap']} AP, "
                          f"{plural(plan['items'], 'defensive item')}, camp bonus "
                          f"+{camp_level}% -> +{plan['level']}%{extra}")
             lines.append(f"Odds after the plan: {_pct(plan['odds'])}")
             terms = camping_terms(level=plan["level"], **kw)
             if can_record:
                 camp_zones.record_zone(town_id, zone_key, day, plan["level"], "planned")
-        top = max_level_plan(camp_level, ap, defense_items)
-        if top["level"] > plan["level"]:
-            lines.append(f"For the next nights: {order_text(top)} ({top['ap']} AP, "
-                         f"{plural(top['items'], 'defensive item')}) takes the camp bonus to "
-                         f"+{top['level']}% instead: same odds tonight, +{max(0, top['level'] - 15)}% "
-                         "left tomorrow (-15% a night), shared by every camper on the zone.")
+        floor_level = plan["level"]
     else:
         lines.append("No plan (ap=0): ask the player how many AP they can spend on upgrades.")
+        floor_level = camp_level
+    if ap > 0:
+        top = max_level_plan(camp_level, ap, defense_items)
+        if left(top["level"]) > left(floor_level):
+            lines.append(f"Optional, for later nights only (no effect on the odds {'tonight' if not future else 'that night'}): "
+                         f"{order_text(top)} ({top['ap']} AP, {plural(top['items'], 'defensive item')}) "
+                         f"-> camp bonus +{top['level']}% {'tonight' if not future else 'that night'}, "
+                         f"+{left(top['level'])}% left {nxt}. Only the bonus above +{NIGHTLY_DROP}% survives the night.")
 
     shown = ", ".join(f"{TERM_LABELS[k]} {v:+d}%" for k, v in terms.items() if v)
     lines.append(f"Breakdown{' after the plan' if plan_used else ''}: {shown or 'all terms 0'} "
@@ -416,7 +519,7 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
         lines.append("Buried ruin: +15% until uncovered, then the ruin's own bonus.")
     if zone_plans:
         lines.append("")
-        lines += _plan_block(zone_plans, me, alive)
+        lines += _plan_block(zone_plans, me, alive, night_ref)
     lines.append("")
     lines.append("Assumptions:")
     lines += [f"- {a}" for a in assumed]

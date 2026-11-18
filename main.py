@@ -804,6 +804,7 @@ async def get_camping_odds(
     vest: bool | None = None,
     record: bool = True,
     town_id: int = 0,
+    day: int = 0,
 ) -> str:
     """
     Survival odds of camping (hiding overnight) on a zone, and the best order of camp
@@ -831,9 +832,18 @@ async def get_camping_odds(
     night and belongs to the zone (all campers share it). The odds freeze when the citizen
     hides: upgrade first, hide last, after 19:00.
 
-    Output: odds now, the plan (explicit order, AP, items) and the odds after it, the
-    non-zero terms, the Fata plan block (if any), the assumptions, one line of advice.
-    Report them as given. A "MISMATCH" line means our formula and Fata's differ: say so.
+    Which night: default is TONIGHT (the town's current day). When the player says "tomorrow",
+    pass day = current day + 1 (the day number is in any town tool's header); a day number
+    always means the night of that day. The output for a future day is a projection (today's
+    zombie count, the camp bonus typed in that day's plan or today's bonus minus 15% a night,
+    nights camped so far): say so and quote its assumptions.
+
+    Output: the night it is for, odds now, the plan for that night (explicit order, AP, items)
+    and the odds after it, or "no upgrade needed" when the odds are at the cap (then do NOT
+    recommend upgrades for that night), an optional line that is only an investment for later
+    nights, the non-zero terms, the Fata plan block (if any), the assumptions, one line of
+    advice. Report them as given. "hero skill" is the player's Reclusive / Pro camper skill,
+    not their job. A "MISMATCH" line means our formula and Fata's differ: say so.
 
     Args:
         x: Zone X, relative to town. Omit with `citizen` to use that citizen's position.
@@ -853,7 +863,7 @@ async def get_camping_odds(
         hidden_before: Citizens already hidden on the zone before the player (crowd malus).
                        Default 0: from the citizen's Fata plan (campers before them), else 0.
         nights: Camping nights the citizen already survived. -1 = from the citizen's Fata plan,
-                else the town's camping log (sure + probable nights, pessimistic; the player
+                else the town's camping log (sure + probable + planned nights, pessimistic; the player
                 can correct it), else assumed 0.
         tomb: True if the citizen is hidden in a dug grave (+8).
         vest: Scout vest worn (zombies -3 instead of -7 each). Omit: True for a Scout.
@@ -861,6 +871,8 @@ async def get_camping_odds(
                 bonus for this zone, so later questions can start from it. Set False for
                 what-if questions the player does not mean to do.
         town_id: Fata Morgana town ID. Omit for the player's default town.
+        day: Night to compute: 0 (default) = tonight; a day number = the night of that day
+             (tomorrow = current day + 1). A past day is an error.
     """
     got = await _town(town_id)
     if isinstance(got, str):
@@ -869,7 +881,7 @@ async def get_camping_odds(
     return fata.format_camping_odds(
         data, x=x, y=y, citizen=citizen, skill=skill, camp_level=camp_level, ap=ap,
         defense_items=defense_items, camp_items=camp_items, hidden_before=hidden_before,
-        nights=nights, tomb=tomb, vest=vest, record=record, town_id=tid,
+        nights=nights, tomb=tomb, vest=vest, record=record, town_id=tid, day_arg=day,
     )
 
 

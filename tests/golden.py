@@ -274,6 +274,14 @@ CASES += [
       "camp_level": 10}, {"fixture": "v13"}),
     ("v13_camping_fata_level_plan", "get_camping_odds",
      {"town_id": V13[0][1], "x": 10, "y": -8, "citizen": _v13_name(154), "ap": 2, "defense_items": 1}, {"fixture": "v13"}),
+    ("v13_camping_cap_ap", "get_camping_odds",
+     {"town_id": V13[0][1], "citizen": "Korra", "ap": 6, "defense_items": 1}, {"fixture": "v13"}),
+    ("v13_camping_tomorrow", "get_camping_odds",
+     {"town_id": V13[0][1], "citizen": "Korra", "day": 27, "camp_level": 0, "ap": 6, "defense_items": 1}, {"fixture": "v13"}),
+    ("v13_camping_tomorrow_estimate", "get_camping_odds",
+     {"town_id": V13[0][1], "x": 10, "y": -8, "citizen": _v13_name(154), "day": 27, "ap": 2, "defense_items": 1}, {"fixture": "v13"}),
+    ("v13_camping_past_day", "get_camping_odds",
+     {"town_id": V13[0][1], "citizen": "Korra", "day": 20}, {"fixture": "v13"}),
     ("v13_positions", "get_citizen_positions", {"town_id": V13[0][1]}, {"fixture": "v13"}),
 ]
 # Camping odds (rules verified in the game source: docs/camping-plan.md section 1.2).

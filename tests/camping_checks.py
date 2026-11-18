@@ -148,12 +148,12 @@ camplog.apply_night(log, N, {1: {"name": "A", "zone": "[1|1]", "label": "probabl
                              2: {"name": "B", "zone": "[2|2]", "label": "sure"}}, {3: {"name": "C", "zone": "[3|3]"}})
 camplog.apply_night(log, N, {1: {"name": "A", "zone": "[1|1]", "label": "probable"},
                              2: {"name": "B", "zone": "[2|2]", "label": "sure"}}, {3: {"name": "C", "zone": "[3|3]"}})
-assert camplog.counts(log, 1) == (1, 1) and camplog.counts(log, 2) == (1, 0) and camplog.counts(log, 99) == (0, 0)
+assert camplog.counts(log, 1) == (1, 1, 0) and camplog.counts(log, 2) == (1, 0, 0) and camplog.counts(log, 99) == (0, 0, 0)
 assert log["citizens"]["3"]["died_outside"] == N and log["citizens"]["3"]["nights"] == []
 assert camplog.night_line(log, N) == "Camped: 1 sure (B), 1 probable (A)", camplog.night_line(log, N)
 assert camplog.night_line(log, 5) is None
 camplog.apply_night(log, N, {}, {})   # recomputed to nothing: night removed, dead cleared, empty entries dropped
-assert camplog.counts(log, 1) == (1, 0) and "2" not in log["citizens"] and "3" not in log["citizens"]
+assert camplog.counts(log, 1) == (1, 0, 0) and "2" not in log["citizens"] and "3" not in log["citizens"]
 
 # --- zone camp level record (fata/camp_zones.py) ---
 rep = {"day": 20, "level": 58, "source": "reported"}
@@ -186,7 +186,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert not list(tdir.glob("*.tmp"))                               # atomic write left no temp file
 
 # --- Fata camp plans, v1.3 (towndata.town_camping -> camp_plans; anonymised values of town 8299 day 26) ---
-from myhordes_mcp.fata.camping import format_camping_odds, plan_player_odds   # noqa: E402
+from myhordes_mcp.fata.camping import format_camping_odds, plan_player_odds, skill_label   # noqa: E402
 from myhordes_mcp.fata.towndata import build_result, plans_for_citizen, plans_for_day, plans_for_zone   # noqa: E402
 
 
@@ -263,18 +263,155 @@ assert n_checked == 9
 # the tool: plan values as defaults, a right Fata number is silent, a wrong one is a MISMATCH line
 out = format_camping_odds(res, x=7, y=13, citizen="Ann", town_id=None)
 assert "MISMATCH" not in out and "Fata plan tonight on [7|13], Warehouse (by Dan)" in out
-assert "skill reclusive1: from Dan's Fata plan" in out and "camping nights survived: 6, from Dan's Fata plan" in out
-assert "camp bonus +43%: Fata estimate" in out and "Skill: reclusive1" in out
+assert "hero skill Reclusive 1: from Dan's Fata plan" in out and "camping nights survived: 6, from Dan's Fata plan" in out
+assert "camp bonus +43%: Fata estimate" in out and "hero skill Reclusive 1" in out
 RAW["town_camping"][0]["camping_plan"]["players"][3]["effective_chances"] = 58
 assert "MISMATCH Dan" in format_camping_odds(build_result(1, RAW), x=7, y=13, town_id=None)
 RAW["town_camping"][0]["camping_plan"]["players"][3]["effective_chances"] = 59
 # the plan's zone is used when none is given; explicit arguments win over the plan
 out = format_camping_odds(res, x=None, y=None, citizen="Fay", town_id=None)
-assert "Zone [7|12]," in out and "Skill: reclusive4" in out and "camping nights survived: 7, from Fay's" in out
+assert "Zone [7|12]," in out and "hero skill Reclusive 4" in out and "camping nights survived: 7, from Fay's" in out
 out = format_camping_odds(res, x=None, y=None, citizen="Fay", skill="procamp", nights=0, vest=False, camp_level=0, town_id=None)
-assert "Skill: procamp" in out and "camping nights survived" not in out and "Scout vest" not in out
+assert "hero skill Pro camper" in out and "camping nights survived" not in out and "Scout vest" not in out
 # no plans (v1.2 data): no plan block, no plan values
 old = build_result(1, {k: v for k, v in RAW.items() if k != "town_camping"})
 assert old["camp_plans"] == [] and "Fata plan" not in format_camping_odds(old, x=7, y=13, citizen="Ann", town_id=None)
+
+# --- day parameter: projection for a later night ---
+tom = format_camping_odds(res, x=8, y=13, citizen="Eve", day_arg=27, town_id=None)
+assert "Night of day 27 (tomorrow): a projection from today's data." in tom, tom
+assert "Fata plan tomorrow night on [8|13]" in tom and "camp bonus +0%: the existing bonus typed in Ann's Fata plan for day 27" in tom
+assert "today's count, tomorrow's may differ" in tom
+assert "Night of day 26 (tonight)." in format_camping_odds(res, x=8, y=13, town_id=None)
+assert format_camping_odds(res, x=8, y=13, day_arg=26, town_id=None) == format_camping_odds(res, x=8, y=13, town_id=None)
+err = format_camping_odds(res, x=8, y=13, day_arg=20, town_id=None)
+assert err.startswith("Error: day 20 is already over (today is day 26)"), err
+# no plan on the zone for day 27, but tonight's plan on it (+56% after its upgrades): carried
+# over minus 15 per night, stated as conditional on those upgrades
+proj = format_camping_odds(res, x=7, y=13, day_arg=27, town_id=None)
+assert "camp bonus +41%: +56% planned in Dan's Fata plan for day 26 minus 15% (1 night)" in proj, proj
+proj3 = format_camping_odds(res, x=7, y=13, day_arg=29, town_id=None)
+assert "camp bonus +11%: +56% planned" in proj3 and "minus 45% (3 nights)" in proj3 and "Night of day 29 (in 3 days)" in proj3, proj3
+# no plan on the zone at all: today's Fata level minus 15 per night
+res_np = dict(res, camp_plans=[p for p in res["camp_plans"] if p["coords"] != "[7|13]"])
+projn = format_camping_odds(res_np, x=7, y=13, day_arg=27, town_id=None)
+assert "camp bonus +28%: today's +43%" in projn and "assuming no upgrades until then" in projn, projn
+assert "nights camped from tonight to day 28 are not included" in proj3 and "tonight's camping is not included" in proj
+# explicit camp_level wins, over the plan's typed level too
+assert "Odds that night (camp bonus +10%)" in format_camping_odds(res, x=8, y=13, day_arg=27, camp_level=10, town_id=None)
+
+# --- cap wording and zombie tolerance ---
+def spare_of(out):
+    import re
+    mt = re.search(r"no upgrade needed, odds at the cap with (\d+) points to spare \((\d+) extra zombies? at hide time keeps? the cap, (\d+) would not\)", out)
+    assert mt, out
+    return tuple(map(int, mt.groups()))
+
+
+for ap_ in (0, 5):
+    out = format_camping_odds(res, x=7, y=13, camp_level=80, ap=ap_, town_id=None)
+    assert "Tonight: no upgrade needed" in out and "ask the player how many AP" not in out, out
+    sp, k, k1 = spare_of(out)
+    assert (sp, k, k1) == (20, 2, 3) and "Plan:" not in out
+# a vest tolerates floor(spare / 3)
+out = format_camping_odds(res, x=7, y=13, camp_level=80, vest=True, town_id=None)
+sp, k, k1 = spare_of(out)
+assert (sp, k) == (20, 6), out
+# ... and the tolerance is real: k extra zombies keep the cap, k + 1 do not (terms of the zone above)
+t80 = camping_terms(level=80, distance=15, devastated=True)
+assert camping_odds({**t80, "zombies": -7 * 2}, 0.9) == 0.9 and camping_odds({**t80, "zombies": -7 * 3}, 0.9) < 0.9
+# exactly at the cap, no spare: the wording says so
+assert "0 points to spare (one more zombie" in format_camping_odds(res, x=7, y=13, camp_level=60, town_id=None)
+# not at the cap: the minimal plan is labelled Tonight, the optional line is separate and only when it carries over
+out = format_camping_odds(res, x=7, y=13, camp_level=0, ap=3, defense_items=1, town_id=None)
+assert "Tonight: " in out and "Plan:" not in out and "Optional" not in out, out
+out = format_camping_odds(res, x=7, y=13, camp_level=0, ap=20, defense_items=5, camp_items=4, town_id=None)
+assert "Optional, for later nights only (no effect on the odds tonight): " in out and "left tomorrow. Only the bonus above +15% survives the night." in out, out
+out = format_camping_odds(res, x=7, y=13, camp_level=60, ap=1, town_id=None)   # 60 >= 50: no action, nothing to carry over
+assert "Optional" not in out
+# hero skill is not the job
+out = format_camping_odds(res, x=7, y=13, citizen="Ann", town_id=None)
+assert "Citizen: Ann (" in out and ", hero skill Reclusive 1)" in out and "Skill:" not in out
+assert skill_label("procamp") == "Pro camper" and skill_label("reclusive3") == "Reclusive 3" and skill_label("none") == ""
+
+# --- camping log: "planned" label (Fata camp plans as evidence) ---
+def pview(alive_=None, dead_=None, plans=None):
+    return {"alive": alive_ or {}, "dead": dead_ or {}, "plans": plans or []}
+
+
+def plan(uid, day_, coords, *cits):
+    return {"uid": uid, "target_day": day_, "coords": coords, "citizens": list(cits)}
+
+
+# anonymised shape of town 8299 night 25: a citizen with an end-of-day record at 15:00 outside, alive
+# next day, in a plan for night N: sure/probable do not apply (daytime), the plan does
+AFT = EVE - 5 * 3600   # 15:00
+pe = pview({1: alive("[2|3]", N, AFT, name="A"), 2: alive("[4|4]", N, EVE, name="B"), 3: alive("[0|0]", N, EVE, inside=True, name="C"),
+            4: alive("[0|0]", N, AFT, inside=True, name="D"), 5: alive("[6|6]", N, AFT, name="E5")},
+           plans=[plan("p1", N, "[2|3]", 1, 2, 3, 4, 7), plan("p-old", N - 1, "[9|9]", 5)])
+pm = pview({1: alive("[0|0]", N + 1, EVE + 9000, inside=True, name="A"), 2: alive("[4|4]", N + 1, EVE + 9000, name="B"),
+            3: alive("[0|0]", N + 1, EVE + 9000, inside=True, name="C"),
+            4: alive("[0|0]", N + 1, EVE + 9000, inside=True, name="D"), 5: alive("[6|6]", N, AFT, name="E5")},
+           {7: {"name": "G", "type": 5, "day": N, "coords": "[2|3]"}},
+           plans=[plan("p1", N, "[2|3]", 1, 2, 3, 4, 7)])
+camped, died = camplog.night_outcome(N, pe, pm)
+assert camped[1] == {"name": "A", "zone": "[2|3]", "label": "planned"}        # 15:00 outside + plan
+assert camped[2]["label"] == "sure"                                           # sure/probable come first
+assert 3 not in camped                                                        # inside at 19:00+: contrary evidence
+assert camped[4] == {"name": "D", "zone": "[2|3]", "label": "planned"}        # inside at 15:00 only: not contrary
+assert 5 not in camped                                                        # only a plan of another night
+assert 7 not in camped and list(died) == [7]                                  # dead in M: not planned (counted as died)
+# no plan evidence: the old rule only
+assert [c["label"] for c in camplog.night_outcome(N, {**pe, "plans": []}, {**pm, "plans": []})[0].values()] == ["sure"]
+# plans of E and M are united by uid, M wins; a plan only in E counts too
+only_e = camplog.night_outcome(N, pview(pe["alive"], plans=[plan("p1", N, "[2|3]", 1)]), {**pm, "plans": []})[0]
+assert only_e[1]["label"] == "planned"
+mw = camplog.night_outcome(N, pview(pe["alive"], plans=[plan("p1", N, "[2|3]", 1)]),
+                           {**pm, "plans": [plan("p1", N, "[8|8]", 1)]})[0]
+assert mw[1]["zone"] == "[8|8]"
+# several plans: the one on the zone of the latest record, else the first
+two = [plan("a", N, "[7|7]", 1), plan("b", N, "[2|3]", 1)]
+assert camplog.night_outcome(N, pview(pe["alive"], plans=two), {**pm, "plans": []})[0][1]["zone"] == "[2|3]"
+assert camplog.night_outcome(N, pview({}, plans=two), {**pm, "plans": []})[0][1]["zone"] == "[7|7]"
+# counts / lines with the third label
+lg = {}
+camplog.apply_night(lg, N, camped, died)
+assert camplog.counts(lg, 1) == (0, 0, 1) and camplog.night_count(lg, N) == 3
+assert camplog.night_line(lg, N) == "Camped: 1 sure (B), 2 planned (A, D)", camplog.night_line(lg, N)
+
+# rule version: a night stored under older rules is recomputed once, then left alone (temp town dir)
+import gzip, json   # noqa: E402
+
+
+def raw_day(day_, cits, plans):
+    return {"version": "1.3", "town_info": {"town": 1, "day": day_, "name": "T", "tx": 12, "ty": 13},
+            "town_citizens": [{"citizen_id": i, "name": n, "job": "dig", "x": x, "y": y, "out": True,
+                               "last_update": {"day": d, "time": t}} for i, n, x, y, d, t in cits],
+            "town_camping": [{"town": 1, "day": day_, "x": x, "y": y, "uid": u, "target_day": td, "mode": 1, "creator": 1,
+                              "camping_plan": {"players": [{"order": o, "player_id": c, "name": "?", "job": "dig"}
+                                                           for o, c in enumerate(cs)]}} for u, td, x, y, cs in plans]}
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    tdir = Path(tmp) / "s1-test"
+    (tdir / "cache").mkdir(parents=True)
+    archive.town_dir = lambda town_id: tdir
+    camplog.AUTO = 1
+    plans_ = [("u1", N, 14, 13, [1])]     # absolute (14,13) = relative [2|0]
+    for d_, cits in ((N, [(1, "A", 14, 13, N, AFT)]), (N + 1, [(1, "A", 12, 13, N + 1, EVE + 9000)])):
+        with gzip.open(tdir / "cache" / f"day-{d_}.towndata.json.gz", "wt", encoding="utf-8") as f:
+            json.dump(raw_day(d_, cits, plans_), f)
+    camplog._views.clear()
+    assert camplog.update_camping_log(1) == [N]
+    lg = camplog.load_log(1)
+    assert lg["nights"][str(N)]["rules"] == camplog.RULES and lg["nights"][str(N)]["planned"] == 1
+    assert camplog.counts(lg, 1) == (0, 0, 1)
+    assert camplog.update_camping_log(1) == []                      # unchanged inputs and rules: nothing to do
+    stale = camplog.load_log(1)
+    del stale["nights"][str(N)]["rules"]                            # as stored before the planned rule
+    stale["citizens"] = {}
+    camplog._write(tdir, stale)
+    assert camplog.update_camping_log(1) == [N]                     # recomputed once
+    assert camplog.counts(camplog.load_log(1), 1) == (0, 0, 1) and camplog.update_camping_log(1) == []
 
 print("camping checks: ok")
