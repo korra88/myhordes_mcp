@@ -164,6 +164,8 @@ odds by hand. First ask the player what Fata cannot know: Reclusive / pro-camper
 nights already camped (the tool reads the town's camping log if they do not know), the
 zone's current camp bonus, AP for upgrades, defensive items and Groundsheets / Festering
 Flesh carried, citizens already hidden there. Pass `record=False` for what-if questions.
+The tool reads the players' Fata camp plans for tonight (skill, nights, vest, items, tomb,
+hide order, the zone's camp bonus): do not ask for what its output says came from a plan.
 
 For an expedition, call `find_expedition_path` then `plan_expedition_supplies`. When the
 player has Second Wind (they say so, or the bot memory holds their level), pass

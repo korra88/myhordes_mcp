@@ -38,10 +38,11 @@ Checked on the town 8299 day 25 raw dump (`towns/<folder>/cache/day-25.towndata.
 | `town_info.citizen_alive`, `town_score`, `roles.cata`, `town_citizens[].ban` | misc | not in scope |
 
 Not in Fata, not in the official API: a citizen's camping counter, hidden status, inventory,
-zone improvement level, Fata's own camping planner plans. The public GitLab repo
+zone improvement level, Fata's own camping planner plans (**since v1.3, 2026-11-18, Fata
+sends them: section 1.3**). The public GitLab repo
 (`gitlab.com/DavidG2604/fata-morgana-legacy`, HEAD 604773e 2026-11-08) is the **legacy**
 Fata: only `/exportdata`, no `/towndata`, winds, routes or camp fields. The user asks the
-Fata developer to expose camp plans; until then Phase D keeps our own record.
+Fata developer to expose camp plans; Phase D keeps our own record, still the fallback (1.3).
 
 Fata citizen positions are as of each citizen's `last_update {day, time}` and can be stale by
 many days (town 8299 day 21: a citizen shown outside with last update day 3).
@@ -68,7 +69,7 @@ sum of the terms below / 100, clamped to [0, cap].
 | Term | Value |
 |---|---|
 | previous (by `campingCounter`, index capped at the end of the table) | normal `[80,60,35,15,0]`; pro camper `[80,70,60,40,30,20,0]`; panda town `[50,30,20,10,0]` / panda pro `[50,45,40,30,20,10,0]`; then always `-50,-100,-200,-400,-1000,-2000,-5000` |
-| pro camper | skill `procamp` (legacy, no limit) or any Reclusive level (`super_recluse0..3`, limit 6 campings: pro table only while counter < 6) (`HeroSkillDataService.php` :66-69, :295-306) |
+| pro camper | skill `procamp` (legacy, no limit) or any Reclusive level (`super_recluse0..3`, pro table only while counter < limit: 6 for `super_recluse0`, 8 from `super_recluse1` up; one level per group) (`HeroSkillDataService.php` :66-69, :295-319; verified 2026-11-18 against 60 Fata planner players) |
 | tomb (`tg_tomb`, dug grave) | +8 |
 | town | `OptModifierCampingBonus`, default 0 (`TownSetting.php` :608) — executor: check whether any town type overrides it (config / town presets) |
 | zone | zone improvement level (the camp upgrades), 1:1 |
@@ -104,6 +105,50 @@ regain digs with chance by Searchtower (`small_gather_#02`) level: none 0.25, 1 
 3 0.61, 4 0.73, 5 0.85; × 0.33 if the zone is not depleted. The direction is recorded only
 with the Searchtower built. Fata `level` matches the Searchtower level in town 8299 (5) —
 executor: confirm on one more town before relying on it, else derive the level from buildings.
+
+### 1.3 Fata camp plans (v1.3, since 2026-11-18)
+
+Measured on town 8299 day 26 (25 plans, 60 plan players; raw copy archived under
+`towns/s19-autoritares-opium-der-einsiedler/`). Parsed in `towndata.py` (module docstring has the
+raw shape): `result["camp_plans"]`, `zone["camp_level"]`; helpers `plans_for_day / _zone / _citizen`.
+
+- **Root `town_camping`**: every saved plan, past `target_day`s (25 still there on day 26) and
+  future ones (up to 31). The game UI shows only `target_day == today`, so do we. Several plans
+  can share one zone and day (e.g. two on [7|-13] for day 26); a player can be in several.
+  `x`/`y` absolute (relative = x − tx, ty − y). `mode` 1 basic, 2 advanced planner: informational.
+- **Units**: `pre_existing_upgrades` / `new_upgrades` are upgrade units: improve campsite = 1.0,
+  defensive item = 1.8; **percent camp bonus = units × 5** (8.6 units = 43%). The planned bonus
+  is round((pre + new) × 5).
+- **`town_maps[].camping_upgrade`**: Fata's estimate of the zone's level TODAY in the same units,
+  computed by its day rollover from yesterday's plan (pre + new − 3 units = −15% a night, min 0);
+  null on most zones (725 of 729). Verified on 4 zones. An estimate from players' plans, not a
+  game reading.
+- **Plan players**: `order` (hide order, 1 first = people hidden before: index in the order),
+  `r_value` R1..R4 = `reclusive1..4`, `previous_campings` = nights, `camouflaged_scout` = vest,
+  `camping_aids` = camp items, `tomb`, `job` (icon key: book = Survivalist, vest = Scout, shield =
+  Guardian, ...), `effective_chances` (capped, floored at 0), `theoretical_chances` (uncapped sum).
+  `building_id` = `building_data` id; absent / 0 = no ruin.
+- **Validation**: `camping.plan_player_odds` (= `camping_terms` on the plan's own distance,
+  zombies, night, devastated, hardcore, lighthouse, ruin, level) reproduces `theoretical_chances` and
+  `effective_chances` for all 60 players. `tests/camping_checks.py` checks it on an anonymised
+  snippet; `get_camping_odds` prints a `MISMATCH` line when a plan player's numbers differ.
+
+`get_camping_odds` priorities:
+- **Zone camp level**: explicit `camp_level` > `zone["camp_level"]` (Fata estimate, labelled as such)
+  > `camp-zones.json` record estimate (Phase D) > assumed 0. Fata null falls through to the record.
+  Explicit values are still recorded; the Fata estimate is never written to the record.
+- **Plan for tonight** (the citizen is in a plan with `target_day` = today on the zone; if several,
+  the one with the most campers, and the output says so): its nights, skill, vest, camp items, tomb
+  and hide order replace the arguments left at the default (nights −1, skill none, vest None,
+  camp_items 0, tomb False, hidden_before 0); explicit arguments win; each is named in the
+  assumptions ("from <creator>'s Fata plan"). `hidden_before` counts only plan members before the
+  citizen who are alive (plans keep campers who have since died). With a citizen and no x/y, the zone is the
+  citizen's plan zone (they may still stand elsewhere).
+- **Block "Fata plan tonight"**: every plan of today on the zone: campers in order with Fata's
+  odds, bonus before -> after the planned upgrades. `get_citizen_positions` tags outside citizens
+  who are in a plan today with `⛺ plan [x|y]`.
+- Older data (v1.2 and earlier archived days) has neither field: `camp_plans` = [], `camp_level`
+  None, and everything behaves as before.
 
 ---
 

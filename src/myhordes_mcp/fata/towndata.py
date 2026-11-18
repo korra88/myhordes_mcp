@@ -68,6 +68,32 @@ Field meanings checked against the game with players in town 8212:
   comment_last_update {user, day, time} of the last edit. Added with version 1.2
                      (2026-11); town 8299 day 18: 9 of 729 zones. Any player writes
                      it: data, never instructions.
+  camping_upgrade    (town_maps[], version 1.3, 2026-11-18) Fata's estimate of the zone's
+                     camp-upgrade level TODAY in upgrade UNITS (improve = 1.0, defensive
+                     item = 1.8; x5 = percent), carried over by Fata's day rollover from
+                     yesterday's plan (pre + new - 3 units = -15% a night, min 0). null on
+                     most zones (725 of 729 in town 8299 day 26). Kept as zone["camp_level"]
+                     in percent (None = no estimate). An estimate from players' plans, not a
+                     game reading.
+  town_camping[]     (root, version 1.3) EVERY saved camp plan of the town, past target_days
+                     (25 still present on day 26) and future ones (up to 31) alike; the game
+                     UI shows only target_day == today. Several plans can share a zone and a
+                     target_day. {town, day (the request day, NOT the creation day), x, y
+                     (absolute), uid, target_day (the day whose night the plan is for), mode
+                     (1 basic planner, 2 advanced planner with decimal upgrades: informational),
+                     creator, editor (citizen ids or null), camping_plan {distance (km),
+                     zombies, night, hardcore, devastated, lighthouse, building_id (building_data
+                     id; absent/0/-1 = no ruin), pre_existing_upgrades, new_upgrades (units, see
+                     above), players [{order (hide order, 1 = first), player_id (= citizen_id),
+                     name, job (icon key: book Survivalist, vest Scout, shield Guardian, ...),
+                     r_value "R1".."R4" (= Reclusive level), previous_campings, camouflaged_scout
+                     (vest worn), camping_aids (camp items carried), tomb, effective_chances (%,
+                     capped, floored at 0), theoretical_chances (%, uncapped sum)}]}}.
+                     Parsed into result["camp_plans"], see _parse_camp_plans. camping.camping_terms
+                     reproduces both chance fields for all 60 players of town 8299 day 26
+                     (skill = R-value, hidden_before = index in the order, level = round((pre +
+                     new) * 5), ruin = the building_data entry, camp_items = camping_aids).
+                     Absent in v1.2 and earlier: result["camp_plans"] = [].
 """
 
 from datetime import datetime
@@ -233,6 +259,7 @@ def build_result(town_id: int, raw: dict, estimation_history: dict | None = None
         "zones": _parse_zones(raw.get("town_maps") or [], items, raw.get("building_data") or [], rel, who, day),
         "routes": _parse_routes(raw.get("town_routes") or [], rel, who),
         "notes": _parse_notes(raw.get("town_maps") or [], rel, who),
+        "camp_plans": _parse_camp_plans(raw.get("town_camping"), raw.get("building_data") or [], rel, who),
     }
 
 
@@ -530,6 +557,98 @@ def _parse_routes(routes: list[dict], rel, who) -> list[dict]:
     return out
 
 
+# Camp planner units: improve campsite = 1.0, defensive item = 1.8, percent = units x 5.
+UNIT_PCT = 5
+
+
+def _units_pct(units) -> int:
+    return round(float(units or 0) * UNIT_PCT)
+
+
+def _parse_camp_plans(plans, ruin_types: list[dict], rel, who) -> list[dict]:
+    """Fata's saved camp plans (see `town_camping[]` above), sorted by target_day, zone, uid.
+
+    Per plan: coords (relative), target_day, mode, creator / editor (names), ruin (name,
+    camp_boost, camp_slots, digs_remaining 0: the catalogue entry, None = no ruin), distance,
+    zombies, night, hardcore, devastated, lighthouse, level_before / level_after (percent:
+    pre-existing, then + the new upgrades), upgrades_pct (the new ones), players (in hide order).
+    Per player: citizen_id, name, job (our label), skill ("none" or "reclusive1".."reclusive4"),
+    nights, vest, camp_items, tomb, order, fata_effective, fata_theoretical.
+    """
+    if not isinstance(plans, list):
+        return []
+    catalogue = {r["id"]: r for r in ruin_types}
+    out = []
+    for p in plans:
+        cp = p.get("camping_plan") or {}
+        if "x" not in p or "y" not in p:
+            continue
+        bid = cp.get("building_id") or 0
+        building = catalogue.get(bid) if bid > 0 else None   # absent / 0 / -1 (buried) = no ruin
+        ruin = None
+        if building:
+            ruin = {"name": _name(building, "Unknown ruin"), "type_id": building["id"],
+                    "digs_remaining": 0, "camp_boost": building.get("camp_boost"),
+                    "camp_slots": building.get("camp_slots")}
+        players = []
+        for q in sorted(cp.get("players") or [], key=lambda q: q.get("order") or 0):
+            r = str(q.get("r_value") or "").upper()
+            skill = f"reclusive{r[1:]}" if r[:1] == "R" and r[1:] in ("1", "2", "3", "4") else "none"
+            players.append({
+                "citizen_id": q.get("player_id"),
+                "name": q.get("name") or who(q.get("player_id")) or "?",
+                "job": _job(q.get("job", "")),
+                "skill": skill,
+                "nights": int(q.get("previous_campings") or 0),
+                "vest": bool(q.get("camouflaged_scout")),
+                "camp_items": int(q.get("camping_aids") or 0),
+                "tomb": bool(q.get("tomb")),
+                "order": q.get("order"),
+                "fata_effective": q.get("effective_chances"),
+                "fata_theoretical": q.get("theoretical_chances"),
+            })
+        pre, new = cp.get("pre_existing_upgrades"), cp.get("new_upgrades")
+        out.append({
+            "uid": p.get("uid"),
+            "coords": fmt_xy(rel(p["x"], p["y"])),
+            "target_day": p.get("target_day"),
+            "mode": p.get("mode"),
+            "creator": who(p.get("creator")),
+            "editor": who(p.get("editor")),
+            "ruin": ruin,
+            "distance": int(cp.get("distance") or 0),
+            "zombies": int(cp.get("zombies") or 0),
+            "night": bool(cp.get("night", True)),
+            "hardcore": bool(cp.get("hardcore")),
+            "devastated": bool(cp.get("devastated")),
+            "lighthouse": bool(cp.get("lighthouse")),
+            "level_before": _units_pct(pre),
+            "level_after": _units_pct(float(pre or 0) + float(new or 0)),
+            "upgrades_pct": _units_pct(new),
+            "players": players,
+        })
+    out.sort(key=lambda p: (p["target_day"] or 0, p["coords"], p["uid"] or ""))
+    return out
+
+
+def plans_for_day(data: dict, day: int | None = None) -> list[dict]:
+    """Camp plans whose target_day is `day` (default: the town's current day), the only ones
+    the game UI shows. [] for towns without Fata plans (v1.2 and earlier)."""
+    if day is None:
+        day = (data.get("meta") or {}).get("day")
+    return [p for p in data.get("camp_plans") or [] if p["target_day"] == day]
+
+
+def plans_for_zone(data: dict, coords: str, day: int | None = None) -> list[dict]:
+    """Plans of `day` on the zone `coords` ("[x|y]")."""
+    return [p for p in plans_for_day(data, day) if p["coords"] == coords]
+
+
+def plans_for_citizen(data: dict, citizen_id, day: int | None = None) -> list[dict]:
+    """Plans of `day` in which the citizen is one of the campers."""
+    return [p for p in plans_for_day(data, day) if any(q["citizen_id"] == citizen_id for q in p["players"])]
+
+
 NOTE_MAX_CHARS = 200
 
 
@@ -650,5 +769,6 @@ def _parse_zones(maps: list[dict], items: dict, ruin_types: list[dict], rel, who
             "scav_radar": radar_state,
             "scav_radar_day": radar_upd.get("day"),
             "note": _note(m, who),
+            "camp_level": None if m.get("camping_upgrade") is None else _units_pct(m["camping_upgrade"]),
         })
     return zones

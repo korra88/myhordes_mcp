@@ -45,8 +45,10 @@ assert camping_terms(panda=True)["town"] == -30 and camping_terms()["town"] == 0
 
 # Pro camper: procamp has no limit, Reclusive only while nights < 6
 assert is_pro_camper("procamp", 40) and is_pro_camper("reclusive2", 5)
-assert not is_pro_camper("reclusive2", 6) and not is_pro_camper("none", 0)
-assert prev(nights=6, skill="reclusive3") == -100       # normal table at index 6
+assert not is_pro_camper("reclusive1", 6) and not is_pro_camper("none", 0)
+assert is_pro_camper("reclusive2", 7) and not is_pro_camper("reclusive4", 8)
+assert prev(nights=6, skill="reclusive1") == -100       # Reclusive 1: normal table from 6
+assert prev(nights=7, skill="reclusive3") == -50 and prev(nights=8, skill="reclusive3") == -400
 assert prev(nights=6, skill="procamp") == 0             # pro table at index 6
 
 # Caps
@@ -182,5 +184,97 @@ with tempfile.TemporaryDirectory() as tmp:
     assert camp_zones.load_zones(1)["[1|2]"]["level"] == 30
     assert not camp_zones.record_zone(1, "[1|2]", 21, 1, "bogus")
     assert not list(tdir.glob("*.tmp"))                               # atomic write left no temp file
+
+# --- Fata camp plans, v1.3 (towndata.town_camping -> camp_plans; anonymised values of town 8299 day 26) ---
+from myhordes_mcp.fata.camping import format_camping_odds, plan_player_odds   # noqa: E402
+from myhordes_mcp.fata.towndata import build_result, plans_for_citizen, plans_for_day, plans_for_zone   # noqa: E402
+
+
+IDS = {"Ann": 101, "Bob": 102, "Cyd": 103, "Dan": 104, "Eve": 105, "Fay": 106}
+
+
+def fplayer(order, name, job, r, nights, vest, aids, tomb, eff, theo):
+    return {"order": order, "player_id": IDS[name], "name": name, "job": job, "r_value": r,
+            "previous_campings": nights, "camouflaged_scout": vest, "camping_aids": aids, "tomb": tomb,
+            "effective_chances": eff, "theoretical_chances": theo}
+
+
+def fplan(x, y, target_day, building, pre, new, dist, players, mode=1, creator=101):   # 101 = Ann
+    return {"town": 1, "day": 26, "x": x, "y": y, "uid": f"u{x}-{y}-{target_day}", "target_day": target_day,
+            "mode": mode, "creator": creator, "editor": None,
+            "camping_plan": {"distance": dist, "zombies": 0, "night": True, "hardcore": False, "devastated": True,
+                             "lighthouse": True, "building_id": building, "pre_existing_upgrades": pre,
+                             "new_upgrades": new, "players": players}}
+
+
+RAW = {
+    "version": "1.3", "town_info": {"town": 1, "day": 26, "name": "T", "tx": 12, "ty": 13, "devast": 1},
+    "town_maps": [{"x": 19, "y": 0, "camping_upgrade": 8.6, "zone_update": {"day": 26}},   # [7|13]
+                  {"x": 20, "y": 0, "camping_upgrade": None, "zone_update": {"day": 26}}],
+    "town_citizens": [{"citizen_id": IDS[n], "name": n, "job": j, "x": 12, "y": 13, "out": True}
+                      for n, j in [("Ann", "shield"), ("Bob", "tamer"), ("Cyd", "tech"), ("Dan", "tech"),
+                                   ("Eve", "book"), ("Fay", "vest")]],
+    "building_data": [{"id": 36, "name_en": "Warehouse", "camp_boost": 10, "camp_slots": 5},
+                      {"id": 58, "name_en": "Tent", "camp_boost": 30, "camp_slots": 1},
+                      {"id": 10, "name_en": "Bunker", "camp_boost": 50, "camp_slots": 5}],
+    "town_camping": [
+        # Reclusive 1 at 6 nights (normal table again), Reclusive 2 with 3 camp items, a crowd malus
+        fplan(19, 0, 26, 36, 8.4, 2.8, 15, [
+            fplayer(1, "Ann", "shield", "R1", 6, False, 0, True, 0, -26),
+            fplayer(2, "Bob", "tamer", "R1", 6, False, 0, True, 0, -26),
+            fplayer(3, "Cyd", "tech", "R1", 6, False, 0, True, 0, -36),
+            fplayer(4, "Dan", "tech", "R2", 6, False, 3, True, 59, 59)], creator=IDS["Dan"]),
+        # Reclusive 4 at 7 nights, Scout vest, alone, a tent
+        fplan(19, 1, 26, 58, 8.6, 2.8, 14, [fplayer(1, "Fay", "vest", "R4", 7, True, 0, True, 40, 40)], mode=2,
+              creator=IDS['Fay']),
+        # Survivalist (cap 100%) behind two Reclusive shields
+        fplan(20, 0, 26, 10, 8.6, 2.8, 13, [
+            fplayer(1, "Ann", "shield", "R1", 1, False, 0, False, 90, 169),
+            fplayer(2, "Bob", "shield", "R4", 1, False, 0, False, 99, 169),
+            fplayer(3, "Eve", "book", "R2", 6, False, 1, True, 100, 102)], creator=IDS['Eve']),
+        # tomorrow, no ruin: shape only (the 52 is our own sum, not a Fata value)
+        fplan(20, 0, 27, 0, 0, 1, 13, [fplayer(1, "Eve", "book", "none", 0, False, 0, False, 52, 52)]),
+    ],
+}
+res = build_result(1, RAW)
+plans = res["camp_plans"]   # sorted by target day, then zone
+assert len(plans) == 4 and [(p["target_day"], p["coords"]) for p in plans] == [
+    (26, "[7|12]"), (26, "[7|13]"), (26, "[8|13]"), (27, "[8|13]")]
+fay, wh, bunker, tomorrow = plans
+assert wh["ruin"]["name"] == "Warehouse" and wh["creator"] == "Dan" and wh["editor"] is None
+assert (wh["level_before"], wh["level_after"], wh["upgrades_pct"]) == (42, 56, 14)
+assert tomorrow["ruin"] is None and tomorrow["creator"] == "Ann"          # building_id 0 = no ruin
+eve = bunker["players"][2]
+assert (eve["job"], eve["skill"], eve["nights"], eve["camp_items"], eve["tomb"]) == ("Survivalist", "reclusive2", 6, 1, True)
+assert fay["players"][0]["vest"] and fay["players"][0]["skill"] == "reclusive4"
+assert [z["camp_level"] for z in res["zones"]] == [43, None]               # 8.6 units = 43 %, null = no estimate
+# selection helpers: today by default, then by zone and by citizen
+assert len(plans_for_day(res)) == 3 and len(plans_for_day(res, 27)) == 1 and not plans_for_day(res, 5)
+assert len(plans_for_zone(res, "[8|13]")) == 1 and len(plans_for_zone(res, "[8|13]", 27)) == 1
+assert [p["coords"] for p in plans_for_citizen(res, 105)] == ["[8|13]"]     # Eve, today only
+# every camper: our terms == Fata's uncapped sum, our capped odds == Fata's effective odds
+n_checked = 0
+for p in plans:
+    for i, q in enumerate(p["players"]):
+        terms, theo, eff = plan_player_odds(p, i)
+        assert theo == q["fata_theoretical"] and eff == q["fata_effective"], (p["coords"], q["name"], theo, eff, q)
+        n_checked += 1
+assert n_checked == 9
+# the tool: plan values as defaults, a right Fata number is silent, a wrong one is a MISMATCH line
+out = format_camping_odds(res, x=7, y=13, citizen="Ann", town_id=None)
+assert "MISMATCH" not in out and "Fata plan tonight on [7|13], Warehouse (by Dan)" in out
+assert "skill reclusive1: from Dan's Fata plan" in out and "camping nights survived: 6, from Dan's Fata plan" in out
+assert "camp bonus +43%: Fata estimate" in out and "Skill: reclusive1" in out
+RAW["town_camping"][0]["camping_plan"]["players"][3]["effective_chances"] = 58
+assert "MISMATCH Dan" in format_camping_odds(build_result(1, RAW), x=7, y=13, town_id=None)
+RAW["town_camping"][0]["camping_plan"]["players"][3]["effective_chances"] = 59
+# the plan's zone is used when none is given; explicit arguments win over the plan
+out = format_camping_odds(res, x=None, y=None, citizen="Fay", town_id=None)
+assert "Zone [7|12]," in out and "Skill: reclusive4" in out and "camping nights survived: 7, from Fay's" in out
+out = format_camping_odds(res, x=None, y=None, citizen="Fay", skill="procamp", nights=0, vest=False, camp_level=0, town_id=None)
+assert "Skill: procamp" in out and "camping nights survived" not in out and "Scout vest" not in out
+# no plans (v1.2 data): no plan block, no plan values
+old = build_result(1, {k: v for k, v in RAW.items() if k != "town_camping"})
+assert old["camp_plans"] == [] and "Fata plan" not in format_camping_odds(old, x=7, y=13, citizen="Ann", town_id=None)
 
 print("camping checks: ok")

@@ -3,6 +3,7 @@
 from ..utils.fmt import est_status, estimate, header, plural, town_name
 from ..utils.clock import data_updated
 from .cp import cp_label
+from .towndata import plans_for_day
 from .risk import (
     _staleness_tag,
     defense_alert,
@@ -191,9 +192,15 @@ def format_citizens(data: dict, cp_log: dict | None = None) -> str:
     if outside:
         lines.append("### Outside the town:")
         dried = dried_coords(data)
+        planned: dict[int, list[str]] = {}   # citizen id -> zones of their Fata camp plans for tonight
+        for p in plans_for_day(data):
+            for q in p["players"]:
+                planned.setdefault(q["citizen_id"], []).append(p["coords"])
         for c in outside:
             cp = cp_label(cp_log, c["id"]) if cp_log else ""
             tag = " (dried)" if c["coords"] in dried else ""
+            if zones := planned.get(c["id"]):
+                tag += f" ⛺ plan {c['coords'] if c['coords'] in zones else zones[0]}"
             lines.append(f"  {_who(c)} at {c['coords']}{tag}{_stale(c, meta)}{cp}")
     else:
         lines.append("Everyone is inside the town.")

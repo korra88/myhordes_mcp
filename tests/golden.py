@@ -28,7 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
-from offline import manifest, offline   # noqa: E402
+from offline import frozen_now, manifest, offline   # noqa: E402
 GOLDEN = ROOT / "tests" / "golden"
 FIXTURES = GOLDEN / "fixtures"
 OUT = GOLDEN / "out"
@@ -39,6 +39,27 @@ OUT = GOLDEN / "out"
 TOWNS = [("s19-autoritares-opium-der-einsiedler", 8299), ("s19-grave-arenas-of-hades", 8212)]
 MAIN, OTHER = TOWNS[0][1], TOWNS[1][1]
 CLOCK_AFTER_DATA = timedelta(minutes=10)   # "now" = the main town's data time + 10 min
+
+# Extra fixture, kept outside fixtures/ so `--freeze` never wipes it: a copy of the raw v1.3
+# /towndata of town 8299 day 26 (Fata camp plans, camping_upgrade; the frozen towns above are
+# v1.2). Hand-copied, not frozen; a case opts in with {"fixture": "v13"}: the folder is copied
+# into the temporary towns/ for that case only (so `_files` is unchanged) and the clock moves
+# to its data time + 10 min.
+V13_DIR = GOLDEN / "fixtures-v13"
+V13 = [("s19-camp-plans-v13", 9926)]
+
+
+def _v13_name(citizen_id: int) -> str:
+    """A citizen's name in the V13 fixture: the cases name players by id, so no player name
+    sits in this public file."""
+    import gzip
+    path = V13_DIR / "towns" / V13[0][0] / "cache" / "day-26.towndata.live.json.gz"
+    try:
+        raw = json.loads(gzip.decompress(path.read_bytes()))
+    except OSError:
+        return f"citizen-{citizen_id}"   # fixture missing: the case reports it
+    return next((c["name"] for c in raw["town_citizens"] if c["citizen_id"] == citizen_id), "?")
+
 
 DUMP_SHEET = "Water Ration\nBattery\n\nPlastic Bag\nMachete\nBurning Laser Pointer\nTwinoid"
 
@@ -243,6 +264,18 @@ CASES += [
     ("dump_lookup", "map_bank_to_dump_sheet",
      {"sheet_items": "Battery\nUnshaped Concre\nOverhead Proj\netal\nWater P\nzzz\nWater Ration"}),
 ]
+# Fata camp plans and camp-level estimates (v1.3 fixture, see V13): zone from the citizen's
+# own plan, plan values as defaults, explicit arguments winning, two plans on one zone.
+CASES += [
+    ("v13_camping_citizen_plan", "get_camping_odds", {"town_id": V13[0][1], "citizen": "Korra"}, {"fixture": "v13"}),
+    ("v13_camping_two_plans_zone", "get_camping_odds", {"town_id": V13[0][1], "x": 7, "y": -13}, {"fixture": "v13"}),
+    ("v13_camping_override", "get_camping_odds",
+     {"town_id": V13[0][1], "x": 7, "y": -13, "citizen": _v13_name(38242), "skill": "reclusive4", "nights": 2,
+      "camp_level": 10}, {"fixture": "v13"}),
+    ("v13_camping_fata_level_plan", "get_camping_odds",
+     {"town_id": V13[0][1], "x": 10, "y": -8, "citizen": _v13_name(154), "ap": 2, "defense_items": 1}, {"fixture": "v13"}),
+    ("v13_positions", "get_citizen_positions", {"town_id": V13[0][1]}, {"fixture": "v13"}),
+]
 # Camping odds (rules verified in the game source: docs/camping-plan.md section 1.2).
 CASES += [
     ("camping_ruin_plan", "get_camping_odds",
@@ -299,10 +332,11 @@ def _tool_schemas(main) -> str:
 
 def run_cases(*, full: bool = True) -> dict[str, str]:
     """Run CASES (name, tool, kwargs[, opts]). opts: clock "HH:MM" (same date), env {var: value},
-    files {path under towns/: text} written for the case, hide [paths under towns/] moved away
+    files {path under towns/: text} written for the case, fixture "v13" (the V13 town copied in,
+    clock set to its data time + 10 min), hide [paths under towns/] moved away
     for the case, townlog True (town log on; the .md files it changed are added to the
     output). full: also the pseudo-cases _files (written files) and _tools (tool schemas)."""
-    with offline(FIXTURES, TOWNS, MAIN, clock_after=CLOCK_AFTER_DATA, prefix="golden-") as run:
+    with offline(FIXTURES, TOWNS + V13, MAIN, clock_after=CLOCK_AFTER_DATA, prefix="golden-") as run:
         return _run_cases(run, full)
 
 
@@ -320,6 +354,10 @@ def _run_cases(run, full: bool) -> dict[str, str]:
         if "clock" in opts:
             h, m = map(int, opts["clock"].split(":"))
             now["t"] = day0.replace(hour=h, minute=m)
+        if opts.get("fixture") == "v13":
+            for folder, _ in V13:
+                shutil.copytree(V13_DIR / "towns" / folder, towns_dir / folder)
+            now["t"] = frozen_now(towns_dir, V13, V13[0][1], CLOCK_AFTER_DATA)
         env_old = {k: os.environ.get(k) for k in opts.get("env", {})}
         os.environ.update(opts.get("env", {}))
         for rel, text in opts.get("files", {}).items():
@@ -357,6 +395,9 @@ def _run_cases(run, full: bool) -> dict[str, str]:
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+        if opts.get("fixture") == "v13":
+            for folder, _ in V13:
+                shutil.rmtree(towns_dir / folder)
         now["t"] = day0
     if full:
         out["_files"] = manifest(towns_dir) + "\n"

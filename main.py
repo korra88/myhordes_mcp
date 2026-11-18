@@ -104,6 +104,8 @@ async def get_citizen_positions(day: int = 0, town_id: int = 0) -> str:
     who is outside (and where), and the list of dead citizens with cause of death.
     Each citizen shows their last known CP (Control Points) when one was read.
     A position on a depleted zone (no dig left) is marked "(dried)", with a count line.
+    "⛺ plan [x|y]" = the citizen is in a Fata camp plan for tonight on that zone
+    (details: get_camping_odds).
     Use this when the user asks who is outside, who is camping, who is on a
     depleted zone, or about deaths.
     For a CP table of the whole town use get_citizen_cp instead.
@@ -811,8 +813,15 @@ async def get_camping_odds(
     the town type from Fata: do NOT call other tools to work it out, and do not estimate
     odds yourself.
 
-    Fata cannot know these: ASK the player before calling, and pass what they say. Without
-    them the tool assumes and states the assumption: Reclusive / pro-camper skill, camping
+    Fata camp plans (the players' saved plans, v1.3) are read automatically: when the citizen
+    is in a plan for TODAY on the zone, the tool takes their skill, camping nights, vest, camp
+    items, tomb and hide order from it, shows the plan's campers with Fata's own odds and
+    the upgrades planned, and takes the zone's camp bonus from Fata's estimate. Do NOT ask the
+    player for values the output says came from the plan; pass an argument only to override one
+    (the player corrects it) or for a what-if.
+
+    Without a plan Fata cannot know these: ASK the player before calling, and pass what they
+    say. Without them the tool assumes and states the assumption: Reclusive / pro-camper skill, camping
     nights already survived (each one lowers the odds a lot), the zone's current camp bonus (%),
     AP to spend on upgrades, defensive items carried (Old Door, Sheet Metal, Trestle,
     Mattress, Solid Wooden Board, Sheet of Plywood, Järpen Table), camp items in the backpack
@@ -823,7 +832,8 @@ async def get_camping_odds(
     hides: upgrade first, hide last, after 19:00.
 
     Output: odds now, the plan (explicit order, AP, items) and the odds after it, the
-    non-zero terms, the assumptions, one line of advice. Report them as given.
+    non-zero terms, the Fata plan block (if any), the assumptions, one line of advice.
+    Report them as given. A "MISMATCH" line means our formula and Fata's differ: say so.
 
     Args:
         x: Zone X, relative to town. Omit with `citizen` to use that citizen's position.
@@ -831,16 +841,20 @@ async def get_camping_odds(
         citizen: Citizen name (case-insensitive): gives the job (Survivalist cap 100%,
                  Scout vest) and the default position.
         skill: "none" (default), "procamp" (pro camper), or "reclusive1".."reclusive4"
-               (Reclusive level; level 4 caps at 99%). Ask the player.
+               (Reclusive level; level 4 caps at 99%). Default: from the citizen's Fata plan,
+               else ask the player.
         camp_level: The zone's current camp bonus in % (e.g. 43; the percentage the game shows
-                    for the campsite, 0-60). -1 = unknown: the last recorded bonus minus 15%
-                    per night since, else assumed 0; say which.
+                    for the campsite, 0-60). -1 = unknown: Fata's estimate from the players'
+                    plans, else the bonus typed in tonight's plan, else the last recorded bonus minus 15% per night since, else
+                    assumed 0; the output says which. A value given here always wins.
         ap: AP the player can spend on upgrades. 0 = odds only, no plan.
         defense_items: Defensive items carried for installs (each +9 for 1 AP).
         camp_items: Groundsheets / Festering Flesh in the backpack (+5 each).
         hidden_before: Citizens already hidden on the zone before the player (crowd malus).
-        nights: Camping nights the citizen already survived. -1 = from the town's camping log
-                (sure + probable nights, pessimistic; the player can correct it), else assumed 0.
+                       Default 0: from the citizen's Fata plan (campers before them), else 0.
+        nights: Camping nights the citizen already survived. -1 = from the citizen's Fata plan,
+                else the town's camping log (sure + probable nights, pessimistic; the player
+                can correct it), else assumed 0.
         tomb: True if the citizen is hidden in a dug grave (+8).
         vest: Scout vest worn (zombies -3 instead of -7 each). Omit: True for a Scout.
         record: True (default) stores the camp bonus the player gave and the plan's resulting

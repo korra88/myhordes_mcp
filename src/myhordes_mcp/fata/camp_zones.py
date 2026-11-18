@@ -9,8 +9,10 @@ its own record in towns/{town}/camp-zones.json: per zone "[x|y]" {day, level, so
 The level drops 15 every night (floor 0), so the default for a later day is
 level - 15 * (day - recorded day). A newer entry replaces an older one.
 
-TODO: when Fata exposes its camp plans (shape unknown, asked of the Fata developer), they
-replace the "planned" entries here.
+Fata v1.3 now sends a camp-level estimate per zone (`zone["camp_level"]`) and the players'
+camp plans: the odds tool prefers that estimate over this record (docs/camping-plan.md,
+"Fata camp plans (v1.3)"); the record stays the fallback for zones Fata has no estimate for
+and for older data.
 
 Local file only, like the bot memory: no game action. Written only where TOWN_LOG_AUTO is on
 (the Pi; camplog.AUTO), like the camping log: one writer for the shared towns/ repo.

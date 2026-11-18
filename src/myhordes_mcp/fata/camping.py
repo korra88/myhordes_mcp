@@ -6,6 +6,11 @@ Rules verified in the game source (myhordes-docker/myhordes), see docs/camping-p
 
 The pure functions (`camping_terms`, `camping_odds`, `plan_upgrades`) take plain values;
 `format_camping_odds` reads a parsed Fata town (`data`) and prints the answer.
+
+Fata v1.3 sends the players' saved camp plans (`data["camp_plans"]`) and a camp-level
+estimate per zone (`zone["camp_level"]`): see docs/camping-plan.md "Fata camp plans (v1.3)".
+A plan for today on the zone supplies the defaults the caller left open, and `plan_player_odds`
+recomputes Fata's own odds for each camper as a drift check.
 """
 
 from ..utils.fmt import header, plural, ruin_label
@@ -13,6 +18,7 @@ from . import camp_zones, camplog
 from .cp import citizen_key
 from .geo import fmt_xy, km, xy, zone_map
 from .risk import DANGER_BAND, zone_is_today
+from .towndata import plans_for_citizen, plans_for_zone
 
 # Previous campings (index = camping nights survived, capped at the end of the whole table).
 _TAIL = [-50, -100, -200, -400, -1000, -2000, -5000]
@@ -22,7 +28,9 @@ PREVIOUS = {
     (True, False): [50, 30, 20, 10, 0] + _TAIL,        # Pandemonium town
     (True, True): [50, 45, 40, 30, 20, 10, 0] + _TAIL,
 }
-PRO_CAMPER_LIMIT = 6          # nights; the pro table applies only while nights < 6
+# Nights the Reclusive pro table lasts: Reclusive 1 (super_recluse0) 6, higher levels 8
+# (HeroSkillDataService ProCamperUsageLimit; one level per skill group). Matches Fata's planner.
+PRO_CAMPER_LIMIT = {"reclusive1": 6, "reclusive2": 8, "reclusive3": 8, "reclusive4": 8}
 PANDA_TOWN_BONUS = -30        # rules.yml `panda: modifiers.camping.default_bonus`
 CROWD = [0, 0, -10, -30, -50, -70]
 DISTANCE = [-100, -75, -50, -25, -10, 0, 0, 0, 0, 0, 0, 0, 5, 7, 10, 15, 20]
@@ -40,10 +48,10 @@ TERM_LABELS = {
 
 
 def is_pro_camper(skill: str, nights: int) -> bool:
-    """procamp (legacy skill, no limit) or any Reclusive level (limit 6 nights)."""
+    """procamp (legacy skill, no limit) or any Reclusive level (limit 6 nights, 8 from level 2)."""
     if skill == "procamp":
         return True
-    return skill.startswith("reclusive") and nights < PRO_CAMPER_LIMIT
+    return nights < PRO_CAMPER_LIMIT.get(skill, 0)
 
 
 def odds_cap(job: str, skill: str) -> float:
@@ -145,6 +153,41 @@ def order_text(plan: dict) -> str:
     return ", then ".join(parts) if parts else "nothing to do"
 
 
+def plan_player_odds(plan: dict, idx: int) -> tuple[dict[str, int], int, int]:
+    """(terms, uncapped %, capped %) of camper number `idx` (0-based, = people hidden before)
+    of a parsed Fata plan (towndata._parse_camp_plans), from the plan's own inputs. Equals
+    Fata's `theoretical_chances` / `effective_chances` (60/60 players, town 8299 day 26)."""
+    q = plan["players"][idx]
+    terms = camping_terms(
+        nights=q["nights"], skill=q["skill"], panda=plan["hardcore"], tomb=q["tomb"],
+        level=plan["level_after"], ruin=plan["ruin"], hidden_before=idx,
+        lighthouse=plan["lighthouse"], camp_items=q["camp_items"], zombies=plan["zombies"],
+        vest=q["vest"], night=plan["night"], distance=plan["distance"], devastated=plan["devastated"])
+    return terms, sum(terms.values()), round(camping_odds(terms, odds_cap(q["job"], q["skill"])) * 100)
+
+
+def _plan_block(plans: list[dict], me: dict | None, alive: set) -> list[str]:
+    """The "Fata plan tonight" lines: one per plan, campers in hide order with Fata's odds,
+    planned upgrades; a line per camper whose odds our formula does not reproduce."""
+    lines = []
+    for p in plans:
+        lines.append(f"Fata plan tonight on {p['coords']}" + (f", {p['ruin']['name']}" if p["ruin"] else "")
+                     + f" (by {p['creator'] or '?'}): camp bonus {p['level_before']}% -> {p['level_after']}%"
+                     f" (+{p['upgrades_pct']}% planned)")
+        campers, drift = [], []
+        for i, q in enumerate(p["players"]):
+            e, t = q["fata_effective"], q["fata_theoretical"]
+            campers.append(f"{i + 1}. {q['name']}{'*' if me is q else ''}{'' if q['citizen_id'] in alive else ' (dead)'} {e}%"
+                           + (f" (uncapped {t}%)" if t is not None and t != e and t > 100 else ""))
+            _, ours_t, ours_e = plan_player_odds(p, i)
+            if (e, t) != (ours_e, ours_t):
+                drift.append(f"  MISMATCH {q['name']}: our formula {ours_e}% (uncapped {ours_t}%), "
+                             f"Fata {e}% (uncapped {t}%): inputs or rules drifted, report it")
+        lines.append("  " + ", ".join(campers) + " (Fata's odds, in hiding order" + (", * = asked)" if me else ")"))
+        lines += drift
+    return lines
+
+
 def _pct(x: float) -> str:
     return f"{round(x * 100)}%"
 
@@ -200,11 +243,17 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
         cit = _find_citizen(data, citizen)
         if cit is None:
             return f"Error: '{citizen}' is not a living citizen of this town."
+    assumed = []
     if x is None or y is None:
         if cit is None:
             return "Error: give the zone (x, y) or a citizen name."
         cell = xy(cit)
-        if cell is None or cit.get("inside_town"):
+        own = max(plans_for_citizen(data, cit["id"]), key=lambda p: len(p["players"]), default=None)
+        if own:   # no zone given: the zone of the citizen's own Fata plan for tonight
+            cell = xy(own["coords"])
+            assumed.append(f"zone {own['coords']}: from {cit['name']}'s Fata plan"
+                           + (f" (they stand on {fmt_xy(xy(cit))} now)" if xy(cit) != cell and not cit.get("inside_town") else ""))
+        elif cell is None or cit.get("inside_town"):
             return f"Error: {cit['name']} is in town (no position outside): give the zone (x, y)."
     else:
         cell = (x, y)
@@ -215,10 +264,50 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
     z = zone_map(data).get(cell)
     ruin = z.get("ruin") if z else None
     zombies, zombie_note = _zombie_reading(z, day)
+    coords = fmt_xy(cell)
+    zone_plans = plans_for_zone(data, coords)
+    alive = {c["id"] for c in data.get("citizens", [])}
+    mine = me = None   # the citizen's plan on this zone today (the biggest if several) and their entry
+    if cit is not None:
+        mine = max((p for p in zone_plans if any(q["citizen_id"] == cit["id"] for q in p["players"])),
+                   key=lambda p: len(p["players"]), default=None)
+        if mine:
+            me = next(q for q in mine["players"] if q["citizen_id"] == cit["id"])
+            others = [p for p in zone_plans if p is not mine and any(q["citizen_id"] == cit["id"] for q in p["players"])]
+            if others:
+                assumed.append(f"{cit['name']} is in {len(others) + 1} Fata plans for this zone tonight: the one with "
+                               f"the most campers ({mine['creator'] or '?'}'s) was used")
+        else:
+            elsewhere = [p["coords"] for p in plans_for_citizen(data, cit["id"])]
+            if elsewhere:
+                assumed.append(f"{cit['name']} has a Fata plan tonight on {', '.join(elsewhere)}, not on this zone: "
+                               "its values are not used")
+    src = f"{mine['creator'] or 'a player'}'s Fata plan" if mine else ""
+    if me:   # plan values fill in what the caller left at the default; explicit arguments win
+        if skill == "none" and me["skill"] != "none":
+            skill = me["skill"]
+            assumed.append(f"skill {skill}: from {src}")
+        if camp_items == 0 and me["camp_items"]:
+            camp_items = me["camp_items"]
+            assumed.append(f"{plural(camp_items, 'camp item')}: from {src}")
+        if not tomb and me["tomb"]:
+            tomb = True
+            assumed.append(f"hidden in a dug grave (tomb +8): from {src}")
+        if hidden_before == 0:
+            before = mine["players"][:mine["players"].index(me)]
+            hidden_before = sum(1 for q in before if q["citizen_id"] in alive)
+            dead = len(before) - hidden_before
+            assumed.append(f"{hidden_before} hidden on the zone before the player: from {src}"
+                           + (f" ({dead} earlier camper{'s' if dead > 1 else ''} in it died, not counted)" if dead else "")
+                           if hidden_before or dead else f"first to hide on the zone: from {src}")
+        if vest is None:
+            vest = me["vest"]
     if vest is None:
         vest = job == "Scout"
-    assumed = []
-    if nights < 0:
+    if nights < 0 and me:
+        nights = me["nights"]
+        assumed.append(f"camping nights survived: {nights}, from {src}")
+    elif nights < 0:
         nights = 0
         sure = prob = 0
         if cit is not None and town_id is not None:
@@ -232,7 +321,7 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
                            "ask the player")
         else:
             assumed.append("camping nights survived by this citizen: assumed 0, ask the player")
-    zone_key = fmt_xy(cell)
+    zone_key = coords
     can_record = record and town_id is not None and isinstance(day, int)
     if camp_level >= 0:
         if can_record:
@@ -241,20 +330,31 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
         est = None
         if town_id is not None and isinstance(day, int):
             est = camp_zones.estimate_level(camp_zones.load_zones(town_id).get(zone_key), day)
-        if est:
+        fata_level = z.get("camp_level") if z else None
+        # The camp bonus a plan for tonight starts from, as its author typed it.
+        typed = mine or (zone_plans[0] if len({p["level_before"] for p in zone_plans}) == 1 else None)
+        if fata_level is not None:
+            camp_level = fata_level
+            assumed.append(f"camp bonus +{camp_level}%: Fata estimate from the players' plans, not a game reading "
+                           "(the bonus drops 15% every night)")
+        elif typed:
+            camp_level = typed["level_before"]
+            assumed.append(f"camp bonus +{camp_level}%: the existing bonus typed in "
+                           f"{typed['creator'] or 'a player'}'s Fata plan, not a game reading")
+        elif est:
             camp_level = est[0]
             assumed.append(f"camp bonus +{camp_level}%: {est[1]}"
                            + (" (-15% per night since)" if est[1].startswith("reported") and est[2] != day else ""))
         else:
             camp_level = 0
-            assumed.append("camp bonus: assumed +0% (Fata does not know it; it drops 15% every night), ask the player")
-    if hidden_before == 0:
+            assumed.append("camp bonus: assumed +0% (no Fata estimate for this zone; it drops 15% every night), ask the player")
+    if hidden_before == 0 and not me:
         assumed.append("nobody hidden on the zone before the player: assumed")
     assumed.append("hiding between 19:00 and 06:59: night +10 included")
     if cit is None:
         assumed.append("no citizen given: job unknown, cap 90% (100% for a Survivalist)")
     if vest:
-        assumed.append("Scout vest worn: zombies count -3 each instead of -7")
+        assumed.append("Scout vest worn: zombies count -3 each instead of -7" + (f" (from {src})" if me else ""))
     if not z:
         assumed.append(zombie_note)
     if ruin and ruin.get("camp_boost") is None:
@@ -270,7 +370,7 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
     now = camping_odds(terms, cap)
     base_sum = sum(terms.values()) - camp_level
 
-    where = fmt_xy(cell)
+    where = coords
     if ruin:
         where += f", {ruin_label(ruin)}"
     who = f"{cit['name']} ({job})" if cit else "no citizen given"
@@ -314,6 +414,9 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
     lines.append(f"Zombies on the zone: {zombies}, {zombie_note}.")
     if ruin and int(ruin.get("digs_remaining") or 0) > 0:
         lines.append("Buried ruin: +15% until uncovered, then the ruin's own bonus.")
+    if zone_plans:
+        lines.append("")
+        lines += _plan_block(zone_plans, me, alive)
     lines.append("")
     lines.append("Assumptions:")
     lines += [f"- {a}" for a in assumed]
