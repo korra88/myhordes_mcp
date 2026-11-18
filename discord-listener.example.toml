@@ -130,6 +130,7 @@ allowed_tools = [
 # default town is changed only from the terminal (deny wins over the towns/** allow).
 deny = [
   "Read(./personal/**)",
+  "Read(~/.myhordes_mcp/**)",          # the usage stats file (/stats): ids of who used the bot
   "Write(./towns/_current_town)",
   "Edit(./towns/_current_town)",
 ]
@@ -188,6 +189,7 @@ allowed_tools = [
 # other readers, sometimes from their DMs.
 deny = [
   "Read(./personal/**)",
+  "Read(~/.myhordes_mcp/**)",          # the usage stats file (/stats): ids of who used the bot
   "Read(./towns/_bot/**)",
 ]
 timeout_seconds = 600
