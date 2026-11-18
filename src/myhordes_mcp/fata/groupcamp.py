@@ -570,10 +570,8 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
         # NightlyHandler), so an earlier night's plan never gives one.
         tomb = ov.get("tomb", bool(entry and entry["tomb"] and not shift))
         carried = ov.get("items", entry["camp_items"] if entry else 0)
-        if entry and entry["tomb"] and "tomb" not in ov:
-            assumed.append(f"{cit['name']}: grave in {src} " + (
-                "not carried over: a grave lasts one night, a new one is planned only if needed"
-                if shift else "counted as already dug (notomb if not dug yet)"))
+        if entry and entry["tomb"] and "tomb" not in ov and not shift:
+            assumed.append(f"{cit['name']}: grave in {src} counted as already dug (notomb if not dug yet)")
         if shift and carried and "items" not in ov:
             assumed.append(f"{cit['name']}: {plural(carried, 'camp item')} carried, taken from {src}: "
                            "assumed still carried that night (items=K corrects it)")

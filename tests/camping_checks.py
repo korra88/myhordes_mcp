@@ -281,7 +281,29 @@ assert old["camp_plans"] == [] and "Fata plan" not in format_camping_odds(old, x
 tom = format_camping_odds(res, x=8, y=13, citizen="Eve", day_arg=27, town_id=None)
 assert "Night of day 27 (tomorrow): a projection from today's data." in tom, tom
 assert "Fata plan tomorrow night on [8|13]" in tom and "camp bonus +0%: the existing bonus typed in Ann's Fata plan for day 27" in tom
-assert "today's count, tomorrow's may differ" in tom
+assert ("still none tomorrow" in tom or "can spread in at night" in tom or "+1 a night" in tom
+        or "probably higher" in tom), tom
+# zombie projection (MapMaker::spreadCycleMH): growth +1 a night, spread only from neighbours
+from myhordes_mcp.fata.camping import _project_zombies
+_zm = {(5, 5): {"zombies": 0, "updated_day": 26}}
+for _dx in (-1, 0, 1):
+    for _dy in (-1, 0, 1):
+        _zm.setdefault((5 + _dx, 5 + _dy), {"zombies": 0, "updated_day": 26})
+import myhordes_mcp.fata.camping as _cm
+_orig_zone_map, _orig_today = _cm.zone_map, _cm.zone_is_today
+_cm.zone_map = lambda d: d["_zm"]
+_cm.zone_is_today = lambda z, day: z.get("updated_day") == day
+try:
+    n, note = _project_zombies({"_zm": _zm}, (5, 5), _zm[(5, 5)], 0, "", 26, 27)
+    assert n == 0 and "still none tomorrow" in note, note
+    _zm[(6, 6)] = {"zombies": 3, "updated_day": 26}
+    n, note = _project_zombies({"_zm": _zm}, (5, 5), _zm[(5, 5)], 0, "", 26, 27)
+    assert n == 0 and "1 neighbouring zone has zombies" in note and "can spread in" in note, note
+    _zm[(5, 5)] = {"zombies": 2, "updated_day": 26}
+    n, note = _project_zombies({"_zm": _zm}, (5, 5), _zm[(5, 5)], 2, "", 26, 28)
+    assert n == 4 and "counted 4 that night" in note, note
+finally:
+    _cm.zone_map, _cm.zone_is_today = _orig_zone_map, _orig_today
 assert "Night of day 26 (tonight)." in format_camping_odds(res, x=8, y=13, town_id=None)
 assert format_camping_odds(res, x=8, y=13, day_arg=26, town_id=None) == format_camping_odds(res, x=8, y=13, town_id=None)
 err = format_camping_odds(res, x=8, y=13, day_arg=20, town_id=None)

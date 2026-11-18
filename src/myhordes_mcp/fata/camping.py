@@ -264,8 +264,38 @@ def zone_reading(data: dict, cell: tuple, night: dict) -> tuple:
     ruin = z.get("ruin") if z else None
     zombies, zombie_note = _zombie_reading(z, day)
     if night["future"]:
-        zombie_note += (f"; today's count, {'tomorrow' if target == day + 1 else 'that night'}'s may differ")
+        zombies, zombie_note = _project_zombies(data, cell, z, zombies, zombie_note, day, target)
     return z, ruin, zombies, zombie_note
+
+
+def _project_zombies(data: dict, cell: tuple, z: dict | None, zombies: int, note: str,
+                     day: int, target: int) -> tuple[int, str]:
+    """Zombies on the zone the night of `target`, from today's reading. Game rule (MapMaker::
+    spreadCycleMH, once per night): a zone with zombies usually gains 1 (90%); a zone with none
+    gains some only from a neighbouring zone (8 around) that has more, at random (0-4)."""
+    nights = target - day
+    if not z or not zone_is_today(z, day) or z.get("danger_today") or z.get("zombies", -1) < 0:
+        return zombies, note + "; zombies grow at night, the real count that night is probably higher"
+    if zombies > 0:
+        return zombies + nights, (f"{zombies} today (d{day}), +1 a night is the usual growth (90%): "
+                                  f"counted {zombies + nights} that night")
+    zones = zone_map(data)
+    with_z = unknown = 0
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            if (dx or dy) and (cell[0] + dx, cell[1] + dy) != (0, 0):
+                nz = zones.get((cell[0] + dx, cell[1] + dy))
+                if not nz or not zone_is_today(nz, day) or nz.get("danger_today") or nz.get("zombies", -1) < 0:
+                    unknown += 1
+                elif nz["zombies"] > 0:
+                    with_z += 1
+    if with_z == unknown == 0 and nights == 1:
+        return 0, "none today nor on the 8 neighbouring zones: still none tomorrow (zombies spread at night only from neighbours)"
+    parts = [f"{with_z} neighbouring zone{'s have' if with_z != 1 else ' has'} zombies"] if with_z else []
+    if unknown:
+        parts.append(f"{unknown} neighbouring zone{'s' if unknown != 1 else ''} without a count today")
+    return 0, ("none today; " + (", ".join(parts) if parts else f"neighbours empty, {nights} nights away")
+               + ": zombies can spread in at night (0-4 a night), check before hiding")
 
 
 def resolve_camp_level(data: dict, *, coords: str, z: dict | None, night: dict, camp_level: int,
@@ -420,8 +450,6 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
         if not tomb and entry["tomb"] and entry is me:
             tomb = True
             assumed.append(f"hidden in a dug grave (tomb +8): from {src}")
-        elif not tomb and entry["tomb"]:   # tg_tomb is volatile: the game clears it every night
-            assumed.append(f"no grave counted: the one in {src} lasts one night only (tomb=true if a new one is dug)")
         if vest is None:
             vest = entry["vest"]
     if me:
