@@ -68,6 +68,20 @@ required = true                            # a required option is focused right 
 min_value = 1
 max_value = 9999999
 
+# Usage stats: the listener adds one row per Claude turn (ids and numbers, never text) to
+# this SQLite file; the MCP server adds the real Fata requests to the same file (env
+# USAGE_STATS_DB overrides the path there). Read with /stats (the command after set-my-town). Absent = nothing written.
+[stats]
+db = "~/.myhordes_mcp/usage_stats.sqlite"
+
+[[commands]]
+name = "stats"
+description = "Bot usage: turns, tokens, tools, Fata requests (maintainer only)"
+argv = ["python3", "scripts/usage_stats.py"]
+users = ["YOUR_DISCORD_USER_ID"]           # only these ids may run it; others are refused
+ephemeral = true
+timeout_seconds = 20
+
 [limits]
 max_turns_per_user_per_hour = 60
 max_turns_per_hour = 60

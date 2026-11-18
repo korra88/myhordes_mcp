@@ -106,6 +106,7 @@ including how to keep them in a private git repo.
 
 - **Offline wiki** for `search_wiki`: [docs/wiki.md](docs/wiki.md).
 - **Discord bot** answering in a channel: the listener used here is private, but any MCP-capable bot can serve the same tools — [docs/discord.md](docs/discord.md).
+- **Bot usage stats** (`/stats`, maintainer only): [docs/usage-stats-plan.md](docs/usage-stats-plan.md).
 - **Developing** the server (layout, key files, game source): [docs/development.md](docs/development.md).
 
 ## Credits

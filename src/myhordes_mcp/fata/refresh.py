@@ -14,6 +14,7 @@ retry, no message to anyone, no game action. Never touches the MyHordes API.
 """
 
 import asyncio
+import os
 import sys
 
 from ..utils.config import resolve_town_id
@@ -37,6 +38,7 @@ async def _run() -> int:
 
 
 def main() -> int:
+    os.environ["USAGE_STATS_ORIGIN"] = "timer"   # utils/usage_stats.py: label the request
     return asyncio.run(_run())
 
 

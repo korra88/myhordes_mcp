@@ -27,6 +27,7 @@ myhordes_mcp/
 ├── templates/town/          # Starting files for a new town's logs
 ├── templates/systemd/       # User units: Discord listener service, nightly towns commit
 ├── scripts/set_town.py      # Show/set the default town (make town)
+├── scripts/usage_stats.py   # Bot usage report for /stats (reads the usage-stats SQLite file)
 ├── kb_build/                # Wiki fetch/process/update scripts (see wiki.md)
 ├── wiki/                    # Generated wiki content (gitignored)
 ├── docs/                    # This documentation, API and source references
@@ -46,6 +47,7 @@ myhordes_mcp/
 | `src/myhordes_mcp/gesthordes/` | Gest'Hordes stats client + formatters |
 | `src/myhordes_mcp/myhordes/official_api.py` | *(disabled)* Official API client placeholder |
 | `src/myhordes_mcp/knowledgebase/` | `wiki.py` (indexes `wiki/processed/`), `curated.py` (searches `knowledge/`) |
+| `src/myhordes_mcp/utils/usage_stats.py` | `fata_calls` rows (one per real Fata HTTP request, from `fata/client.py:_load`) in `~/.myhordes_mcp/usage_stats.sqlite` (`USAGE_STATS_DB`, `off` disables); the listener writes `turns`/`tool_calls` to the same file. Tests: `tests/usage_stats_checks.py` (plain script). |
 | `src/myhordes_mcp/utils/` | `config.py` (.env, town ID, paths, User-Agent), `cache.py` (single-flight TTL cache), `clock.py` (game time) |
 | `persona.md` | Active persona (gitignored). Copy from `persona.example.md`. Loaded by `make advisor` and the Discord listener. |
 | `prompts/game-primer.md` | Core game rules + knowledge-base index, appended by the listener. Rules the tools compute stay out of it. |

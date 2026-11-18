@@ -27,6 +27,7 @@ Read-only MCP server in Python for **MyHordes** (browser survival game, Eternalt
 - Live (Gest'Hordes): `get_attack_distribution`, `get_attack_forecast`
 - Live (Discord listener only, write local files in `towns/_bot/`): `log_feedback`, `remember`, `forget` (`bot/store.py`; env `LISTENER_USER_ID`, `LISTENER_CONTEXT`; memory only when `dm`). Migration: `make bot-memory-migrate`
 - Live (offline knowledge): `search_wiki`, `list_wiki_categories`, `search_knowledge`
+- Usage stats (Discord bot): `/stats` maintainer-only command (`scripts/usage_stats.py`), SQLite `~/.myhordes_mcp/usage_stats.sqlite` (`USAGE_STATS_DB`; `off` disables): listener writes turns/tools, `fata/client.py` writes `fata_calls`. Ids and numbers only. Plan: `docs/usage-stats-plan.md`
 - Removed: `refresh_fata_data` (wrote to Fata, little value)
 - Official API disabled; planned tools described in `myhordes/official_api.py`
 

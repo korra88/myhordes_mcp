@@ -115,6 +115,7 @@ itself, without Claude (mechanism: `../discord_mcp/README.md`, "Slash commands")
 | --- | --- |
 | `/help` | Fixed English text from `prompts/discord-help.md`: what to ask, with examples. At most 2000 characters. |
 | `/set-my-town <town>` | Sets the caller's default town (`towns/_user_towns/<id>`) through `scripts/set_town.py --user`. Answers with the town name, season and day when `towns/` holds that town, and the previous ID when it changed. |
+| `/stats` | Maintainer only (`users = ["<id>"]` on the command; everybody else is refused): bot usage over 24 h / 48 h / 7 d from `~/.myhordes_mcp/usage_stats.sqlite` (turns, sessions, users, tokens, cost estimate, tool calls, real Fata HTTP requests) through `scripts/usage_stats.py`. Ids and numbers only, never message text. Plan: [usage-stats-plan.md](usage-stats-plan.md). |
 | `/new` | DMs only, built into the listener (not in the toml; there whenever `[dm]` is on): starts a fresh DM conversation. Its answer stays visible in the DM, as the start of the new session. |
 
 Answers are visible only to the person who ran the command (except `/new`). With `[public]`

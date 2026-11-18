@@ -22,11 +22,13 @@ The endpoint is not affected by the nightly attack (Fata developer, 2026-10-15).
 
 import logging
 import os
+import time
 
 import httpx
 
 from ..utils.cache import TTLCache
 from ..utils.config import USER_AGENT, env_int
+from ..utils.usage_stats import record_fata_call
 from . import archive, camplog, cp, townlog
 from .parse import _build_result
 from .snapshot import snapshot
@@ -88,12 +90,19 @@ async def _load(town_id: int, day: int | None) -> dict:
     params = {"town": town_id}
     if day is not None:
         params["day"] = day
+    started, status = time.monotonic(), None
     try:
         async with httpx.AsyncClient(timeout=30.0, headers={"user-agent": USER_AGENT}, follow_redirects=True) as client:
             resp = await client.get(FATA_TOWNDATA_URL, params=params)
+            status = resp.status_code
             resp.raise_for_status()
             raw = resp.json()
     except (httpx.HTTPError, ValueError) as e:
+        # One usage-stats row per real HTTP attempt (utils/usage_stats.py), never for
+        # archive or cache hits.
+        outcome = ("rate_limited" if status == 429 else "http_error" if isinstance(e, httpx.HTTPStatusError)
+                   else "network_error" if isinstance(e, httpx.RequestError) else "bad_data")
+        record_fata_call(town_id, day, outcome, status, round((time.monotonic() - started) * 1000))
         cached = _from_archive(town_id, day, final_only=False) if day is not None else None
         if cached is not None:
             return cached
@@ -112,12 +121,14 @@ async def _load(town_id: int, day: int | None) -> dict:
             raise ValueError("not a /towndata response")
         result = _result(town_id, raw)
     except (KeyError, TypeError, ValueError, AttributeError) as e:
+        record_fata_call(town_id, day, "bad_data", status, round((time.monotonic() - started) * 1000))
         cached = _from_archive(town_id, day, final_only=False) if day is not None else None
         if cached is not None:
             return cached
         return {"error": f"No usable Fata Morgana data for town {town_id}"
                          + (f" on day {day}" if day is not None else "") + f" ({e})."}
 
+    record_fata_call(town_id, day, "ok", status, round((time.monotonic() - started) * 1000))
     result_day = raw["town_info"].get("day")
     if result_day is not None:
         # Only a request without a day tells us the town's current day. A past

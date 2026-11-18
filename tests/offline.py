@@ -126,6 +126,7 @@ def offline(fixtures: Path, towns: list[tuple[str, int]], main_town: int, *,
     os.environ["TOWN_LOG_AUTO"] = "0"
     os.environ["FATA_CACHE_TTL"] = "0"
     os.environ.pop("LISTENER_USER_ID", None)
+    os.environ["USAGE_STATS_DB"] = "off"   # the fake Fata calls must not write the real stats file
     sys.path.insert(0, str(ROOT))
     sys.path.insert(0, str(ROOT / "src"))
     install_fakes(towns_dir, towns, fixtures / "gesthordes.json", gesthordes_town or main_town)
