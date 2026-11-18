@@ -157,6 +157,12 @@ Checked in the game code (`CitizenHandler::getCampingValues`, details and line n
   50%, so the last action can cross it: from 0, 8 improves then 2 installs = 40 → 49 → 58%.
   The bonus drops 15% each night (58 → 43; then 1 improve + 1 install = 57%) and belongs to
   the zone: every camper there shares it.
+- **Group camping:** the zone's camp bonus is shared, the crowd malus and the ruin's room depend
+  on the hiding order (use `plan_group_camping`, not one `get_camping_odds` per camper). A grave
+  costs 1 AP and helps only its digger (+8%). Groundsheet / Festering Flesh count only while
+  in the camper's rucksack (+5% each, not consumed) and can be handed to whoever needs them.
+  A Tamer's dog digs the Tamer's grave for free (once); fed a Tasty-looking Steak it also
+  improves the camp +5%.
 - Fata's camp planner (the players' saved plans, read by `get_camping_odds`) stores upgrades as
   units: improve campsite 1, install an item (Old Door, Mattress…) 1.8; × 5 = the percent camp bonus (8.6 units = 43%).
 

@@ -123,7 +123,8 @@ def plan_upgrades(level: int, base_sum: int, cap: float, ap: int, items: int) ->
     `base_sum` = sum of the terms without the zone level. An action is allowed only while
     the level is below 50 (the last one may cross it). Counts (i improves, j installs) are
     searched exhaustively; improves first then installs is the order that allows the most
-    (the biggest step last). Objective: highest capped odds, then fewest AP, then fewest items.
+    (the biggest step last). Objective: highest capped odds, then fewest defensive items (they
+    are consumed: plain improves preferred, user decision 2026-11-18), then fewest AP.
     Returns {improve, install, ap, items, level, odds}.
     """
     best = None
@@ -134,7 +135,7 @@ def plan_upgrades(level: int, base_sum: int, cap: float, ap: int, items: int) ->
             if (i or j) and total - last >= MAX_LEVEL_TO_ACT:
                 continue
             odds = max(0.0, min((base_sum + total) / 100.0, cap))
-            key = (-round(odds, 6), i + j, j)
+            key = (-round(odds, 6), j, i + j)
             if best is None or key < best[0]:
                 best = (key, {"improve": i, "install": j, "ap": i + j, "items": j,
                               "level": total, "odds": odds})
@@ -236,14 +237,10 @@ def _zombie_reading(z: dict | None, day) -> tuple[int, str]:
                "the real count is probably higher")
 
 
-def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: str = "",
-                        skill: str = "none", camp_level: int = -1, ap: int = 0,
-                        defense_items: int = 0, camp_items: int = 0, hidden_before: int = 0,
-                        nights: int = -1, tomb: bool = False, vest: bool | None = None,
-                        record: bool = True, town_id: int | None = None, day_arg: int = 0) -> str:
-    if data.get("error"):
-        return f"Error: {data['error']}"
-    meta, day = data["meta"], data["meta"].get("day")
+def resolve_night(data: dict, day_arg: int = 0) -> dict | str:
+    """The night asked for: {day, target, future, ref, name}, or the error text.
+    `day_arg` 0 = tonight (the town's current day), a later day = that night's projection."""
+    day = data["meta"].get("day")
     target = day   # the night asked for (day N = the night of day N -> N+1)
     if day_arg and isinstance(day, int):
         if day_arg < day:
@@ -256,125 +253,30 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
         night_ref, night_name = "tomorrow night", "Tomorrow night"
     else:
         night_ref, night_name = f"the night of day {target}", f"Night of day {target}"
-    skill = (skill or "none").strip().lower()
-    if skill not in SKILLS:
-        return f"Error: skill must be one of {', '.join(SKILLS)}."
-    for label, v in (("ap", ap), ("defense_items", defense_items), ("camp_items", camp_items),
-                     ("hidden_before", hidden_before)):
-        if v < 0:
-            return f"Error: {label} cannot be negative."
+    return {"day": day, "target": target, "future": future, "ref": night_ref, "name": night_name}
 
-    cit = None
-    if citizen.strip():
-        cit = _find_citizen(data, citizen)
-        if cit is None:
-            return f"Error: '{citizen}' is not a living citizen of this town."
-    assumed = []
-    # A future night without a plan of its own: the citizen's latest plan before it (tonight's
-    # first) gives the zone and, assuming they camp as planned until then, the nights.
-    earlier = None
-    if future and cit is not None and not plans_for_citizen(data, cit["id"], target):
-        for d in range(target - 1, day - 1, -1):
-            earlier = max(plans_for_citizen(data, cit["id"], d), key=lambda p: len(p["players"]), default=None)
-            if earlier:
-                break
-    if x is None or y is None:
-        if cit is None:
-            return "Error: give the zone (x, y) or a citizen name."
-        cell = xy(cit)
-        own = max(plans_for_citizen(data, cit["id"], target), key=lambda p: len(p["players"]), default=None) or earlier
-        if own:   # no zone given: the zone of the citizen's own Fata plan for tonight
-            cell = xy(own["coords"])
-            assumed.append(f"zone {own['coords']}: from {cit['name']}'s Fata plan"
-                           + (f" (they stand on {fmt_xy(xy(cit))} now)" if xy(cit) != cell and not cit.get("inside_town") else ""))
-        elif cell is None or cit.get("inside_town"):
-            return f"Error: {cit['name']} is in town (no position outside): give the zone (x, y)."
-    else:
-        cell = (x, y)
-    if cell == (0, 0):
-        return "Error: nobody camps in town: give a zone outside."
 
-    job = cit["job"] if cit else "unknown"
+def zone_reading(data: dict, cell: tuple, night: dict) -> tuple:
+    """(zone, ruin, zombies, zombie note) of a cell for the night: the zone is None when nobody
+    visited it; a future night keeps today's count and says so."""
+    day, target = night["day"], night["target"]
     z = zone_map(data).get(cell)
     ruin = z.get("ruin") if z else None
     zombies, zombie_note = _zombie_reading(z, day)
-    if future:
+    if night["future"]:
         zombie_note += (f"; today's count, {'tomorrow' if target == day + 1 else 'that night'}'s may differ")
-    coords = fmt_xy(cell)
-    zone_plans = plans_for_zone(data, coords, target)
-    alive = {c["id"] for c in data.get("citizens", [])}
-    mine = me = None   # the citizen's plan on this zone today (the biggest if several) and their entry
-    if cit is not None:
-        mine = max((p for p in zone_plans if any(q["citizen_id"] == cit["id"] for q in p["players"])),
-                   key=lambda p: len(p["players"]), default=None)
-        if mine:
-            me = next(q for q in mine["players"] if q["citizen_id"] == cit["id"])
-            others = [p for p in zone_plans if p is not mine and any(q["citizen_id"] == cit["id"] for q in p["players"])]
-            if others:
-                assumed.append(f"{cit['name']} is in {len(others) + 1} Fata plans for this zone {night_ref}: the one with "
-                               f"the most campers ({mine['creator'] or '?'}'s) was used")
-        else:
-            elsewhere = [p["coords"] for p in plans_for_citizen(data, cit["id"], target)]
-            if elsewhere:
-                assumed.append(f"{cit['name']} has a Fata plan {night_ref} on {', '.join(elsewhere)}, not on this zone: "
-                               "its values are not used")
-    src = f"{mine['creator'] or 'a player'}'s Fata plan" if mine else ""
-    # Without a plan for that night, the citizen's own entry in an earlier plan still gives the
-    # hero skill, the vest, camp items and tomb (not the hiding order: another night).
-    entry = me
-    if entry is None and earlier is not None:
-        entry = next(q for q in earlier["players"] if q["citizen_id"] == cit["id"])
-        src = f"{earlier['creator'] or 'a player'}'s Fata plan for day {earlier['target_day']}"
-    if entry:   # plan values fill in what the caller left at the default; explicit arguments win
-        if skill == "none" and entry["skill"] != "none":
-            skill = entry["skill"]
-            assumed.append(f"hero skill {skill_label(skill)}: from {src}")
-        if camp_items == 0 and entry["camp_items"]:
-            camp_items = entry["camp_items"]
-            assumed.append(f"{plural(camp_items, 'camp item')}: from {src}")
-        if not tomb and entry["tomb"]:
-            tomb = True
-            assumed.append(f"hidden in a dug grave (tomb +8): from {src}")
-        if vest is None:
-            vest = entry["vest"]
-    if me:
-        if hidden_before == 0:
-            before = mine["players"][:mine["players"].index(me)]
-            hidden_before = sum(1 for q in before if q["citizen_id"] in alive)
-            dead = len(before) - hidden_before
-            assumed.append(f"{hidden_before} hidden on the zone before the player: from {src}"
-                           + (f" ({dead} earlier camper{'s' if dead > 1 else ''} in it died, not counted)" if dead else "")
-                           if hidden_before or dead else f"first to hide on the zone: from {src}")
-    if vest is None:
-        vest = job == "Scout"
-    if nights < 0 and me:
-        nights = me["nights"]
-        assumed.append(f"camping nights survived: {nights}, from {src}")
-    elif nights < 0 and earlier:
-        q = next(q for q in earlier["players"] if q["citizen_id"] == cit["id"])
-        nights = q["nights"] + (target - earlier["target_day"])
-        assumed.append(f"camping nights survived: {nights} = {q['nights']} in {earlier['creator'] or 'a player'}'s "
-                       f"Fata plan for day {earlier['target_day']} + {target - earlier['target_day']}, assuming "
-                       "every night until then is camped as planned (ask the player)")
-    elif nights < 0:
-        nights = 0
-        sure = prob = plnd = 0
-        if cit is not None and town_id is not None:
-            sure, prob, plnd = camplog.counts(camplog.load_log(town_id), cit["id"])
-        if sure + prob + plnd:
-            nights = sure + prob + plnd
-            assumed.append(f"camping nights from the log: {sure} sure + {prob} probable + {plnd} planned = {nights} "
-                           "counted (pessimistic; the player can correct with nights=)")
-        elif cit is not None and town_id is not None:
-            assumed.append("camping nights survived by this citizen: assumed 0, the camping log shows none, "
-                           "ask the player")
-        else:
-            assumed.append("camping nights survived by this citizen: assumed 0, ask the player")
-        if future and not me:
-            until = "tonight's camping is" if target == day + 1 else f"nights camped from tonight to day {target - 1} are"
-            assumed.append(f"camping nights survived up to now only: {until} not included, ask the player")
+    return z, ruin, zombies, zombie_note
+
+
+def resolve_camp_level(data: dict, *, coords: str, z: dict | None, night: dict, camp_level: int,
+                       zone_plans: list[dict], mine: dict | None, assumed: list[str],
+                       town_id: int | None, can_record: bool) -> int:
+    """The zone's camp bonus (%) for the night: the value given (>= 0), else the plan's typed
+    bonus, Fata's estimate, the recorded one or 0, minus 15 a night for a future night. Appends
+    the source to `assumed`; records a reported value when `can_record`."""
+    day, target, future = night["day"], night["target"], night["future"]
     zone_key = coords
-    can_record = record and town_id is not None and isinstance(day, int) and not future
+
     decay = NIGHTLY_DROP * (target - day) if future else 0
     if camp_level >= 0:
         if can_record:
@@ -427,6 +329,142 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
         else:
             camp_level = 0
             assumed.append("camp bonus: assumed +0% (no Fata estimate for this zone; it drops 15% every night), ask the player")
+    return camp_level
+
+
+def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: str = "",
+                        skill: str = "none", camp_level: int = -1, ap: int = 0,
+                        defense_items: int = 0, camp_items: int = 0, hidden_before: int = 0,
+                        nights: int = -1, tomb: bool = False, vest: bool | None = None,
+                        record: bool = True, town_id: int | None = None, day_arg: int = 0) -> str:
+    if data.get("error"):
+        return f"Error: {data['error']}"
+    meta = data["meta"]
+    night = resolve_night(data, day_arg)
+    if isinstance(night, str):
+        return night
+    day, target, future = night["day"], night["target"], night["future"]
+    night_ref, night_name = night["ref"], night["name"]
+    skill = (skill or "none").strip().lower()
+    if skill not in SKILLS:
+        return f"Error: skill must be one of {', '.join(SKILLS)}."
+    for label, v in (("ap", ap), ("defense_items", defense_items), ("camp_items", camp_items),
+                     ("hidden_before", hidden_before)):
+        if v < 0:
+            return f"Error: {label} cannot be negative."
+
+    cit = None
+    if citizen.strip():
+        cit = _find_citizen(data, citizen)
+        if cit is None:
+            return f"Error: '{citizen}' is not a living citizen of this town."
+    assumed = []
+    # A future night without a plan of its own: the citizen's latest plan before it (tonight's
+    # first) gives the zone and, assuming they camp as planned until then, the nights.
+    earlier = None
+    if future and cit is not None and not plans_for_citizen(data, cit["id"], target):
+        for d in range(target - 1, day - 1, -1):
+            earlier = max(plans_for_citizen(data, cit["id"], d), key=lambda p: len(p["players"]), default=None)
+            if earlier:
+                break
+    if x is None or y is None:
+        if cit is None:
+            return "Error: give the zone (x, y) or a citizen name."
+        cell = xy(cit)
+        own = max(plans_for_citizen(data, cit["id"], target), key=lambda p: len(p["players"]), default=None) or earlier
+        if own:   # no zone given: the zone of the citizen's own Fata plan for tonight
+            cell = xy(own["coords"])
+            assumed.append(f"zone {own['coords']}: from {cit['name']}'s Fata plan"
+                           + (f" (they stand on {fmt_xy(xy(cit))} now)" if xy(cit) != cell and not cit.get("inside_town") else ""))
+        elif cell is None or cit.get("inside_town"):
+            return f"Error: {cit['name']} is in town (no position outside): give the zone (x, y)."
+    else:
+        cell = (x, y)
+    if cell == (0, 0):
+        return "Error: nobody camps in town: give a zone outside."
+
+    job = cit["job"] if cit else "unknown"
+    z, ruin, zombies, zombie_note = zone_reading(data, cell, night)
+    coords = fmt_xy(cell)
+    zone_plans = plans_for_zone(data, coords, target)
+    alive = {c["id"] for c in data.get("citizens", [])}
+    mine = me = None   # the citizen's plan on this zone today (the biggest if several) and their entry
+    if cit is not None:
+        mine = max((p for p in zone_plans if any(q["citizen_id"] == cit["id"] for q in p["players"])),
+                   key=lambda p: len(p["players"]), default=None)
+        if mine:
+            me = next(q for q in mine["players"] if q["citizen_id"] == cit["id"])
+            others = [p for p in zone_plans if p is not mine and any(q["citizen_id"] == cit["id"] for q in p["players"])]
+            if others:
+                assumed.append(f"{cit['name']} is in {len(others) + 1} Fata plans for this zone {night_ref}: the one with "
+                               f"the most campers ({mine['creator'] or '?'}'s) was used")
+        else:
+            elsewhere = [p["coords"] for p in plans_for_citizen(data, cit["id"], target)]
+            if elsewhere:
+                assumed.append(f"{cit['name']} has a Fata plan {night_ref} on {', '.join(elsewhere)}, not on this zone: "
+                               "its values are not used")
+    src = f"{mine['creator'] or 'a player'}'s Fata plan" if mine else ""
+    # Without a plan for that night, the citizen's own entry in an earlier plan still gives the
+    # hero skill, the vest, camp items and tomb (not the hiding order: another night).
+    entry = me
+    if entry is None and earlier is not None:
+        entry = next(q for q in earlier["players"] if q["citizen_id"] == cit["id"])
+        src = f"{earlier['creator'] or 'a player'}'s Fata plan for day {earlier['target_day']}"
+    if entry:   # plan values fill in what the caller left at the default; explicit arguments win
+        if skill == "none" and entry["skill"] != "none":
+            skill = entry["skill"]
+            assumed.append(f"hero skill {skill_label(skill)}: from {src}")
+        if camp_items == 0 and entry["camp_items"]:
+            camp_items = entry["camp_items"]
+            assumed.append(f"{plural(camp_items, 'camp item')}: from {src}")
+        if not tomb and entry["tomb"] and entry is me:
+            tomb = True
+            assumed.append(f"hidden in a dug grave (tomb +8): from {src}")
+        elif not tomb and entry["tomb"]:   # tg_tomb is volatile: the game clears it every night
+            assumed.append(f"no grave counted: the one in {src} lasts one night only (tomb=true if a new one is dug)")
+        if vest is None:
+            vest = entry["vest"]
+    if me:
+        if hidden_before == 0:
+            before = mine["players"][:mine["players"].index(me)]
+            hidden_before = sum(1 for q in before if q["citizen_id"] in alive)
+            dead = len(before) - hidden_before
+            assumed.append(f"{hidden_before} hidden on the zone before the player: from {src}"
+                           + (f" ({dead} earlier camper{'s' if dead > 1 else ''} in it died, not counted)" if dead else "")
+                           if hidden_before or dead else f"first to hide on the zone: from {src}")
+    if vest is None:
+        vest = job == "Scout"
+    if nights < 0 and me:
+        nights = me["nights"]
+        assumed.append(f"camping nights survived: {nights}, from {src}")
+    elif nights < 0 and earlier:
+        q = next(q for q in earlier["players"] if q["citizen_id"] == cit["id"])
+        nights = q["nights"] + (target - earlier["target_day"])
+        assumed.append(f"camping nights survived: {nights} = {q['nights']} in {earlier['creator'] or 'a player'}'s "
+                       f"Fata plan for day {earlier['target_day']} + {target - earlier['target_day']}, assuming "
+                       "every night until then is camped as planned (ask the player)")
+    elif nights < 0:
+        nights = 0
+        sure = prob = plnd = 0
+        if cit is not None and town_id is not None:
+            sure, prob, plnd = camplog.counts(camplog.load_log(town_id), cit["id"])
+        if sure + prob + plnd:
+            nights = sure + prob + plnd
+            assumed.append(f"camping nights from the log: {sure} sure + {prob} probable + {plnd} planned = {nights} "
+                           "counted (pessimistic; the player can correct with nights=)")
+        elif cit is not None and town_id is not None:
+            assumed.append("camping nights survived by this citizen: assumed 0, the camping log shows none, "
+                           "ask the player")
+        else:
+            assumed.append("camping nights survived by this citizen: assumed 0, ask the player")
+        if future and not me:
+            until = "tonight's camping is" if target == day + 1 else f"nights camped from tonight to day {target - 1} are"
+            assumed.append(f"camping nights survived up to now only: {until} not included, ask the player")
+    zone_key = coords
+    can_record = record and town_id is not None and isinstance(day, int) and not future
+    camp_level = resolve_camp_level(data, coords=coords, z=z, night=night, camp_level=camp_level,
+                                    zone_plans=zone_plans, mine=mine, assumed=assumed,
+                                    town_id=town_id, can_record=can_record)
     if hidden_before == 0 and not me:
         assumed.append("nobody hidden on the zone before the player: assumed")
     assumed.append("hiding between 19:00 and 06:59: night +10 included")

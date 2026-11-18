@@ -28,7 +28,7 @@ WINDOWS = (("24h", 24 * 3600), ("48h", 48 * 3600), ("7d", 7 * 24 * 3600))
 CATEGORIES = {
     "expeditions": ("find_expedition_path", "plan_expedition_supplies", "plan_kill_route",
                     "get_expedition_roster"),
-    "camping": ("get_camping_odds",),
+    "camping": ("get_camping_odds", "plan_group_camping"),
     "construction": ("get_build_options", "get_blueprint_order", "get_buildings",
                      "get_construction_history"),
     "knowledge": ("search_wiki", "list_wiki_categories", "search_knowledge"),

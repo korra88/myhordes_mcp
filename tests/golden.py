@@ -284,6 +284,25 @@ CASES += [
      {"town_id": V13[0][1], "citizen": "Korra", "day": 20}, {"fixture": "v13"}),
     ("v13_positions", "get_citizen_positions", {"town_id": V13[0][1]}, {"fixture": "v13"}),
 ]
+# Group camping planner (plan_group_camping, docs/group-camping-plan.md) on the same fixture: the
+# Fata plan's group tonight, tomorrow with overrides, a Tamer with a steak, an AP-limited group,
+# and a five-camper plan group with floor items and spare AP.
+_G3 = f"{_v13_name(5325)}:R4:n2, {_v13_name(35153)}:R2:n2"
+CASES += [
+    ("v13_group_tonight", "plan_group_camping",
+     {"town_id": V13[0][1], "group": f"Korra, {_v13_name(5325)}, {_v13_name(35153)}"}, {"fixture": "v13"}),
+    ("v13_group_tomorrow", "plan_group_camping",
+     {"town_id": V13[0][1], "group": f"Korra:R2:n2, {_G3}", "day": 27, "camp_level": 0}, {"fixture": "v13"}),
+    ("v13_group_tamer_steak", "plan_group_camping",
+     {"town_id": V13[0][1], "x": 14, "y": 13, "day": 27, "camp_level": 0, "steaks": 1,
+      "group": f"Korra:tamer:n3:none, {_v13_name(5325)}:R4:n3, {_v13_name(35153)}:R2:n3"}, {"fixture": "v13"}),
+    ("v13_group_ap_limited", "plan_group_camping",
+     {"town_id": V13[0][1], "x": 14, "y": 13, "day": 27, "camp_level": 0, "ap": 3, "defense_items": 1,
+      "group": f"Korra:n4:none, {_v13_name(5325)}:R4:n3, {_v13_name(35153)}:R2:n4"}, {"fixture": "v13"}),
+    ("v13_group_plan_zone_carry", "plan_group_camping",
+     {"town_id": V13[0][1], "x": 10, "y": -8, "ap": 4, "defense_items": 1}, {"fixture": "v13"}),
+    ("v13_group_err_zones", "plan_group_camping", {"town_id": V13[0][1]}, {"fixture": "v13"}),
+]
 # Camping odds (rules verified in the game source: docs/camping-plan.md section 1.2).
 CASES += [
     ("camping_ruin_plan", "get_camping_odds",

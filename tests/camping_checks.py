@@ -414,4 +414,158 @@ with tempfile.TemporaryDirectory() as tmp:
     assert camplog.update_camping_log(1) == [N]                     # recomputed once
     assert camplog.counts(camplog.load_log(1), 1) == (0, 0, 1) and camplog.update_camping_log(1) == []
 
+
+# --- group planner (fata/groupcamp.py, docs/group-camping-plan.md) ---
+import itertools   # noqa: E402
+import random   # noqa: E402
+import time   # noqa: E402
+from myhordes_mcp.fata.groupcamp import (   # noqa: E402
+    Camper, format_group_camping, level_ok, order_matters, parse_group, position_terms, solve,
+)
+
+C = Camper   # Camper(name, base, cap, tomb, tamer, carried, hint)
+R0 = {"camp_boost": 0, "camp_slots": 5, "digs_remaining": 0}   # a ruin with no bonus and room for all
+R20 = {"camp_boost": 20, "camp_slots": 1, "digs_remaining": 0}
+
+# crowd absorbed by the camper with the most surplus: A has 10 points to spare, hides last (-10)
+s = solve([C("A", 125), C("B", 115), C("C", 115)], level=0, ruin=None, ap=0)
+assert s.order[2] == 0 and s.odds == [90, 90, 90] and s.ap == 0, s
+# ruin room (1 place, +20, then -25): the camper with more to lose goes first
+s = solve([C("A", 60), C("B", 90)], level=0, ruin=R20, ap=0)
+assert s.order == [0, 1] and s.odds == [80, 65], s
+assert position_terms(3, R20, 1) == [-25, -35, -55]   # 1 hidden before: the only place is taken
+# improves beat a paid grave (fewest paid graves first): 7 improves, no grave, no install
+s = solve([C("A", 80)], level=0, ruin=None, defense_items=2)
+assert (s.improves, s.installs, s.paid, s.level, s.odds) == (7, 0, 0, 35, [90]), s
+# at level 50 nothing can be improved: the grave is the only way
+s = solve([C("A", 57)], level=50, ruin=None)
+assert (s.improves, s.paid, s.ap, s.odds) == (0, 1, 1, [90]), s
+assert level_ok(45, 1, 0) and not level_ok(50, 1, 0) and level_ok(44, 1, 1) and not level_ok(45, 1, 1)
+# the camp item goes where the group gains most: equal gain, the lowest camper wins
+s = solve([C("A", 110), C("B", 105)], level=0, ruin=None, ap=0, pool=1)
+assert s.items == [0, 1] and s.odds == [85, 85], s
+# the slot limit: 2 items of the 5 available
+s = solve([C("A", 40)], level=0, ruin=None, ap=0, pool=5, slots=2)
+assert s.items == [2] and s.odds == [25], s
+# Tamer: the dog digs the grave for free; a steak adds +5 to the zone while it is below 50
+s = solve([C("T", 50, tamer=True)], level=0, ruin=None, ap=0)
+assert (s.grave, s.odds, s.dogs, s.boosts, s.ap) == (["dog"], [33], 1, 0, 0), s
+s = solve([C("T", 50, tamer=True)], level=0, ruin=None, ap=0, steaks=1)
+assert (s.grave, s.odds, s.boosts, s.level, s.ap) == (["boost"], [38], 1, 5, 0), s
+s = solve([C("T", 50, tamer=True)], level=50, ruin=None, ap=0, steaks=1)
+assert (s.grave, s.boosts, s.level) == (["dog"], 0, 50), s                      # zone not improvable: plain dog
+s = solve([C("T", 50, tamer=True, tomb=True)], level=0, ruin=None, ap=0, steaks=1)
+assert s.grave == ["dug"] and s.boosts == 0, s                                  # grave already dug: no dog use
+# objective: 1 AP, one improve (+5 for both) or one grave
+s = solve([C("A", 40), C("B", 80)], level=0, ruin=R0, ap=1)
+assert (s.improves, s.paid, s.odds) == (1, 0, [45, 85]), s
+s = solve([C("A", 40), C("B", 80)], level=0, ruin=R0, ap=1, objective="weakest")
+assert (s.improves, s.paid, s.grave, s.odds) == (0, 1, ["paid", ""], [48, 80]), s
+# AP limit
+s = solve([C("A", 80)], level=0, ruin=None, ap=2)
+assert (s.ap, s.improves, s.paid, s.odds) == (2, 1, 1, [68]), s    # 1 improve + 1 grave: 80 - 25 + 5 + 8
+s = solve([C("A", 80)], level=0, ruin=None, ap=0)
+assert s.ap == 0 and s.odds == [55], s
+# hiding order irrelevant when everyone is far above the cap
+cs = [C("A", 200), C("B", 200)]
+s = solve(cs, level=0, ruin=R0, ap=0)
+assert not order_matters(cs, s, position_terms(2, R0, 0), s.level)
+cs = [C("A", 60), C("B", 90)]
+s = solve(cs, level=0, ruin=R20, ap=0)
+assert order_matters(cs, s, position_terms(2, R20, 0), s.level)
+
+# exact: compared with a brute force over every order, grave, item split and upgrade count
+def brute(campers, *, level, ruin, hidden_before=0, ap=None, defense_items=0, pool=0, steaks=0, slots=5,
+          objective="expected"):
+    n = len(campers)
+    pos = position_terms(n, ruin, hidden_before)
+    tam = sum(1 for c in campers if c.tamer and not c.tomb)
+    best = None
+    allocs = [m for m in itertools.product(range(min(slots, pool) + 1), repeat=n) if sum(m) <= pool]
+    kinds = []
+    for c in campers:
+        if c.tomb:
+            kinds.append([("dug", 0, 0, 0, 0)])
+        else:
+            k = [("", 0, 0, 0, 0), ("paid", 1, 0, 8, 0)]
+            if c.tamer:
+                k += [("dog", 0, 0, 8, 1), ("boost", 0, 1, 8, 1)]
+            kinds.append(k)
+    for j in range(defense_items + 1 if ap is None else min(defense_items, ap) + 1):
+        for sb in range(min(steaks, tam) + 1):
+            i = 0
+            while (ap is None or i + j <= ap) and level_ok(level, i + sb, j):
+                lv = level + 5 * (i + sb) + 9 * j
+                gm = n if ap is None else ap - i - j
+                for ks in itertools.product(*kinds):
+                    paid, b, dogs = sum(k[1] for k in ks), sum(k[2] for k in ks), sum(k[4] for k in ks)
+                    if paid > gm or b != sb:
+                        continue
+                    for m in allocs:
+                        for perm in itertools.permutations(range(n)):
+                            odds = [0] * n
+                            for p, k in enumerate(perm):
+                                odds[k] = max(0, min(campers[k].base + pos[p] + lv + ks[k][3] + 5 * m[k], campers[k].cap))
+                            surv = (sum(odds), min(odds)) if objective == "expected" else (min(odds), sum(odds))
+                            key = (tuple(-v for v in surv), j, paid, i + j + paid, sb, dogs, sum(m))
+                            if best is None or key < best:
+                                best = key
+                i += 1
+    return best
+
+
+rnd = random.Random(7)
+for t in range(40):
+    n = rnd.choice([1, 2, 3, 3])
+    cs = [C(f"c{k}", rnd.randint(-30, 95), rnd.choice([90, 99, 100]), rnd.random() < .15, rnd.random() < .35,
+            rnd.choice([0, 0, 1]), k) for k in range(n)]
+    kw = dict(level=rnd.choice([0, 0, 10, 35, 47, 50]),
+              ruin=rnd.choice([None, {"camp_boost": rnd.choice([-20, 0, 10, 25]), "camp_slots": rnd.choice([1, 2, 5]),
+                                      "digs_remaining": 0}]),
+              hidden_before=rnd.choice([0, 0, 1, 2]), ap=rnd.choice([None, None, 0, 1, 3, 6]),
+              defense_items=rnd.choice([0, 1, 2]), pool=rnd.choice([0, 1, 2, 3]), steaks=rnd.choice([0, 0, 1, 2]),
+              slots=rnd.choice([1, 2, 5]), objective=rnd.choice(["expected", "weakest"]))
+    s = solve(cs, **kw)
+    got = (tuple(-v for v in s.survival), s.installs, s.paid, s.ap, s.boosts, s.dogs, sum(s.items)) if s else None
+    assert got == brute(cs, **kw), (t, got, brute(cs, **kw), kw)
+
+# runtime: 6 campers, a lot to decide (PC; the Pi 3B+ is about 10x slower)
+RUIN3 = {"camp_boost": 10, "camp_slots": 3, "digs_remaining": 0}
+worst = 0.0
+for bases, kw in [([20, 10, 0, -10, -20, -30], dict(ap=30, defense_items=5, pool=6, steaks=2)),
+                  ([75, 65, 55, 45, 35, 25], dict(ap=None, defense_items=6, pool=8, steaks=2)),
+                  ([60, 50, 40, 30, 20, 10], dict(ap=6, defense_items=3, pool=4, steaks=1))]:
+    cs = [C(f"c{i}", b, 90 if i % 3 else 99, False, i < 2, 1 if i < 2 else 0, i) for i, b in enumerate(bases)]
+    for ruin in (None, RUIN3):
+        t0 = time.perf_counter()
+        solve(cs, level=0, ruin=ruin, **kw)
+        worst = max(worst, time.perf_counter() - t0)
+assert worst < 1.0, worst
+
+# group spec
+assert parse_group("Korra:R2:n2, Ammonia:R4:n2:tomb:items=1, Bob:tamer:vest, @Eve:123:surv") == [
+    {"name": "Korra", "skill": "reclusive2", "nights": 2},
+    {"name": "Ammonia", "skill": "reclusive4", "nights": 2, "tomb": True, "items": 1},
+    {"name": "Bob", "tamer": True, "vest": True}, {"name": "@Eve:123", "surv": True}]
+assert parse_group("") == [] and parse_group("A:pro:none")[0]["skill"] == "none"
+assert parse_group("A:zzz").startswith("Error: cannot read 'zzz' after A")
+
+# the tool on the synthetic town above
+out = format_group_camping(res, x=7, y=13, town_id=None)
+assert out.startswith("## Group camping") and "Ann (" in out and "Dan (" in out and "Expected survivors" in out, out
+assert "Night of day 26 (tonight)." in out and "Zone [7|13]" in out
+assert format_group_camping(res, x=7, y=13, group="Ann, Bob, Cyd, Dan", town_id=None).split("Hiding order")[1] == out.split("Hiding order")[1]
+assert "Error: the group's plans are on several zones ([7|12], [7|13], [8|13])" in format_group_camping(res, x=None, y=None, town_id=None)
+assert "Zone [8|13]" in format_group_camping(res, x=None, y=None, group="Eve", town_id=None)
+e = format_group_camping(res, x=7, y=13, group="Anna", town_id=None)
+assert e.startswith("Error: 'Anna' is not a living citizen") and "Ann" in e, e
+e = format_group_camping(res, x=7, y=13, group="Ann,Bob,Cyd,Dan,Eve,Fay,Ann", town_id=None)
+assert e.startswith("Error: 7 campers: the planner handles at most 6"), e
+assert format_group_camping(res, x=7, y=13, day_arg=20, town_id=None).startswith("Error: day 20 is already over")
+assert format_group_camping(res, x=7, y=13, objective="best", town_id=None).startswith("Error: objective must be")
+assert format_group_camping(res, x=0, y=0, group="Ann", town_id=None).startswith("Error: nobody camps in town")
+assert "a projection from today's data" in format_group_camping(res, x=7, y=13, day_arg=27, town_id=None)
+w = format_group_camping(res, x=8, y=13, group="Eve:R4:surv", ap=0, town_id=None)
+assert "Survivalist" in w and "cap 100" in w and "AP used 0 of 0" in w, w
+
 print("camping checks: ok")

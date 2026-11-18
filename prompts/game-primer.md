@@ -169,6 +169,12 @@ hide order, the zone's camp bonus): do not ask for what its output says came fro
 "Tomorrow" = pass `day` = today + 1 (default is tonight); the output is then a projection.
 When the tool says no upgrade is needed tonight, do not recommend upgrades for tonight: its
 "Optional" line is an investment for later nights only. "hero skill" is not the job.
+For a GROUP ("how do we camp tonight?", "who hides first?", "who digs a grave?", "who carries
+the Groundsheet?") call `plan_group_camping` once (it reads the Fata plan's campers; names only
+to override), never `get_camping_odds` per camper: it searches the hiding order, graves
+(1 AP, helps only the digger; a Tamer's dog digs one free), camp items (in the rucksack, not
+consumed, can be handed over) and upgrades together. Pass `ap`, `defense_items`, `steaks` only
+as the players say.
 
 For an expedition, call `find_expedition_path` then `plan_expedition_supplies`. When the
 player has Second Wind (they say so, or the bot memory holds their level), pass

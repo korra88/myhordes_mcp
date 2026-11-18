@@ -838,6 +838,10 @@ async def get_camping_odds(
     zombie count, the camp bonus typed in that day's plan or today's bonus minus 15% a night,
     nights camped so far): say so and quote its assumptions.
 
+    ONE camper only. For a GROUP ("who hides first?", "who digs a grave?", "who carries the
+    Groundsheet?", "how do we camp tonight on [x|y]?") call plan_group_camping once: do NOT call
+    this tool per camper for a group question.
+
     Output: the night it is for, odds now, the plan for that night (explicit order, AP, items)
     and the odds after it, or "no upgrade needed" when the odds are at the cap (then do NOT
     recommend upgrades for that night), an optional line that is only an investment for later
@@ -882,6 +886,90 @@ async def get_camping_odds(
         data, x=x, y=y, citizen=citizen, skill=skill, camp_level=camp_level, ap=ap,
         defense_items=defense_items, camp_items=camp_items, hidden_before=hidden_before,
         nights=nights, tomb=tomb, vest=vest, record=record, town_id=tid, day_arg=day,
+    )
+
+
+@mcp.tool()
+async def plan_group_camping(
+    x: int | None = None,
+    y: int | None = None,
+    group: str = "",
+    day: int = 0,
+    ap: int = -1,
+    defense_items: int = 0,
+    camp_items: int = 0,
+    steaks: int = -1,
+    slots: int = 5,
+    camp_level: int = -1,
+    hidden_before: int = 0,
+    objective: str = "expected",
+    town_id: int = 0,
+) -> str:
+    """
+    Best way for a GROUP to camp (hide overnight) on one zone: who hides in which order, who
+    digs a grave, who carries the Groundsheets / Festering Flesh, how many camp upgrades, with
+    every camper's odds. Use it for any group question: "how do we camp tonight?", "who hides
+    first?", "who should dig a grave?", "who takes the camp items?". For ONE camper's odds use
+    get_camping_odds; do NOT call get_camping_odds once per camper for a group, and do not work
+    out an order or odds yourself: the tool searches every order and assignment (exact) with
+    the game's formula.
+
+    Fata camp plans are read automatically: with `group` empty, the campers are those of the
+    Fata plan(s) for that night on the zone (skill, nights survived, vest, camp items, grave from
+    the plan), and the zone is the plan's: just call it with no arguments for "our camping
+    tonight". Do NOT ask the player for values the output says came from a plan.
+
+    Rules the tool applies (state the result, not the rules): the crowd malus and the ruin's room
+    depend on how many are already hidden, so the ORDER matters (the tool says "any order" when
+    it does not); improve campsite = +5% for 1 AP and install a defensive item = +9% for 1 AP and
+    the item (consumed), both only while the zone's camp bonus is below 50%, shared by every
+    camper; a grave costs 1 AP and helps only its digger (+8%); a Groundsheet or Festering Flesh
+    carried in the rucksack gives +5% each, is not consumed and can be handed to whoever needs it;
+    a Tamer's dog digs the Tamer's grave for free, and fed a Tasty-looking Steak also improves
+    the camp +5%. AP are one pool for the whole group. Odds freeze when each camper hides:
+    upgrade first, hide in the given order after 19:00.
+
+    Output: the night, the zone, the plan (upgrades, graves, AP), the hiding order with each
+    camper's odds and what they do or carry, expected survivors, an optional "for later nights
+    only" line (an investment, not needed for these odds), the assumptions. Report them as given.
+
+    Args:
+        x: Zone X relative to town. Omit to use the zone of the group's Fata plan.
+        y: Zone Y relative to town.
+        group: Empty = the campers of the Fata plan(s) for that night on the zone. Else a comma
+               list of citizen names, each with optional overrides after colons, e.g.
+               "Korra:R2:n2, Ammonia:R4:n2:tomb:items=1, Bob:tamer:vest". Overrides: R1-R4 /
+               pro / none (hero skill), nN (camping nights survived), tomb (grave already dug; notomb
+               cancels one taken from a plan),
+               items=K (camp items carried), vest (Scout vest worn), tamer, surv (Survivalist,
+               cap 100%). Defaults come from the Fata plan, then the camping log, then the
+               citizen's job. At most 6 campers.
+        day: Night to plan: 0 = tonight; a day number = the night of that day (tomorrow = current
+             day + 1): a projection from today's data (the output says so). A past day is an error.
+        ap: AP the whole group can spend on upgrades and graves. -1 = unlimited: the plan says
+            how many it needs. Extra AP appear as an optional line for later nights.
+        defense_items: Defensive items available (Old Door, Sheet Metal, Trestle, Mattress, Solid
+                       Wooden Board, Sheet of Plywood, Järpen Table); each install uses one.
+        camp_items: Extra Groundsheets / Festering Flesh available beyond what the campers carry
+                    (those on the zone's floor, if Fata's items are from today, are counted).
+        steaks: Tasty-looking Steaks for the Tamer's dog. -1 = those on the zone's floor (today's
+                Fata items), else 0.
+        slots: Rucksack slots a camper may fill with camp items (default 5).
+        camp_level: The zone's camp bonus in % now. -1 = from the Fata plan / Fata estimate /
+                    assumed (the output says which). A value given here wins.
+        hidden_before: Citizens outside the group already hidden on the zone.
+        objective: "expected" (default) = most expected survivors; "weakest" = raise the
+                   lowest camper's odds first.
+        town_id: Fata Morgana town ID. Omit for the player's default town.
+    """
+    got = await _town(town_id)
+    if isinstance(got, str):
+        return got
+    tid, data = got
+    return fata.format_group_camping(
+        data, x=x, y=y, group=group, day_arg=day, ap=ap, defense_items=defense_items,
+        camp_items=camp_items, steaks=steaks, slots=slots, camp_level=camp_level,
+        hidden_before=hidden_before, objective=objective, town_id=tid,
     )
 
 
