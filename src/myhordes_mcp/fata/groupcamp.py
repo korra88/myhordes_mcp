@@ -791,7 +791,9 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
                       "tomb": tomb, "vest": vest, "tamer": tamer, "carried": carried, "hint": hint})
 
     # --- resources (finite pools shrink from night to night) -----------------------------
-    floor_ok = bool(z) and not future and z.get("seen_today", False)
+    # Items seen on the zone today count for a later night too (assumed still there): they are free.
+    floor_ok = bool(z) and z.get("seen_today", False)
+    still = ", assumed still there" if future else ""
     floor_items = sum(_zone_item_count(z, u) for u in ITEM_UIDS) if floor_ok else 0
     floor_steaks = _zone_item_count(z, STEAK_UID) if floor_ok else 0
     floor_def = sum(i.get("count", 0) for i in (z or {}).get("items", [])
@@ -799,17 +801,17 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
     pool = sum(i["carried"] for i in infos) + camp_items + floor_items
     if floor_items:
         assumed.append(f"{floor_items} Groundsheet / Festering Flesh lie on the zone's floor (Fata items "
-                       "of today): counted as available, someone must pick them up")
+                       f"of today{still}): counted as available, someone must pick them up")
     if floor_def:
         defense_items += floor_def
-        assumed.append(f"{plural(floor_def, 'defensive item')} lie on the zone's floor (Fata items of today): added "
+        assumed.append(f"{plural(floor_def, 'defensive item')} lie on the zone's floor (Fata items of today{still}): added "
                        "to the defensive items available, someone must pick them up")
     steaks_given = steaks >= 0
     has_tamer = any(i["tamer"] for i in infos)
     if steaks < 0:
         steaks = floor_steaks if has_tamer else 0   # a steak matters only with a Tamer's dog
         if steaks:
-            assumed.append(f"{plural(steaks, 'steak')} on the zone's floor (Fata items of today): counted, someone "
+            assumed.append(f"{plural(steaks, 'steak')} on the zone's floor (Fata items of today{still}): counted, someone "
                            "must pick them up")
     n_tamers = sum(1 for i in infos if i["tamer"] and not i["tomb"])
     if n_tamers:
@@ -874,7 +876,10 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
     if not multi:
         np_ = nights[0]
         sol = np_.sol
-        lines.append(f"Night of day {target} ({ref})" + (": a projection from today's data." if future else "."))
+        lines.append(f"Night of day {target} ({ref})" + (
+            ": a projection from today's data, this night alone: the upgrades the plan would make on the "
+            "nights before are not counted. For several nights make ONE call with until_day = the last night."
+            if future else "."))
         bonus = (f"Camp bonus +{camp_level}% with the Fata plan's upgrades (+{plan_up['before']}% before them)"
                  if plan_up else f"Camp bonus now +{camp_level}%")
         lines.append(f"Zone {where}{slots_txt}, {km_} km. {bonus}. "
