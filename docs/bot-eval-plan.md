@@ -1,6 +1,6 @@
 # Bot evaluation suite — plan
 
-Status (2026-11-20): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 implemented, awaiting review. Written so that
+Status (2026-11-20): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 implemented, awaiting review. Written so that
 an agent with no prior context can implement it phase by phase (section 8).
 
 **Changes since the plan was written (2026-11-14), read first.** The server now has **28**
@@ -18,8 +18,9 @@ are stable). Gap G9 is closed, C1 is rewritten, C3/C4 and F18–F20 are new (202
 | G1/G2 fixes | committed b3bf081, deployed on the Pi |
 | 1 `tests/offline.py` | committed 9130e8f |
 | 2 `tests/bot_eval/freeze.py`, `make bot-eval-freeze`, 14 fixtures in `towns/_eval/fixtures/`, `towns/.gitignore` negations | done and reviewed, committed 2026-11-17 (both repos) |
-| 3 offline MCP server + expectations | implemented 2026-11-20, not committed: `tests/bot_eval/{server,mcp_config,scenario}.py`, `scenario.example.json`, `freeze.py --expect [--check]`, `make bot-eval-expect[-check]`, `bot-eval-server`, `bot-eval-mcp-config`; fixture `8299-d26` (local cache, v1.3 camp plans, 0 Fata requests; 15 fixtures); C3/C4 drafts in `towns/_eval/scenarios/`; `claude -p` lists 28 tools on it; `make golden` 223 same |
-| 4 runner | implemented 2026-11-20, not committed: `tests/bot_eval/run.py`, `make bot-eval`, `suite` field in the scenario schema, `server.py --now` and SIGTERM-safe manifest, private scenario I1; smoke runs on Haiku 5.5 (I1, C4) green, real `towns/` untouched, `make golden` 223 same |
+| 3 offline MCP server + expectations | committed 6078a46 (implemented 2026-11-20): `tests/bot_eval/{server,mcp_config,scenario}.py`, `scenario.example.json`, `freeze.py --expect [--check]`, `make bot-eval-expect[-check]`, `bot-eval-server`, `bot-eval-mcp-config`; fixture `8299-d26` (local cache, v1.3 camp plans, 0 Fata requests; 15 fixtures); C3/C4 drafts in `towns/_eval/scenarios/`; `claude -p` lists 28 tools on it; `make golden` 223 same |
+| 4 runner | committed e58207e (implemented 2026-11-20): `tests/bot_eval/run.py`, `make bot-eval`, `suite` field in the scenario schema, `server.py --now` and SIGTERM-safe manifest, private scenario I1; smoke runs on Haiku 5.5 (I1, C4) green, real `towns/` untouched, `make golden` 223 same |
+| 5 deterministic grader | implemented 2026-11-20, not committed: `tests/bot_eval/grade.py` (D1-D13), `grade_checks.py` (148 unit assertions + the old bench runs through an adapter), `make bot-eval-grade RUN=…`, `make bot-eval-grade-checks`; scenario fields `hard_checks`, `names_max`, `names_expected`, `writes_allowed`, `tools_any` groups, argument predicates; grades go to `<run>.graded.json`; `make golden` 223 same |
 
 Goal: a small, offline, reproducible set of real-town scenarios that scores the Discord
 advisor's answers, so a change to `prompts/game-primer.md`, `prompts/discord.md`,
@@ -323,6 +324,43 @@ Trace format = `probe_claude.py:trace_of` (tool, args, full output, error flag) 
 | D12 | Budget | tool calls ≤ per-scenario cap (default 6, I1/N1/T1: 2); repeated identical calls == 0; wall time and tokens recorded (not scored) |
 | D13 | Side effects | manifest diff of the temporary `towns/` (as `tests/golden.py:_manifest`): only expected files (CP log, snapshots, a memory line in M1-A); real `towns/` tree unchanged (abort otherwise) |
 
+**As implemented (phase 5).** `make bot-eval-grade RUN=towns/_eval/runs/<run>.json` (`tests/bot_eval/grade.py`, no model call,
+no network) writes `<run>.graded.json` next to the run file (the run file stays as the runner wrote it) and prints the 6.4
+summary without the J columns. Per scenario `grades.checks` (D1-D5, D9-D13 over all turns of the scenario, tool checks) and per
+turn `grades` (D6-D8 on that turn's answer); a result is `{status: pass|fail|n.a., evidence, subs}`. Unit tests and the old-bench
+adapter: `make bot-eval-grade-checks`. Where the implementation differs from the table above:
+- **Tool calls** are the 28 tools of `main.py` (read with `ast`). `ToolSearch` and other harness tools are listed in
+  `grades.harness_calls`, left out of D12 and of repeats; `Skill`, `Write`, `Edit`, `Bash`, `NotebookEdit` calls and any
+  `permission_denials` fail D2, `remember` / `forget` in a thread too.
+- **D1** `tools_any`: a list of names = any one of them; a list of lists = every group needs a hit.
+- **D3** global rules (no scenario needed): `start_ap > 6` unless the question mentions dice / cards, non-empty `available` on
+  `plan_kill_route`, `detail='full'` / `include_all` unless the question asks for everything, a `town_id` that is neither in the
+  fixture nor in the question. `step_table` is **not** flagged (the maintainer wants the step table in expedition plans).
+- **D3/D4** argument values: a literal (compared as lower-case text) or one predicate `{ge|le|gt|lt|in|contains|present|absent|available_ge: x}`.
+- **D5** reads `expected.json` groups; numbers compared normalised (`norm`, decimal comma, `1.80` = `1.8`), words case-insensitive.
+- **D6** exempt: numbers on a line that shows its arithmetic (`a + b = c`, `a - b`, "short by"...), dates / times (`2026-11-14`, `14/11`, `21:39`),
+  `<@id>`, the numbers inside `[x|y]` (checked as coordinates). Corpus = tool outputs of the session (unwrapped), every prompt of the session,
+  the answers of earlier turns, and the system-prompt files (`persona.md`, `prompts/discord.md`, `prompts/discord-feedback.md`, `prompts/game-primer.md`;
+  `--ground` overrides). Catalogue names checked: several words, or one word of 7+ letters (single common words such as "Water" would match prose).
+  The result carries counts and the lists; the check fails on any ungrounded item, and is hard only when a scenario says so.
+- **D7** stop-word lists IT / EN / FR plus NL / DE / ES ("other"); a word in two lists counts for neither. Stripped first: code blocks, `>` lines,
+  inline code, mentions, citizen / town / catalogue names. Under 30 words = n.a. (judge). Fails when another language has more hits than the expected
+  one; a language mix and a differing opening line are written in the evidence of a pass.
+- **D8** four parts (`table`, `narration`, `slash`, `tool_names`), each usable in `hard_checks` as `D8:<part>`; length and 2000-char chunks are reported,
+  not scored. Narration = present / future promises ("I'll check", "ti avviso", "je vais vérifier"), not past reports ("I searched").
+- **D9** `names_max: N` (trap) and `names_expected: [...]` (control, memory) in the scenario; names in the reader's own text are exempt; a short lower-case
+  name or one that is an ordinary word counts only when marked (bold / code / quotes / @); without either field the check is n.a. and only reports a count.
+- **D10** coordinates on the numbered / bulleted lines of the answer must be an ordered subsequence of the coordinates of a tool `**Itinerary**` block.
+  The consumables comparison of the plan is not implemented (answers translate item names).
+- **D11** invariants are a registry in `grade.py` (`no_tool_names`, `start_ap_6`, `camping_one_call_until_day`, `upgrades_before_hiding_order`,
+  `water_rations_ceil_half_days`, `heavy_items_max`, `drugs_max_one`), each with its source in its docstring; an unknown name is a validation error.
+  `upgrades_before_hiding_order` and `water_rations_ceil_half_days` are heuristics on the text.
+- **D12** two parts: `calls` (game tools only, cap = `max_calls`, default 6) and `repeats`; seconds and tokens are in the evidence.
+- **D13** compares each turn's manifest with the fixture's tree (+ `_current_town`, the scenario's memory / user_town files): new, removed or changed
+  paths fail unless they are intraday snapshots, `citizens-cp.json` or match `writes_allowed`; also `real_towns_guard`. No manifest recorded = reported, not failed.
+- **Hard checks**: `hard_checks: ["D3", "D12:calls"]` in the scenario; a hard fail is any of them failing. Score: `det` printed as passed / applicable
+  (n.a. excluded); the 4.3 formula needs J1 (phase 6).
+
 ### 4.2 LLM judge
 
 One call per scenario turn, model stronger than both candidates (**proposal**: `opus`
@@ -521,6 +559,8 @@ make bot-eval-freeze FIXTURE=7365-d22 TOWN=7365 DAY=22      # by hand, counts Fa
 make bot-eval SUITE=core MODEL=sonnet TIER=trusted LABEL=baseline
 make bot-eval SUITE=core MODEL=claude-haiku-5-5 TIER=public LABEL=baseline
 make bot-eval ONLY=E1,K1 REPEAT=3 LABEL=primer-v2
+make bot-eval-grade RUN=towns/_eval/runs/<run>.json          # deterministic checks D1-D13, writes <run>.graded.json, no model call
+make bot-eval-grade-checks                                   # unit tests of the grader + old bench runs through it
 make bot-eval-compare A=runs/<a>.json B=runs/<b>.json
 ```
 
@@ -603,7 +643,8 @@ only Fata / Gest'Hordes data is frozen.
 ### 6.4 Score format
 
 `runs/*.json`: one record per scenario turn (prompt, answer, trace, usage, secs), plus
-`grades` (each D-check: pass / fail / n.a. with the evidence; judge JSON). Printed summary:
+`grades` (each D-check: pass / fail / n.a. with the evidence; judge JSON). Phase 5 writes the D grades to the sibling `<run>.graded.json`
+(the run file is left as the runner wrote it; phase 6 adds the judge to the same file). Printed summary:
 
 ```
 suite=core model=claude-sonnet-5-5 tier=trusted label=baseline sha=9993e5e
@@ -716,7 +757,7 @@ multi-turn, DM + memory, decision 7, manifest capture, real-`towns/` guard, run 
 Done when: `make bot-eval ONLY=I1 MODEL=claude-haiku-5-5` produces a run file with trace
 and usage, and `git -C towns status` is unchanged apart from `_eval/runs/`.
 
-**Phase 5 — deterministic grader.** `tests/bot_eval/grade.py`: port `grade.py` (grounding,
+**Phase 5 — deterministic grader** (implemented 2026-11-20, see "As implemented (phase 5)" in 4.1). `tests/bot_eval/grade.py`: port `grade.py` (grounding,
 repeats, bad args) and add D2, D4, D7–D13. Unit-test it on recorded traces
 (`run-day18-sonnet.json`, `run-day18-haiku55.json`, `run-defame-*.json`): the known
 defects there (4 wrong-language answers, the named-player answer) must be flagged.

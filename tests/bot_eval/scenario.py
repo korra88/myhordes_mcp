@@ -6,6 +6,7 @@ scenario.example.json.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -25,7 +26,16 @@ FIELDS = {
     "args_required": (list, []), "args_forbidden": (list, []),
     "facts_from": (list, []), "invariants": (list, []),
     "max_calls": (int, 0), "must": (list, []), "hard_fail": (list, []),
+    # phase 5 (grader): which D-checks are hard ("D3", or a named part "D12:calls"), names rule of D9,
+    # extra files a run may write (fnmatch on paths under towns/, D13)
+    "hard_checks": (list, []), "names_max": (int, -1), "names_expected": (list, []),
+    "writes_allowed": (list, []),
 }
+CHECK_IDS = tuple(f"D{i}" for i in range(1, 14))
+# Named invariants of D11 (implemented, with their sources, in grade.py; it asserts the two lists agree)
+INVARIANT_NAMES = ("no_tool_names", "start_ap_6", "camping_one_call_until_day", "upgrades_before_hiding_order",
+                   "water_rations_ceil_half_days", "heavy_items_max", "drugs_max_one")
+ARG_OPS = ("ge", "le", "gt", "lt", "in", "contains", "present", "absent", "available_ge")
 
 
 class ScenarioError(ValueError):
@@ -67,20 +77,39 @@ def validate(data: dict, where: str = "scenario", check_fixture: bool = True) ->
             if not (isinstance(t, dict) and isinstance(t.get("text"), str) and t["text"]
                     and isinstance(t.get("lang", ""), str)):
                 errors.append(f"turns[{i}] must be {{lang, text}}")
-        for key in ("tools_any", "tools_forbidden", "must", "hard_fail"):
+        for key in ("tools_forbidden", "must", "hard_fail", "invariants", "hard_checks", "names_expected",
+                    "writes_allowed"):
             if not all(isinstance(x, str) for x in out[key]):
                 errors.append(f"'{key}' must be a list of strings")
+        # tools_any: ["a", "b"] = any of them; [["a", "b"], ["c"]] = every group needs one hit
+        ta = out["tools_any"]
+        if not (all(isinstance(x, str) for x in ta)
+                or all(isinstance(g, list) and g and all(isinstance(x, str) for x in g) for g in ta)):
+            errors.append("'tools_any' must be a list of names or a list of lists of names")
+        for name in out["invariants"]:
+            if isinstance(name, str) and name not in INVARIANT_NAMES:
+                errors.append(f"unknown invariant '{name}' (known: {', '.join(INVARIANT_NAMES)})")
+        for h in out["hard_checks"]:
+            if isinstance(h, str) and h.partition(":")[0] not in CHECK_IDS:
+                errors.append(f"hard_checks entry '{h}' must be D1..D13, optionally 'Dn:part'")
+        if out["names_max"] < -1:
+            errors.append("names_max must be -1 (no rule) or >= 0")
         for key in ("args_required", "args_forbidden"):
             if not all(isinstance(x, dict) and isinstance(x.get("tool"), str) and isinstance(x.get("args", {}), dict)
                        for x in out[key]):
                 errors.append(f"'{key}' entries must be {{tool, args}}")
+                continue
+            # an argument is a literal (compared as lower-case text) or one predicate {op: value}
+            for x in out[key]:
+                for a, v in (x.get("args") or {}).items():
+                    if isinstance(v, dict) and not (len(v) == 1 and next(iter(v)) in ARG_OPS):
+                        errors.append(f"'{key}' {x['tool']}.{a}: predicate must be one of {ARG_OPS}")
         for i, f in enumerate(out["facts_from"]):
             if not (isinstance(f, dict) and isinstance(f.get("tool"), str)
                     and isinstance(f.get("args", {}), dict)
                     and isinstance(f.get("extract", []), list) and all(isinstance(r, str) for r in f.get("extract", []))):
                 errors.append(f"facts_from[{i}] must be {{tool, args, extract: [regex]}}")
             else:
-                import re
                 for r in f.get("extract", []):
                     try:
                         re.compile(r)
@@ -96,7 +125,6 @@ def validate(data: dict, where: str = "scenario", check_fixture: bool = True) ->
 
 
 def _clock_ok(spec: str) -> bool:
-    import re
     return bool(re.fullmatch(r"\+\d+[hm]|\d{1,2}:\d{2}", spec))
 
 

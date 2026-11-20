@@ -81,9 +81,10 @@ def frozen_now(towns_dir: Path, towns: list[tuple[str, int]], main_town: int, af
 
 
 def tree(root: Path) -> dict[str, tuple[int, int]]:
-    """{relative path: (size, mtime_ns)} of every file under root."""
+    """{relative path: (size, mtime_ns)} of every file under root, except .git/ (an editor's
+    git integration refreshes the index during a run: not a write by the server)."""
     return {str(f.relative_to(root)): (f.stat().st_size, f.stat().st_mtime_ns)
-            for f in root.rglob("*") if f.is_file()}
+            for f in root.rglob("*") if f.is_file() and f.relative_to(root).parts[0] != ".git"}
 
 
 def manifest(towns_dir: Path) -> str:

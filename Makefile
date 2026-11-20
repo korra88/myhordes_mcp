@@ -13,6 +13,7 @@
 #   make bot-eval-server ID=7365-d22  Offline MCP server on a fixture, by hand (tests/bot_eval/server.py)
 #   make bot-eval-mcp-config ID=7365-d22 [ARGS="--clock 14:30"]  Print the --mcp-config JSON for claude -p
 #   make bot-eval [SUITE=core] [ONLY=I1,C4] [MODEL=claude-haiku-5-5] [TIER=public|trusted] [LABEL=x] [REPEAT=n]  Run scenarios through the listener's code (calls claude: costs; a person runs it)
+#   make bot-eval-grade RUN=towns/_eval/runs/<run>.json  Deterministic grader D1-D13 on a run file (no model call; tests/bot_eval/grade.py)
 #   make golden       Check every tool's output against the recorded goldens (tests/golden.py)
 
 -include .env
@@ -39,7 +40,7 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 	discord-service-install discord-service-disable discord-service-uninstall \
 	towns-commit towns-commit-install towns-commit-disable towns-commit-uninstall \
 	golden golden-update golden-freeze golden-anyseed bot-memory-migrate bot-eval-freeze \
-	bot-eval-expect bot-eval-expect-check bot-eval-server bot-eval-mcp-config bot-eval
+	bot-eval-expect bot-eval-expect-check bot-eval-server bot-eval-mcp-config bot-eval bot-eval-grade bot-eval-grade-checks
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -189,6 +190,13 @@ bot-eval: ## Run bot-eval scenarios with claude -p (SUITE=core|extended|all ONLY
 	@$(DISCORD_PYTHON) tests/bot_eval/run.py --suite "$(or $(SUITE),core)" --label "$(or $(LABEL),run)" \
 		$(if $(ONLY),--only $(ONLY)) $(if $(MODEL),--model $(MODEL)) $(if $(TIER),--tier $(TIER)) \
 		$(if $(REPEAT),--repeat $(REPEAT)) $(foreach t,$(subst $(comma), ,$(EXTRA_TOOLS)),--allow-extra $(t)) $(if $(DRY),--dry-run)
+
+bot-eval-grade: ## Grade a run file with the deterministic checks D1-D13, no model call (RUN=towns/_eval/runs/<run>.json) -> <run>.graded.json
+	@test -n "$(RUN)" || { echo "usage: make bot-eval-grade RUN=towns/_eval/runs/<run>.json"; exit 2; }
+	@.venv/bin/python tests/bot_eval/grade.py "$(RUN)" $(if $(OUT),--out $(OUT))
+
+bot-eval-grade-checks: ## Unit tests of the grader + the old bench runs through it (tests/bot_eval/grade_checks.py)
+	@.venv/bin/python tests/bot_eval/grade_checks.py
 
 golden-anyseed: ## Golden check with a random string-hash seed (finds set order leaking into outputs)
 	@.venv/bin/python tests/golden.py --any-seed
