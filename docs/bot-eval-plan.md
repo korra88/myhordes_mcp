@@ -1,6 +1,6 @@
 # Bot evaluation suite — plan
 
-Status (2026-11-20): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation). Written so that
+Status (2026-11-20): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5). Written so that
 an agent with no prior context can implement it phase by phase (section 8).
 
 **Changes since the plan was written (2026-11-14), read first.** The server now has **28**
@@ -22,7 +22,7 @@ are stable). Gap G9 is closed, C1 is rewritten, C3/C4 and F18–F20 are new (202
 | 4 runner | committed e58207e (implemented 2026-11-20): `tests/bot_eval/run.py`, `make bot-eval`, `suite` field in the scenario schema, `server.py --now` and SIGTERM-safe manifest, private scenario I1; smoke runs on Haiku 5.5 (I1, C4) green, real `towns/` untouched, `make golden` 223 same |
 | 5 deterministic grader | implemented 2026-11-20, not committed: `tests/bot_eval/grade.py` (D1-D13), `grade_checks.py` (148 unit assertions + the old bench runs through an adapter), `make bot-eval-grade RUN=…`, `make bot-eval-grade-checks`; scenario fields `hard_checks`, `names_max`, `names_expected`, `writes_allowed`, `tools_any` groups, argument predicates; grades go to `<run>.graded.json`; `make golden` 223 same |
 | 6 judge | implemented 2026-11-20, not committed: `tests/bot_eval/judge_prompt.md` (fixed rubric, v1), `judge.py` (`claude -p`, opus, no tools / MCP, one call per turn, J1-J6 + 4.3 score merged into `<run>.graded.json`), `calibrate.py`; `make bot-eval-judge RUN=…`, `make bot-eval-calibrate`; smoke runs I1 and C4 judged; 10-item calibration set judged (10 calls, $0.6411); calibration: blind hand grades agreed 5/10, all 11 differing grades (6 of them `?`) re-checked against `items.json` and the judge was right on each, sheet reconciled → 10/10 (judge prompt unchanged, rubric v1). J6 (not in the criterion): judge equal or 1 lower than the hand grade, never higher (lower on K02 K04 K06 K08 K10) |
-| 7 core scenarios + baseline | scenarios written 2026-11-20, baseline pending: 18 core scenarios (+ extended M1b) in `towns/_eval/scenarios/`, expectations materialised (`make bot-eval-expect-check` clean), `make bot-eval DRY=1 SUITE=core` loads all 18; `docs/bot-eval.md`; `run.py` accepts `tools_any` as a list of lists. Baseline runs and cost measurement not done |
+| 7 core scenarios + baseline | done 2026-11-20: 18 core scenarios (+ extended M1b) in `towns/_eval/scenarios/`, expectations materialised, `docs/bot-eval.md`; baseline runs `towns/_eval/runs/2026-11-20-baseline-claude-{sonnet,haiku}-5-5.json` (+ `baseline-noskill` for A1/B1), graded and judged; measured cost in 6.2; hard fails classified in 6.5. Three harness fixes found by the baseline (6.5) |
 
 Goal: a small, offline, reproducible set of real-town scenarios that scores the Discord
 advisor's answers, so a change to `prompts/game-primer.md`, `prompts/discord.md`,
@@ -653,13 +653,22 @@ Never from cron, a timer or CI: a person runs it (`CLAUDE.md` hard constraints; 
 | 30 single-turn bench questions, Sonnet 5.5 | $2.90 CLI (≈ $0.097 each), 289.6 s | `RESULTS.md` 2026-11-10 |
 | Same, Haiku 5.5 | CLI says $5.65 (wrong price table); ≈ $0.16 at list price; 329.4 s | same |
 
-Core run = 16 scenarios, 19 turns. Sonnet: between ~$1.8 (19 × $0.097) and ~$21 (19 ×
-$1.11); **guess** $4–8, since fresh sessions are lighter than the $1.11 turn but
-expedition scenarios call more tools than the bench questions. Haiku: **guess** under $1
-at list price. Judge: 19 calls, **measured** $0.026–$0.168 per call, mean $0.064 over 10 calibration calls, so ≈ $1.2 (13 calls measured: $0.7863 in all). On the subscription these are usage-limit
-weight, not charges. The first baseline replaces these guesses with measurements; the run
-file records tokens per model and computes cost from a price table in
-`tests/bot_eval/prices.json` (do not trust `total_cost_usd` for Haiku 5.5).
+**Measured, baseline 2026-11-20** (core = 18 scenarios, 21 turns, `claude` CLI 2.1.286):
+
+| Run | CLI cost | Wall | Tokens (out / cache read / cache write) |
+|---|---|---|---|
+| Sonnet 5.5, core | $1.7622 (≈ $0.084 per turn; E2 2 turns $0.2344, K1 $0.1440) | 235.7 s | 20 718 / 2 323 634 / 266 665 |
+| Haiku 5.5, core | $0.1242 (CLI figure, **not verified**: `tests/bot_eval/prices.json` does not exist yet) | 242.9 s | 40 634 / 2 634 781 / 270 218 |
+| Judge (Opus 5.5) on the Sonnet run | $1.3824, 21 calls (one retry after an invalid output) | | |
+| Judge on the Haiku run | $1.3655, 20 calls | | |
+
+One core baseline for both models, judged: ≈ $4.6 by the CLI figures. The guesses above
+were too high for Sonnet ($4–8 guessed). Each run also bills ≈ 22k input tokens of
+`claude-haiku-4-5` (the CLI's own helper calls), the same in every run. On the
+subscription these are usage-limit weight, not charges (maintainer, 2026-11-20: cost is an
+indication, not a reason to hold a run back). The run file records tokens per model; the
+cost from a price table needs `tests/bot_eval/prices.json` (do not trust `total_cost_usd`
+for Haiku 5.5).
 
 Budget rule: default `make bot-eval` runs the core set once per model; `REPEAT>1` only
 with `ONLY=`.
@@ -699,6 +708,55 @@ tokens in/out/cache · cost by price table · wall time
 ```
 
 ---
+
+### 6.5 Baseline 2026-11-20 (phase 7)
+
+Run files (private): `towns/_eval/runs/2026-11-20-baseline-claude-sonnet-5-5.json`, `…-haiku-5-5.json`,
+each with `.graded.json` (D-checks + judge, rubric v1 `927d7ecc7272`); A1 and B1 again in
+`2026-11-20-baseline-noskill-…` after the skill fix below. Tier per scenario as the scenario
+says; `EXTRA_TOOLS=plan_kill_route,get_blueprint_order,remember,forget,log_feedback` (the
+maintainer's local `discord-listener.toml` lacked them in the trusted tier; the Pi has them).
+
+| | Sonnet 5.5 | Haiku 5.5 |
+|---|---|---|
+| Hard fails (A1/B1 from the no-skill rerun) | 5 / 18 | 6 / 18 |
+| Mean score (4.3), first run incl. A1/B1 Skill fails | 0.53 | 0.47 |
+| A1 / B1 score without skills | 0.64 / 0.83 | 0.89 / 0.83 |
+
+**Harness defects found by the baseline (fixed in `tests/bot_eval/run.py`).** The eval ran
+`claude -p` with context the deployed bot does not have; two earlier attempts were discarded:
+1. `trace_of` crashed on a CLI event whose `message` is a string.
+2. The CLI loads the machine's **auto-memory** for the cwd's project even with
+   `--setting-sources project`, and the **user-level `CLAUDE.md`**. On the maintainer's PC
+   that is a full private memory index (Haiku tried to `Read` one of its files in R1; denied);
+   on the Pi the memory is empty and there is no user `CLAUDE.md`. Fix: env
+   `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, settings `claudeMdExcludes` for `~/.claude/CLAUDE.md`
+   (checked: project `CLAUDE.md` still loaded, plugins not loaded). The listener sets the
+   variable too since discord_mcp `ed281b0`.
+3. The PC checkout has the maintainer's skills (`.claude/commands`, `.claude/skills`); the Pi
+   has none. Both models called `Skill("build-plan")` in A1/B1 (D2 hard fail). Fix:
+   `--disable-slash-commands`, now also in the listener's argv.
+
+The judge once wrote text after its JSON (D2, Sonnet run); the retry passed. `judge.py` now
+prints the text around a parse error.
+
+**Hard fails, classified by the maintainer (2026-11-20).**
+
+| Scenario | Model | What happened | Class |
+|---|---|---|---|
+| E1 | Sonnet | `start_ap=19`; the tool refused it, the retry used 6 | bot (the tool guard caught it) |
+| E1 | Haiku | Only `find_expedition_path` with `start_ap=19`; never planned the supplies | bot |
+| E2 | both | No `pickups` for the blueprint, so no rucksack check (the docstring has `"14,2: blueprint"`) | bot |
+| K1 | both | `available='water=1, food6=1'` on `plan_kill_route` | **tool**: its start_ap error taught the supplies mapping ("18 = start_ap=6, available=…") while its docstring says leave `available` empty. Fixed 2026-11-20: kill-route error and docstring say `start_ap=6`, `available` empty; primer line made explicit |
+| K1 | Haiku | Route cut before the map edge; zombie counts by hand | bot |
+| M1 | both | DM memory not fully applied (Sonnet: no `second_wind`; Haiku: all defaults) | bot |
+| C2 | Sonnet | The tool prints TRAPPED; the answer does not say the three are trapped | bot |
+| D2 | Haiku | "Would not survive" with no mention of a possible plan | bot |
+| B2 | Haiku | Answered in Italian to a French question (with clean context too) | bot (language drift) |
+
+Known by design: A1 needs the town and day named (G10 open); B2 may conflict with the primer
+rule (G14 open). D13 notes "changed …/cache/estimations.json" in several runs: the offline
+server's Gest'Hordes cache inside the fixture copy, not the real `towns/` (guard ok).
 
 ## 7. Gaps found while preparing this (not fixed; candidates)
 

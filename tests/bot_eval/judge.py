@@ -120,7 +120,7 @@ def parse_verdict(text: str, n_must: int, n_hard: int) -> dict:
     try:
         d = json.loads(t)
     except json.JSONDecodeError as exc:
-        raise BadVerdict(f"not JSON: {exc}")
+        raise BadVerdict(f"not JSON: {exc}; around it: {t[max(0, exc.pos - 80):exc.pos + 220]!r}")
     if not isinstance(d, dict):
         raise BadVerdict("not an object")
 

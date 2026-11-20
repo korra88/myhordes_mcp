@@ -109,7 +109,10 @@ def trace_of(events: list[dict]) -> list[dict]:
     for e in events:
         if e.get("parent_tool_use_id"):
             continue
-        for b in (e.get("message") or {}).get("content") or []:
+        msg = e.get("message")
+        if not isinstance(msg, dict):   # some CLI events carry a plain-text message
+            continue
+        for b in msg.get("content") or []:
             if not isinstance(b, dict):
                 continue
             if e.get("type") == "assistant" and b.get("type") == "tool_use":
@@ -186,7 +189,12 @@ def run_turn(claude, s: dict, turn: dict, index: int, session: str, channel: str
         files=str(files_path), manifest=str(manifest_path))), encoding="utf-8")
     cl = dataclasses.replace(claude, mcp_config=(config_path,))
     settings_path = work / f"settings-{index}.json"
-    settings_path.write_text(json.dumps(listener.settings_payload(cl)), encoding="utf-8")
+    settings = listener.settings_payload(cl)
+    # The user-level CLAUDE.md is loaded even with --setting-sources project (measured 2026-11-20:
+    # the bot saw the maintainer's other projects). The Pi has none; the project CLAUDE.md stays,
+    # as in production.
+    settings["claudeMdExcludes"] = [str(Path.home() / ".claude" / "CLAUDE.md")]
+    settings_path.write_text(json.dumps(settings), encoding="utf-8")
 
     when = datetime.datetime.fromisoformat(now_iso) + datetime.timedelta(minutes=2 * index)
     message = {"id": listener.snowflake_at(int(when.timestamp() * 1000)),
@@ -196,7 +204,18 @@ def run_turn(claude, s: dict, turn: dict, index: int, session: str, channel: str
     prompt = listener.build_prompt([message], first, channel, files=files,
                                    where=s["context"], memory=is_memory)
     argv = listener.claude_argv(cl, session, not first, settings_path)
+    # The maintainer's PC has the project skills (.claude/commands, .claude/skills: build-plan,
+    # inspect-town...); the Pi checkout has none, so the deployed bot cannot launch them. Measured
+    # 2026-11-20: both models called Skill("build-plan") in A1/B1 here. Off, as on the Pi (the
+    # listener passes it itself since discord_mcp 2026-11-20; kept for an older checkout).
+    if "--disable-slash-commands" not in argv:
+        argv.append("--disable-slash-commands")
     env = listener.child_env(dict(os.environ), SYNTH_USER, s["context"])
+    # The CLI loads this machine's auto-memory for the cwd's project (~/.claude/projects/<cwd>/memory)
+    # even with --setting-sources project; on the maintainer's PC that is a full index of private
+    # project notes, on the Pi it is empty. Measured 2026-11-20: Haiku tried to Read one of those
+    # files in R1. Off, so the bot sees what the deployed listener sees.
+    env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "1"
     record = {"lang": turn.get("lang", ""), "prompt": prompt, "user_text": turn["text"],
               "resume": not first}
     if dry:
