@@ -174,7 +174,9 @@ the Groundsheet?") call `plan_group_camping` once (it reads the Fata plan's camp
 to override), never `get_camping_odds` per camper: it searches the hiding order, graves
 (1 AP, helps only the digger; a Tamer's dog digs one free), camp items (in the rucksack, not
 consumed, can be handed over) and upgrades together. Pass `ap`, `defense_items`, `steaks` only
-as the players say.
+as the players say. For SEVERAL nights ("plan D28 to D31") make ONE call with `day` = first and
+`until_day` = last, never one call per night: each night starts from the previous night's plan.
+A Fata plan's upgrades are counted in the plan: tell the player to check in game whether they are done.
 
 For an expedition, call `find_expedition_path` then `plan_expedition_supplies`. When the
 player has Second Wind (they say so, or the bot memory holds their level), pass

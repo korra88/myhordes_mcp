@@ -838,7 +838,7 @@ async def get_camping_odds(
     zombie count, the camp bonus typed in that day's plan or today's bonus minus 15% a night,
     nights camped so far): say so and quote its assumptions.
 
-    ONE camper only. For a GROUP ("who hides first?", "who digs a grave?", "who carries the
+    ONE camper only, ONE night. For several nights use plan_group_camping with until_day. For a GROUP ("who hides first?", "who digs a grave?", "who carries the
     Groundsheet?", "how do we camp tonight on [x|y]?") call plan_group_camping once: do NOT call
     this tool per camper for a group question.
 
@@ -903,6 +903,7 @@ async def plan_group_camping(
     camp_level: int = -1,
     hidden_before: int = 0,
     objective: str = "expected",
+    until_day: int = 0,
     town_id: int = 0,
 ) -> str:
     """
@@ -928,6 +929,20 @@ async def plan_group_camping(
     a Tamer's dog digs the Tamer's grave for free, and fed a Tasty-looking Steak also improves
     the camp +5%. AP are one pool for the whole group. Odds freeze when each camper hides:
     upgrade first, hide in the given order after 19:00.
+
+    SEVERAL NIGHTS ("plan D28 to D31", "camp until day 31"): ONE call with day = the first night
+    and until_day = the last (at most 6 nights). Do NOT call once per night: a call alone does not
+    know the upgrades planned for the nights before. The chain starts each night from the
+    previous night's plan (-15% overnight), counts the Fata plans' upgrades, uses up the finite
+    defensive items and steaks night by night, and warns when a night needs more AP than the
+    group's 6 each. It plans each night greedily (cheapest plan for that night), not jointly.
+    A Fata plan's upgrades (level before -> after) count as part of the plan: "check in game
+    whether they are done" is what the output says tonight; do not re-plan them.
+
+    Defensive items lying on the camp zone itself are added to the pool. A "Defensive items near
+    the camp" block (3 zones at most) points at items worth fetching and the nights with AP to
+    spare; it is a signal only (not counted in the pool). For an exact route to them use
+    find_expedition_path / plan_expedition_supplies with start = the camp (x, y), round trip.
 
     Output: the night, the zone, the plan (upgrades, graves, AP), the hiding order with each
     camper's odds and what they do or carry, expected survivors, an optional "for later nights
@@ -960,6 +975,8 @@ async def plan_group_camping(
         hidden_before: Citizens outside the group already hidden on the zone.
         objective: "expected" (default) = most expected survivors; "weakest" = raise the
                    lowest camper's odds first.
+        until_day: Last night of a multi-night plan (day number). 0 = only the night `day`.
+                   `ap` is then the budget of EACH night.
         town_id: Fata Morgana town ID. Omit for the player's default town.
     """
     got = await _town(town_id)
@@ -969,7 +986,7 @@ async def plan_group_camping(
     return fata.format_group_camping(
         data, x=x, y=y, group=group, day_arg=day, ap=ap, defense_items=defense_items,
         camp_items=camp_items, steaks=steaks, slots=slots, camp_level=camp_level,
-        hidden_before=hidden_before, objective=objective, town_id=tid,
+        hidden_before=hidden_before, objective=objective, until_day=until_day, town_id=tid,
     )
 
 

@@ -298,13 +298,47 @@ def _project_zombies(data: dict, cell: tuple, z: dict | None, zombies: int, note
                + ": zombies can spread in at night (0-4 a night), check before hiding")
 
 
+def typed_plan(zone_plans: list[dict], mine: dict | None) -> dict | None:
+    """The Fata plan whose typed numbers apply to the zone: the caller's own, else the zone's
+    plans when they all agree on the existing bonus."""
+    return mine or (zone_plans[0] if zone_plans and len({p["level_before"] for p in zone_plans}) == 1 else None)
+
+
+def fata_plan_upgrades(plan: dict | None) -> dict | None:
+    """The upgrades a Fata plan adds on top of the zone's existing bonus, or None when it adds
+    none: {creator, target_day, before, after, pct, improves (pct / 5, 1 AP each)}."""
+    if not plan or plan["level_after"] <= plan["level_before"]:
+        return None
+    pct = plan["level_after"] - plan["level_before"]
+    return {"creator": plan["creator"] or "a player", "target_day": plan["target_day"],
+            "before": plan["level_before"], "after": plan["level_after"], "pct": pct,
+            "improves": round(pct / IMPROVE_LEVEL)}
+
+
+def plan_upgrade_text(up: dict, future: bool) -> str:
+    """The sentence that tells the reader the Fata plan's upgrades are part of the starting level."""
+    span = f"upgrades for +{up['pct']}% (+{up['before']}% -> +{up['after']}%)"
+    n = plural(up["improves"], "improve")
+    if future:
+        return (f"Planned in {up['creator']}'s Fata plan for day {up['target_day']}: {span}, counted as done "
+                f"({n} = {up['improves']} AP)")
+    return (f"Fata plan ({up['creator']}): {span}. Not a game reading: check in game whether they are done; "
+            f"if not, do them first ({n} = {up['improves']} AP, fewer with defensive items)")
+
+
 def resolve_camp_level(data: dict, *, coords: str, z: dict | None, night: dict, camp_level: int,
                        zone_plans: list[dict], mine: dict | None, assumed: list[str],
-                       town_id: int | None, can_record: bool) -> int:
+                       town_id: int | None, can_record: bool, info: dict | None = None) -> int:
     """The zone's camp bonus (%) for the night: the value given (>= 0), else the plan's typed
     bonus, Fata's estimate, the recorded one or 0, minus 15 a night for a future night. Appends
-    the source to `assumed`; records a reported value when `can_record`."""
+    the source to `assumed`; records a reported value when `can_record`.
+
+    A Fata plan for the night on the zone that adds upgrades (level_after > level_before) gives
+    its level_after as the starting level (the upgrades are part of the plan, not re-planned),
+    unless `camp_level` is given. `info` (out) receives {"plan": fata_plan_upgrades() or None}."""
     day, target, future = night["day"], night["target"], night["future"]
+    if info is not None:
+        info["plan"] = None
     zone_key = coords
 
     decay = NIGHTLY_DROP * (target - day) if future else 0
@@ -317,7 +351,8 @@ def resolve_camp_level(data: dict, *, coords: str, z: dict | None, night: dict, 
             est = camp_zones.estimate_level(camp_zones.load_zones(town_id).get(zone_key), day)
         fata_level = z.get("camp_level") if z else None
         # The camp bonus a plan for the night starts from, as its author typed it.
-        typed = mine or (zone_plans[0] if len({p["level_before"] for p in zone_plans}) == 1 else None)
+        typed = typed_plan(zone_plans, mine)
+        up = fata_plan_upgrades(typed)
         # A future night without a plan on this zone: an earlier plan on it carries over.
         before = None
         if future and not typed:
@@ -326,7 +361,16 @@ def resolve_camp_level(data: dict, *, coords: str, z: dict | None, night: dict, 
                 if ps and len({p["level_after"] for p in ps}) == 1:
                     before = ps[0]
                     break
-        if future and typed:
+        if up:
+            camp_level = up["after"]
+            if info is not None:
+                info["plan"] = up
+            assumed.append(f"camp bonus +{camp_level}%: the level after the upgrades of {up['creator']}'s Fata plan "
+                           f"(the plan starts from +{up['before']}%), not a game reading")
+            if not future and fata_level is not None and fata_level != up["before"]:
+                assumed.append(f"Fata's zone estimate (+{fata_level}%) differs from the plan's existing bonus "
+                               f"(+{up['before']}%): the plan's numbers are used")
+        elif future and typed:
             camp_level = typed["level_before"]
             assumed.append(f"camp bonus +{camp_level}%: the existing bonus typed in "
                            f"{typed['creator'] or 'a player'}'s Fata plan for day {target}, not a game reading")
@@ -490,9 +534,12 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
             assumed.append(f"camping nights survived up to now only: {until} not included, ask the player")
     zone_key = coords
     can_record = record and town_id is not None and isinstance(day, int) and not future
+    plan_info: dict = {}
     camp_level = resolve_camp_level(data, coords=coords, z=z, night=night, camp_level=camp_level,
                                     zone_plans=zone_plans, mine=mine, assumed=assumed,
-                                    town_id=town_id, can_record=can_record)
+                                    town_id=town_id, can_record=can_record, info=plan_info)
+    if plan_info.get("plan"):
+        assumed.append(plan_upgrade_text(plan_info["plan"], future))
     if hidden_before == 0 and not me:
         assumed.append("nobody hidden on the zone before the player: assumed")
     assumed.append("hiding between 19:00 and 06:59: night +10 included")

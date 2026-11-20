@@ -29,14 +29,17 @@ from ..utils.fmt import header, plural, ruin_label
 from . import camplog
 from .camping import (
     CROWD, IMPROVE_LEVEL, INSTALL_LEVEL, MAX_LEVEL_TO_ACT, NIGHTLY_DROP, _find_citizen, camping_terms,
-    is_panda, lighthouse_built, odds_cap, resolve_camp_level, resolve_night, ruin_term, skill_label,
-    zone_reading,
+    fata_plan_upgrades, is_panda, lighthouse_built, odds_cap, plan_upgrade_text, resolve_camp_level,
+    resolve_night, ruin_term, skill_label, typed_plan, zone_reading,
 )
+from .risk import _zone_freshness, _zone_threat, fmt_items
 from .cp import citizen_key
 from .geo import fmt_xy, km, xy
 from .towndata import plans_for_citizen, plans_for_zone
 
 MAX_CAMPERS = 6
+MAX_NIGHTS = 6
+BASE_AP = 6      # AP each citizen has in a day before drinking / eating / drugs
 GRAVE_BONUS, ITEM_BONUS = 8, 5
 ORD = ["1st", "2nd", "3rd", "4th", "5th", "6th"]
 
@@ -396,10 +399,204 @@ def _zone_item_count(z: dict | None, uid: str) -> int:
     return sum(i.get("count", 0) for i in (z or {}).get("items", []) if i.get("uid") == uid)
 
 
+@dataclass
+class NightPlan:
+    """One night of the chain: the zone level it starts from, the Fata plan's upgrades counted in
+    it, the campers' values and the solution."""
+    target: int
+    night: dict
+    zombies: int
+    zombie_note: str
+    start: int                      # zone level the solver starts from (Fata plan upgrades included)
+    plan_up: dict | None            # fata_plan_upgrades() counted in `start`
+    campers: list
+    infos: list
+    pos: list
+    sol: Solution | None
+    plan_ap: int = 0                # AP of the Fata plan's upgrades
+
+    @property
+    def future(self) -> bool:
+        return self.night["future"]
+
+    @property
+    def ap_total(self) -> int:
+        """AP the night needs: the plan's upgrades (when counted) + improves, installs, paid graves."""
+        return (self.sol.ap if self.sol else 0) + self.plan_ap
+
+
+def _make_camper(info: dict, k: int, ctx: dict, zombies: int) -> Camper:
+    """The camper of night k of the chain (k = nights after the first): one more camping night
+    each, no grave carried over (tg_tomb is reset every night), everything else unchanged."""
+    nights = info["nights"] + k
+    tomb = info["tomb"] and k == 0
+    terms = camping_terms(nights=nights, skill=info["skill"], panda=ctx["panda"], tomb=tomb, level=0, ruin=None,
+                          hidden_before=0, lighthouse=ctx["lighthouse"], camp_items=0, zombies=zombies,
+                          vest=info["vest"], night=True, distance=ctx["km"], devastated=ctx["devastated"])
+    base = sum(terms.values()) - terms["campers"] - terms["zoneBuilding"]
+    cap = round(odds_cap(info["job"], info["skill"]) * 100)
+    return Camper(info["name"], base, cap, tomb, info["tamer"], info["carried"], info["hint"])
+
+
+def _plan_night(data: dict, cell: tuple, tgt: int, k: int, *, infos: list, ctx: dict, start: int,
+                plan_up: dict | None, ruin: dict | None, hidden_before: int, ap: int | None,
+                defense_items: int, pool: int, steaks: int, slots: int, objective: str) -> NightPlan:
+    """The per-night solve: the campers of night k on the zone at level `start`, with the
+    defensive items and steaks still left. `ap` is the group budget (None = unlimited); the Fata
+    plan's upgrades of a future night come out of it (they are counted as done that night)."""
+    night = resolve_night(data, tgt)
+    _, _, zombies, zombie_note = zone_reading(data, cell, night)
+    campers = [_make_camper(inf, k, ctx, zombies) for inf in infos]
+    plan_ap = plan_up["improves"] if plan_up else 0
+    budget = ap if ap is None or not night["future"] else max(0, ap - plan_ap)
+    sol = solve(campers, level=start, ruin=ruin, hidden_before=hidden_before, ap=budget,
+                defense_items=defense_items, pool=pool, steaks=steaks, slots=slots, objective=objective)
+    pos = position_terms(len(campers), ruin, hidden_before)
+    shown = [{**inf, "nights": inf["nights"] + k, "tomb": inf["tomb"] and k == 0} for inf in infos]
+    return NightPlan(tgt, night, zombies, zombie_note, start, plan_up, campers, shown, pos, sol, plan_ap)
+
+
+def _plan_pieces(sol: Solution) -> tuple[str, str]:
+    """('2× improve (2 AP), ...' or 'no upgrade', 'N graves dug at 1 AP each, ...' or 'no grave to dig')."""
+    pieces = []
+    if sol.improves:
+        pieces.append(f"{sol.improves}× improve ({sol.improves} AP)")
+    if sol.installs:
+        pieces.append(f"{sol.installs}× install ({sol.installs} AP + {plural(sol.installs, 'defensive item')})")
+    if sol.boosts:
+        pieces.append(f"{sol.boosts}× steak-fed dog (+5%, {plural(sol.boosts, 'steak')}, 0 AP)")
+    graves = []
+    if sol.paid:
+        graves.append(f"{plural(sol.paid, 'grave')} dug at 1 AP each")
+    if sum(1 for g in sol.grave if g == "dog"):
+        graves.append(f"{plural(sum(1 for g in sol.grave if g == 'dog'), 'grave')} dug by the Tamer's dog (0 AP)")
+    if sol.boosts:
+        graves.append(f"{plural(sol.boosts, 'grave')} dug by a steak-fed dog")
+    return ", ".join(pieces) if pieces else "no upgrade", ", ".join(graves) if graves else "no grave to dig"
+
+
+def _camp_item_steps(campers: list, sol: Solution, camp_items: int, floor_items: int) -> str:
+    """'A gives 1 camp item to B; ...' for the items that change hands, or ''."""
+    moved = [(k, sol.items[k] - c.carried) for k, c in enumerate(campers) if sol.items[k] != c.carried]
+    if not moved:
+        return ""
+    gives = [[campers[k].name, -d] for k, d in moved if d < 0]
+    takes = [[campers[k].name, d] for k, d in moved if d > 0]
+    steps = []
+    for t in takes:
+        for g in gives:
+            n_ = min(t[1], g[1])
+            if n_:
+                steps.append(f"{g[0]} gives {plural(n_, 'camp item')} to {t[0]}")
+                t[1] -= n_
+                g[1] -= n_
+        if t[1]:
+            src = " / ".join(x for x in ((f"the {camp_items} extra" if camp_items else ""),
+                                          ("the zone's floor" if floor_items else "")) if x) or "the pool"
+            steps.append(f"{t[0]} takes {plural(t[1], 'camp item')} from {src}")
+    for g in gives:
+        if g[1]:
+            steps.append(f"{g[0]} leaves {plural(g[1], 'camp item')} unused")
+    return "Camp items: " + "; ".join(steps) + "."
+
+
+def _absorbable(level_after: int) -> int:
+    """Improves that can still be done on a night ending at `level_after`: each must start below 50."""
+    return max(0, -(-(MAX_LEVEL_TO_ACT - level_after) // IMPROVE_LEVEL))
+
+
+def _ap_warning(np_: NightPlan, prev: NightPlan | None, n: int) -> str:
+    """'' or the warning that the night needs more AP than the group's 6 each, with how many of
+    the excess improves the night before could take over (each +5% carries over, -15% overnight)."""
+    base = BASE_AP * n
+    # tonight the plan's upgrades may be done already: only what is planned on top counts
+    need = np_.sol.ap + (np_.plan_ap if np_.future else 0)
+    if need <= base:
+        return ""
+    excess = need - base
+    text = (f"Night {np_.target} needs {need} AP, more than the {base} the group has ({BASE_AP} each): "
+            "drink/eat for AP")
+    if prev is not None and prev.sol is not None:
+        spare = max(0, base - prev.ap_total)
+        movable = np_.sol.improves + (np_.plan_ap if np_.future else 0)
+        k = min(excess, _absorbable(prev.sol.level), spare, movable)
+        if k:
+            text += (f", or do {k} of these improves the night before (night {prev.target}; each +5% carries over, "
+                     f"-{NIGHTLY_DROP}% a night)")
+    return text + "."
+
+
+# ---------------------------------------------------------------------------
+# Nearby defensive items
+# ---------------------------------------------------------------------------
+
+NEARBY_MAX_D, NEARBY_ZONES = 12, 3
+# Items the game lets a camper install on the campsite ('improve' action, ActionDataService).
+INSTALLABLE = {"Old Door", "Sheet Metal", "Trestle", "Mattress", "Solid Wooden Board", "Sheet of Plywood",
+               "Järpen Table"}
+REACH_TIERS = ((3, "the day's 6 AP"), (6, "water or food too (AP back to max once each)"),
+               (9, "water and food"), (12, "water, food and a drug (Steroid / alcohol AP to 6, Twinoid 8, Coffee +4)"))
+
+
+def nearby_installable(data: dict, cell: tuple) -> list[tuple]:
+    """(moves, coords, zone, items) of the zones other than the camp's (and the town) holding
+    items a camper can install (INSTALLABLE: not pets nor assembly parts), within
+    NEARBY_MAX_D moves of `cell`, nearest first."""
+    hits = []
+    for z in data.get("zones", []):
+        zc = xy(z)
+        if zc is None or zc == cell or zc == (0, 0):
+            continue
+        d = abs(zc[0] - cell[0]) + abs(zc[1] - cell[1])
+        found = [i for i in z.get("items", []) if i.get("name") in INSTALLABLE and not i.get("broken")]
+        if d <= NEARBY_MAX_D and found:
+            hits.append((d, z["coords"], z, found))
+    hits.sort(key=lambda h: (h[0], h[1]))
+    return hits
+
+
+def nearby_defense_lines(data: dict, cell: tuple, spare_nights: list[int] | None = None, n: int = 1,
+                         multi: bool = False) -> list[str]:
+    """A signal, not a plan input: the nearest zones of nearby_installable (3 at most), the
+    reach tiers, the nights with AP to spare for the round trip (`spare_nights` = nights whose
+    spare AP >= nearest trip + 1) and a pointer to the route tools. Not added to the defensive
+    items pool."""
+    day = data["meta"].get("day")
+    hits = nearby_installable(data, cell)
+    if not hits:
+        return []
+    lines = ["Defensive items near the camp (round trip from the camp; +1 AP to install each; the AP of the trip "
+             "are not available for upgrades):",
+             "  Reach: " + "; ".join(f"d <= {d} with {w}" for d, w in REACH_TIERS)
+             + ". Inventory unknown: not assumed. EP not counted (scouts, bikes go further); zombies on the way are ignored."]
+    for d, coords, z, found in hits[:NEARBY_ZONES]:
+        lines.append(f"  {coords} {d} away, {2 * d} AP round trip: {fmt_items(found)}"
+                     f"{_zone_threat(z, day)}{_zone_freshness(z, day)}")
+    if any(i.get("heavy") for _, _, _, f in hits[:NEARBY_ZONES] for i in f):
+        lines.append("  Heavy items: one per camper per trip.")
+    if len(hits) > NEARBY_ZONES:
+        far = hits[NEARBY_ZONES:]
+        lines.append(f"  +{plural(len(far), 'more zone')} at {far[0][0]}-{far[-1][0]} away.")
+    if spare_nights:
+        hint = ("Good nights to fetch (AP to spare for the nearest round trip + 1): "
+                if multi else "AP to spare tonight for the nearest round trip + 1: ")
+        hint = (hint + ", ".join(str(t) for t in spare_nights) + ".") if multi else hint.rstrip(": ") + "."
+        if n >= 3:
+            hint += f" With {n} campers, one can fetch while the others upgrade."
+        lines.append(hint)
+    lines.append("For an exact route: find_expedition_path / plan_expedition_supplies with start = the camp (x,y), round trip.")
+    return lines
+
+
+def _spare_nights(nights: list[NightPlan], n: int, trip: int) -> list[int]:
+    """Nights whose spare AP (6 each minus what the night needs) covers `trip` AP."""
+    return [np_.target for np_ in nights if np_.sol is not None and BASE_AP * n - np_.ap_total >= trip]
+
+
 def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str = "", day_arg: int = 0,
                          ap: int = -1, defense_items: int = 0, camp_items: int = 0, steaks: int = -1,
                          slots: int = 5, camp_level: int = -1, hidden_before: int = 0,
-                         objective: str = "expected", town_id: int | None = None) -> str:
+                         objective: str = "expected", until_day: int = 0, town_id: int | None = None) -> str:
     if data.get("error"):
         return f"Error: {data['error']}"
     meta = data["meta"]
@@ -408,6 +605,13 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
         return night
     day, target, future = night["day"], night["target"], night["future"]
     ref = night["ref"]
+    first = target
+    last = until_day if until_day else first
+    if last < first:
+        return f"Error: until_day {until_day} is before the first night (day {first}): give a day >= {first} or 0."
+    if last - first + 1 > MAX_NIGHTS:
+        return (f"Error: {last - first + 1} nights asked (day {first} to {last}): at most {MAX_NIGHTS} nights "
+                f"in one call. Ask for day {first} to {first + MAX_NIGHTS - 1}, then continue from there.")
     objective = (objective or "expected").strip().lower()
     if objective not in ("expected", "weakest"):
         return "Error: objective must be 'expected' (most expected survivors) or 'weakest' (best lowest odds)."
@@ -523,16 +727,19 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
 
     mine = max(zone_plans, key=lambda p: sum(any(q["citizen_id"] == c["id"] for q in p["players"]) for c in cits),
                default=None) if zone_plans else None
+    plan_info: dict = {}
+    camp_level_given = camp_level >= 0
     camp_level = resolve_camp_level(data, coords=coords, z=z, night=night, camp_level=camp_level,
-                                    zone_plans=zone_plans, mine=mine,
-                                    assumed=assumed, town_id=town_id, can_record=False)   # read-only: nothing recorded
+                                    zone_plans=zone_plans, mine=mine, assumed=assumed, town_id=town_id,
+                                    can_record=False, info=plan_info)   # read-only: nothing recorded
+    plan_up = plan_info.get("plan")
     km_ = km(*cell)
-    panda, lighthouse = is_panda(meta), lighthouse_built(data)
-    devastated = bool(meta.get("devastated"))
+    ctx = {"panda": is_panda(meta), "lighthouse": lighthouse_built(data),
+           "devastated": bool(meta.get("devastated")), "km": km_}
     log = camplog.load_log(town_id) if town_id is not None else {}
 
     # --- per camper values: override > plan of the night > earlier plan > log > job > none ----
-    campers, infos = [], []
+    infos = []
     for idx, (ov, cit) in enumerate(zip(overrides, cits)):
         entry, src = None, ""
         for p in zone_plans:
@@ -579,24 +786,24 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
         tamer = bool(ov.get("tamer")) or cit["job"] == "Tamer"
         if skill == "none" and entry is None and "skill" not in ov:
             assumed.append(f"{cit['name']}: hero skill unknown, taken as none (give R1-R4 / pro if they have one)")
-        terms = camping_terms(nights=nights, skill=skill, panda=panda, tomb=tomb, level=0, ruin=None,
-                              hidden_before=0, lighthouse=lighthouse, camp_items=0, zombies=zombies, vest=vest,
-                              night=True, distance=km_, devastated=devastated)
-        base = sum(terms.values()) - terms["campers"] - terms["zoneBuilding"]
-        cap = round(odds_cap(job, skill) * 100)
-        campers.append(Camper(cit["name"], base, cap, tomb, tamer, carried, hint))
         shown_job = f"{job}, declared Tamer" if tamer and job != "Tamer" else job
-        infos.append({"job": shown_job, "skill": skill, "nights": nights, "tomb": tomb, "vest": vest, "tamer": tamer})
+        infos.append({"name": cit["name"], "job": job, "shown_job": shown_job, "skill": skill, "nights": nights,
+                      "tomb": tomb, "vest": vest, "tamer": tamer, "carried": carried, "hint": hint})
 
-    # --- resources -------------------------------------------------------------------
+    # --- resources (finite pools shrink from night to night) -----------------------------
     floor_ok = bool(z) and not future and z.get("seen_today", False)
     floor_items = sum(_zone_item_count(z, u) for u in ITEM_UIDS) if floor_ok else 0
     floor_steaks = _zone_item_count(z, STEAK_UID) if floor_ok else 0
-    carried_total = sum(c.carried for c in campers)
-    pool = carried_total + camp_items + floor_items
+    floor_def = sum(i.get("count", 0) for i in (z or {}).get("items", [])
+                    if floor_ok and i.get("name") in INSTALLABLE and not i.get("broken"))
+    pool = sum(i["carried"] for i in infos) + camp_items + floor_items
     if floor_items:
         assumed.append(f"{floor_items} Groundsheet / Festering Flesh lie on the zone's floor (Fata items "
                        "of today): counted as available, someone must pick them up")
+    if floor_def:
+        defense_items += floor_def
+        assumed.append(f"{plural(floor_def, 'defensive item')} lie on the zone's floor (Fata items of today): added "
+                       "to the defensive items available, someone must pick them up")
     steaks_given = steaks >= 0
     has_tamer = any(i["tamer"] for i in infos)
     if steaks < 0:
@@ -604,130 +811,218 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
         if steaks:
             assumed.append(f"{plural(steaks, 'steak')} on the zone's floor (Fata items of today): counted, someone "
                            "must pick them up")
-    n_tamers = sum(1 for c, i in zip(campers, infos) if i["tamer"] and not c.tomb)
-    for c, i in zip(campers, infos):
-        c.tamer = i["tamer"]
+    n_tamers = sum(1 for i in infos if i["tamer"] and not i["tomb"])
     if n_tamers:
         assumed.append("Tamer's dog: assumed not used yet today; the dog digs the Tamer's grave for free"
                        + (f", or with a steak also improves the zone +5 ({plural(steaks, 'steak')} available)"
-                          if steaks else ""))
+                          if steaks else "") + (", once a night" if last > first else ""))
     elif steaks and steaks_given:
         assumed.append(f"{plural(steaks, 'steak')}: no Tamer in the group, unused")
     ap_arg = None if ap < 0 else ap
+    n = len(infos)
+    defense_start, steaks_start = defense_items, steaks
 
-    sol = solve(campers, level=camp_level, ruin=ruin, hidden_before=hidden_before, ap=ap_arg,
-                defense_items=defense_items, pool=pool, steaks=steaks, slots=slots, objective=objective)
-    pos = position_terms(len(campers), ruin, hidden_before)
+    # --- the chain: one solve per night, each starting from the night before ---------------
+    nights: list[NightPlan] = []
+    defense_left, steaks_left = defense_items, steaks
+    zombie_notes: list[str] = []
+    for k in range(last - first + 1):
+        tgt = first + k
+        start, up = camp_level, plan_up
+        if k > 0:
+            chain = max(0, nights[-1].sol.level - NIGHTLY_DROP)
+            zp = plans_for_zone(data, coords, tgt)
+            typed = typed_plan(zp, max(zp, key=lambda p: sum(any(q["citizen_id"] == c["id"] for q in p["players"])
+                                                              for c in cits), default=None))
+            start, up = chain, None
+            if typed:
+                up = fata_plan_upgrades(typed)
+                start = up["after"] if up else typed["level_before"]
+                if typed["level_before"] != chain:
+                    assumed.append(f"Fata plan for day {tgt} types +{typed['level_before']}%; the chain from night "
+                                   f"{tgt - 1} gives +{chain}%: the plan's number is used")
+                ids = {q["citizen_id"] for p in zp for q in p["players"] if q["citizen_id"] in alive}
+                if ids != {c["id"] for c in cits}:
+                    assumed.append(f"the Fata plan for day {tgt} has other campers: the first night's group is kept")
+        np_ = _plan_night(data, cell, tgt, k, infos=infos, ctx=ctx, start=start, plan_up=up, ruin=ruin,
+                          hidden_before=hidden_before, ap=ap_arg, defense_items=defense_left, pool=pool,
+                          steaks=steaks_left, slots=slots, objective=objective)
+        if np_.zombie_note not in zombie_notes:
+            zombie_notes.append(np_.zombie_note)
+        if np_.sol is None:
+            nights.append(np_)
+            break
+        nights.append(np_)
+        defense_left -= np_.sol.installs
+        steaks_left -= np_.sol.boosts
+        for inf, got in zip(infos, np_.sol.items):   # camp items stay in the rucksack for the next night
+            inf["carried"] = got
 
-    # --- output ----------------------------------------------------------------------
-    n = len(campers)
-    lines = [header("Group camping", meta)]
-    lines.append(f"Night of day {target} ({ref})" + (": a projection from today's data." if future else "."))
+    multi = len(nights) > 1 or last > first
+    near = nearby_installable(data, cell)
+    nearby = []
+    if near:
+        trip = 2 * near[0][0] + 1
+        nearby = nearby_defense_lines(data, cell, _spare_nights(nights, n, trip), n, multi=multi)
     where = coords + (f", {ruin_label(ruin)}" if ruin else "")
     slots_txt = ""
     if ruin and ruin.get("camp_slots") is not None and ruin["camp_slots"] >= 0:
         slots_txt = f" ({plural(ruin['camp_slots'], 'place')})"
-    lines.append(f"Zone {where}{slots_txt}, {km_} km. Camp bonus now +{camp_level}%. "
-                 f"{plural(zombies, 'zombie')}" + (" (today)" if not future else "") + ".")
-    if sol is None:
-        lines.append("No feasible plan: the AP given do not allow the zone level or the graves needed.")
-        return "\n".join(lines)
-    pieces = []
-    if sol.improves:
-        pieces.append(f"{sol.improves}× improve ({sol.improves} AP)")
-    if sol.installs:
-        pieces.append(f"{sol.installs}× install ({sol.installs} AP + {plural(sol.installs, 'defensive item')})")
-    if sol.boosts:
-        pieces.append(f"{sol.boosts}× steak-fed dog (+5%, {plural(sol.boosts, 'steak')}, 0 AP)")
-    plan = ", ".join(pieces) if pieces else "no upgrade"
-    graves = []
-    if sol.paid:
-        graves.append(f"{plural(sol.paid, 'grave')} dug at 1 AP each")
-    if sum(1 for g in sol.grave if g == "dog"):
-        graves.append(f"{plural(sum(1 for g in sol.grave if g == 'dog'), 'grave')} dug by the Tamer's dog (0 AP)")
-    if sol.boosts:
-        graves.append(f"{plural(sol.boosts, 'grave')} dug by a steak-fed dog")
-    gtxt = ", ".join(graves) if graves else "no grave to dig"
-    lvl = f"camp bonus +{camp_level}% -> +{sol.level}%" if sol.level != camp_level else f"camp bonus stays +{camp_level}%"
-    ap_txt = f"AP used {sol.ap} of {ap}" if ap_arg is not None else f"{sol.ap} AP needed"
-    allcap = all(o >= c.cap for o, c in zip(sol.odds, campers))
-    lines.append("")
-    lines.append(f"Plan: {plan}; {gtxt}; {lvl}; {ap_txt}."
-                 + (" Everyone at their cap." if allcap else " Not everyone can reach the cap with these resources."))
-    matters = n > 1 and order_matters(campers, sol, pos, sol.level)
-    lines.append("Hiding order (after the upgrades, after 19:00):" if matters else
-                 "Hiding order: any order (nobody's odds change), after the upgrades and after 19:00:")
-    moved = []
-    for p, k in enumerate(sol.order):
-        c, inf = campers[k], infos[k]
-        desc = [inf["job"]]
-        if inf["skill"] != "none":
-            desc.append(skill_label(inf["skill"]))
-        desc.append(plural(inf["nights"], "night"))
-        g = sol.grave[k]
-        desc.append({"dug": "grave already dug", "paid": "digs a grave (1 AP)", "dog": "grave by the dog",
-                     "boost": "grave by the dog + steak", "": ""}[g])
-        if sol.items[k]:
-            desc.append(plural(sol.items[k], "camp item"))
-        desc = [d for d in desc if d]
-        extra = []
-        if pos[p] < 0 and sol.odds[k] >= c.cap:
-            extra.append(f"{pos[p]:+d} crowd/ruin absorbed")
-        elif pos[p]:
-            extra.append(f"{pos[p]:+d} crowd/ruin")
-        cap_txt = f"cap {c.cap}" + ("".join(", " + e for e in extra))
-        prefix = f"  {_ord(p)} " if matters else "  - "
-        lines.append(f"{prefix}{c.name} ({', '.join(desc)})  {sol.odds[k]}% ({cap_txt})")
-        if sol.items[k] != c.carried:
-            moved.append((k, sol.items[k] - c.carried))
-    lines.append(f"Expected survivors {sol.total / 100:.2f} / {n}." + ("" if objective == "expected" else
-                                                                      f" Lowest {min(sol.odds)}%."))
-    if moved:
-        gives = [[campers[k].name, -d] for k, d in moved if d < 0]
-        takes = [[campers[k].name, d] for k, d in moved if d > 0]
-        steps = []
-        for t in takes:
-            for g in gives:
-                n_ = min(t[1], g[1])
-                if n_:
-                    steps.append(f"{g[0]} gives {plural(n_, 'camp item')} to {t[0]}")
-                    t[1] -= n_
-                    g[1] -= n_
-            if t[1]:
-                src = " / ".join(x for x in ((f"the {camp_items} extra" if camp_items else ""),
-                                              ("the zone's floor" if floor_items else "")) if x) or "the pool"
-                steps.append(f"{t[0]} takes {plural(t[1], 'camp item')} from {src}")
-        for g in gives:
-            if g[1]:
-                steps.append(f"{g[0]} leaves {plural(g[1], 'camp item')} unused")
-        lines.append("Camp items: " + "; ".join(steps) + ".")
-    # --- carry-over: AP beyond the plan --------------------------------------------------
-    if ap_arg is not None and ap_arg > sol.ap:
-        spare = ap_arg - sol.ap
-        best = None
-        for i in range(spare + 1):
-            for j in range(min(defense_items - sol.installs, spare - i) + 1):
-                ti, tj = sol.improves + i, sol.installs + j
-                if not level_ok(camp_level, ti + sol.boosts, tj):
-                    continue
-                tot = camp_level + IMPROVE_LEVEL * (ti + sol.boosts) + INSTALL_LEVEL * tj
-                k = (-tot, i + j, j)
-                if best is None or k < best[0]:
-                    best = (k, i, j, tot)
-        if best:
-            _, i, j, tot = best
-            keep = lambda lv: max(0, lv - NIGHTLY_DROP)
-            if keep(tot) > keep(sol.level):
-                ex = ", ".join(([f"{i}× improve"] if i else []) + ([f"{j}× install"] if j else []))
-                nxt = "the next night" if future else "tomorrow"
-                lines.append(f"Optional, for later nights only (no effect on these odds): {ex} ({i + j} AP) -> "
-                             f"+{tot}% that night, +{keep(tot)}% left {nxt} (only the bonus above +{NIGHTLY_DROP}% "
-                             f"survives the night; now +{keep(sol.level)}% would be left).")
+
+    # --- output ----------------------------------------------------------------------
+    lines = [header("Group camping", meta)]
+    if not multi:
+        np_ = nights[0]
+        sol = np_.sol
+        lines.append(f"Night of day {target} ({ref})" + (": a projection from today's data." if future else "."))
+        bonus = (f"Camp bonus +{camp_level}% with the Fata plan's upgrades (+{plan_up['before']}% before them)"
+                 if plan_up else f"Camp bonus now +{camp_level}%")
+        lines.append(f"Zone {where}{slots_txt}, {km_} km. {bonus}. "
+                     f"{plural(np_.zombies, 'zombie')}" + (" (today)" if not future else "") + ".")
+        if plan_up:
+            lines.append(plan_upgrade_text(plan_up, future) + ".")
+        if sol is None:
+            lines.append("No feasible plan: the AP given do not allow the zone level or the graves needed.")
+            return "\n".join(lines + nearby)
+        plan, gtxt = _plan_pieces(sol)
+        lvl = f"camp bonus +{camp_level}% -> +{sol.level}%" if sol.level != camp_level else f"camp bonus stays +{camp_level}%"
+        if ap_arg is not None:
+            ap_txt = f"AP used {sol.ap + (np_.plan_ap if future else 0)} of {ap}"
+        else:
+            ap_txt = f"{sol.ap} AP needed"
+        if plan_up and future:
+            ap_txt += f" ({np_.plan_ap} of them the Fata plan's upgrades)"
+        elif plan_up:
+            ap_txt += f" (+{np_.plan_ap} AP if the Fata plan's upgrades are not done yet)"
+        allcap = all(o >= c.cap for o, c in zip(sol.odds, np_.campers))
+        lines.append("")
+        lines.append(f"Plan: {plan}; {gtxt}; {lvl}; {ap_txt}."
+                     + (" Everyone at their cap." if allcap else " Not everyone can reach the cap with these resources."))
+        matters = n > 1 and order_matters(np_.campers, sol, np_.pos, sol.level)
+        lines.append("Hiding order (after the upgrades, after 19:00):" if matters else
+                     "Hiding order: any order (nobody's odds change), after the upgrades and after 19:00:")
+        for p, k in enumerate(sol.order):
+            c, inf = np_.campers[k], np_.infos[k]
+            desc = [inf["shown_job"]]
+            if inf["skill"] != "none":
+                desc.append(skill_label(inf["skill"]))
+            desc.append(plural(inf["nights"], "night"))
+            desc.append({"dug": "grave already dug", "paid": "digs a grave (1 AP)", "dog": "grave by the dog",
+                         "boost": "grave by the dog + steak", "": ""}[sol.grave[k]])
+            if sol.items[k]:
+                desc.append(plural(sol.items[k], "camp item"))
+            desc = [d for d in desc if d]
+            extra = []
+            if np_.pos[p] < 0 and sol.odds[k] >= c.cap:
+                extra.append(f"{np_.pos[p]:+d} crowd/ruin absorbed")
+            elif np_.pos[p]:
+                extra.append(f"{np_.pos[p]:+d} crowd/ruin")
+            cap_txt = f"cap {c.cap}" + ("".join(", " + e for e in extra))
+            prefix = f"  {_ord(p)} " if matters else "  - "
+            lines.append(f"{prefix}{c.name} ({', '.join(desc)})  {sol.odds[k]}% ({cap_txt})")
+        lines.append(f"Expected survivors {sol.total / 100:.2f} / {n}." + ("" if objective == "expected" else
+                                                                          f" Lowest {min(sol.odds)}%."))
+        steps = _camp_item_steps(np_.campers, sol, camp_items, floor_items)
+        if steps:
+            lines.append(steps)
+        # --- carry-over: AP beyond the plan ---------------------------------------------
+        if ap_arg is not None and ap_arg > sol.ap:
+            spare = ap_arg - sol.ap
+            best = None
+            for i in range(spare + 1):
+                for j in range(min(defense_items - sol.installs, spare - i) + 1):
+                    ti, tj = sol.improves + i, sol.installs + j
+                    if not level_ok(camp_level, ti + sol.boosts, tj):
+                        continue
+                    tot = camp_level + IMPROVE_LEVEL * (ti + sol.boosts) + INSTALL_LEVEL * tj
+                    k = (-tot, i + j, j)
+                    if best is None or k < best[0]:
+                        best = (k, i, j, tot)
+            if best:
+                _, i, j, tot = best
+                keep = lambda lv: max(0, lv - NIGHTLY_DROP)
+                if keep(tot) > keep(sol.level):
+                    ex = ", ".join(([f"{i}× improve"] if i else []) + ([f"{j}× install"] if j else []))
+                    nxt = "the next night" if future else "tomorrow"
+                    lines.append(f"Optional, for later nights only (no effect on these odds): {ex} ({i + j} AP) -> "
+                                 f"+{tot}% that night, +{keep(tot)}% left {nxt} (only the bonus above +{NIGHTLY_DROP}% "
+                                 f"survives the night; now +{keep(sol.level)}% would be left).")
+        if nearby:
+            lines.append("")
+            lines += nearby
+        zlines = [f"- Zombies: {np_.zombie_note}."]
+    else:
+        names_txt = " and ".join([", ".join(i["name"] for i in infos[:-1]), infos[-1]["name"]]) if n > 1 else infos[0]["name"]
+        lines.append(f"Nights {first}-{nights[-1].target}, {names_txt} at {where}{slots_txt}, {km_} km. Each night "
+                     f"starts from the previous night's plan (-{NIGHTLY_DROP}% overnight); nights after "
+                     f"{'tonight' if not future else 'the first'} are projections.")
+        lines.append("")
+        for k, np_ in enumerate(nights):
+            sol = np_.sol
+            head = f"Night {np_.target} ({np_.night['ref'] if np_.night['ref'] in ('tonight', 'tomorrow night') else f'in {np_.target - day} days'}):"
+            if sol is None:
+                lines.append(f"{head} no feasible plan (the AP given do not allow the zone level or the graves "
+                             "needed); the chain stops here.")
+                break
+            if np_.plan_up:
+                up = np_.plan_up
+                if k == 0:
+                    src = (f"+{up['before']}% now, then {up['creator']}'s Fata plan upgrades for +{up['pct']}% -> "
+                           f"+{up['after']}%" + (": check in game whether done; if not, "
+                                                 f"{up['improves']} AP first" if not future else
+                                                 " counted as done"))
+                else:
+                    src = (f"+{up['before']}% typed in {up['creator']}'s Fata plan, its upgrades for +{up['pct']}% "
+                           f"-> +{up['after']}% counted as done")
+                starts = f"starts {src}."
+            else:
+                starts = f"starts +{np_.start}%" + (" (camp bonus given)." if k == 0 and camp_level_given else ".")
+            plan, gtxt = _plan_pieces(sol)
+            acts = []
+            if sol.improves or sol.installs or sol.boosts:
+                acts.append(plan + f" -> +{sol.level}%")
+            if sol.paid or sol.boosts or any(g == "dog" for g in sol.grave):
+                acts.append(gtxt)
+            act = "; ".join(acts) if acts else "Nothing more needed."
+            matters = n > 1 and order_matters(np_.campers, sol, np_.pos, sol.level)
+            odds = []
+            for p, kk in enumerate(sol.order):
+                c = np_.campers[kk]
+                tag = {"dug": "grave dug", "paid": "grave 1 AP", "dog": "grave by the dog",
+                       "boost": "grave by the dog + steak", "": ""}[sol.grave[kk]]
+                if sol.items[kk]:
+                    tag += (", " if tag else "") + plural(sol.items[kk], "camp item")
+                odds.append((f"{_ord(p)} " if matters else "") + f"{c.name} {sol.odds[kk]}%"
+                            + (" (cap)" if sol.odds[kk] >= c.cap else f" (cap {c.cap})") + (f" [{tag}]" if tag else ""))
+            lines.append(f"{head} {starts} {act}")
+            lines.append(f"  {'Hide in this order' if matters else 'Any order'}: {', '.join(odds)}. "
+                         f"Survivors {sol.total / 100:.2f}/{n}. Zombies {np_.zombies}.")
+            steps = _camp_item_steps(np_.campers, sol, camp_items, floor_items)
+            if steps:
+                lines.append("  " + steps)
+            warn = _ap_warning(np_, nights[k - 1] if k else None, n)
+            if warn:
+                lines.append("  WARNING " + warn)
+        aps = []
+        for np_ in nights:
+            if np_.sol is None:
+                break
+            aps.append(f"{np_.ap_total}" + (f" (+{np_.plan_ap} if not done)" if np_.plan_ap and not np_.future else ""))
+        lines.append(f"AP per night: {' / '.join(aps)}; the group has {BASE_AP * n} a day ({BASE_AP} each).")
+        used_def = sum(np_.sol.installs for np_ in nights if np_.sol)
+        used_st = sum(np_.sol.boosts for np_ in nights if np_.sol)
+        lines.append(f"Items: defensive {used_def} used ({defense_start} available at the start)"
+                     + (f"; steaks {used_st} used ({steaks_start} available)" if steaks_start or used_st else "") + ".")
+        if nearby:
+            lines += nearby
+        zlines = [f"- Zombies: {nt}." for nt in zombie_notes]
+        assumed.append("Survival: every camper is assumed to survive each night (one more camping night each "
+                       "night after the first). Graves last one night: dug again when needed.")
     # --- assumptions ---------------------------------------------------------------------
     lines.append("")
     lines.append("Assumptions:")
-    lines.append(f"- Zombies: {zombie_note}.")
-    lines += [f"- {a}" for a in assumed]
+    lines += zlines
+    lines += [f"- {a}" for a in dict.fromkeys(assumed)]
     if hidden_before:
         lines.append(f"- {plural(hidden_before, 'citizen')} outside the group already hidden on the zone: counted.")
     lines.append(f"- Objective: {'most expected survivors (sum of the odds), then the best lowest odds' if objective == 'expected' else 'best lowest odds, then the most expected survivors'}; "

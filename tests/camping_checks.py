@@ -264,7 +264,8 @@ assert n_checked == 9
 out = format_camping_odds(res, x=7, y=13, citizen="Ann", town_id=None)
 assert "MISMATCH" not in out and "Fata plan tonight on [7|13], Warehouse (by Dan)" in out
 assert "hero skill Reclusive 1: from Dan's Fata plan" in out and "camping nights survived: 6, from Dan's Fata plan" in out
-assert "camp bonus +43%: Fata estimate" in out and "hero skill Reclusive 1" in out
+assert "camp bonus +56%: the level after the upgrades of Dan's Fata plan (the plan starts from +42%)" in out
+assert "Fata's zone estimate (+43%) differs from the plan's existing bonus (+42%)" in out and "hero skill Reclusive 1" in out
 RAW["town_camping"][0]["camping_plan"]["players"][3]["effective_chances"] = 58
 assert "MISMATCH Dan" in format_camping_odds(build_result(1, RAW), x=7, y=13, town_id=None)
 RAW["town_camping"][0]["camping_plan"]["players"][3]["effective_chances"] = 59
@@ -280,7 +281,8 @@ assert old["camp_plans"] == [] and "Fata plan" not in format_camping_odds(old, x
 # --- day parameter: projection for a later night ---
 tom = format_camping_odds(res, x=8, y=13, citizen="Eve", day_arg=27, town_id=None)
 assert "Night of day 27 (tomorrow): a projection from today's data." in tom, tom
-assert "Fata plan tomorrow night on [8|13]" in tom and "camp bonus +0%: the existing bonus typed in Ann's Fata plan for day 27" in tom
+assert "Fata plan tomorrow night on [8|13]" in tom and "camp bonus +5%: the level after the upgrades of Ann's Fata plan (the plan starts from +0%)" in tom
+assert "Planned in Ann's Fata plan for day 27: upgrades for +5% (+0% -> +5%), counted as done (1 improve = 1 AP)" in tom
 assert ("still none tomorrow" in tom or "can spread in at night" in tom or "+1 a night" in tom
         or "probably higher" in tom), tom
 # zombie projection (MapMaker::spreadCycleMH): growth +1 a night, spread only from neighbours
@@ -594,5 +596,102 @@ assert format_group_camping(res, x=0, y=0, group="Ann", town_id=None).startswith
 assert "a projection from today's data" in format_group_camping(res, x=7, y=13, day_arg=27, town_id=None)
 w = format_group_camping(res, x=8, y=13, group="Eve:R4:surv", ap=0, town_id=None)
 assert "Survivalist" in w and "cap 100" in w and "AP used 0 of 0" in w, w
+
+# --- multi-night chain, Fata plan upgrades, nearby defensive items (docs/camping-multinight-plan.md) ---
+import copy, re   # noqa: E402
+from types import SimpleNamespace   # noqa: E402
+from myhordes_mcp.fata.groupcamp import (   # noqa: E402
+    MAX_NIGHTS, Camper as _Camper, _absorbable, _ap_warning, _make_camper, nearby_defense_lines,
+)
+from myhordes_mcp.fata.camping import fata_plan_upgrades, typed_plan   # noqa: E402
+
+# the 2026-11-20 case: Fata plan 7.6 pre-existing + 3 new units of 5% (+38% -> +53%), estimate 38
+RAW2 = copy.deepcopy(RAW)
+RAW2["town_maps"].append({"x": 21, "y": 0, "camping_upgrade": 7.6, "zone_update": {"day": 26}})
+RAW2["town_camping"].append(fplan(21, 0, 26, 0, 7.6, 3.0, 12, [
+    fplayer(1, "Eve", "book", "R2", 2, False, 0, False, 50, 50), fplayer(2, "Fay", "vest", "R2", 2, True, 0, False, 50, 50)],
+    creator=105))
+res2 = build_result(1, RAW2)
+up = fata_plan_upgrades(typed_plan(plans_for_zone(res2, "[9|13]"), None))
+assert (up["before"], up["after"], up["pct"], up["improves"], up["creator"]) == (38, 53, 15, 3, "Eve"), up
+assert fata_plan_upgrades(None) is None and fata_plan_upgrades({"level_before": 5, "level_after": 5, "creator": "x", "target_day": 1}) is None
+# A tonight, single night: start = level_after, the plan line is printed, 3 AP "if not done"
+one = format_group_camping(res2, x=9, y=13, town_id=None)
+assert "Camp bonus +53% with the Fata plan's upgrades (+38% before them)" in one, one
+assert "Fata plan (Eve): upgrades for +15% (+38% -> +53%). Not a game reading: check in game whether they are done" in one
+assert "(+3 AP if the Fata plan's upgrades are not done yet)" in one
+# camp_level given wins: the plan's upgrades are not added, no plan line
+given = format_group_camping(res2, x=9, y=13, camp_level=38, town_id=None)
+assert "Camp bonus now +38%" in given and "Fata plan (Eve)" not in given, given
+# get_camping_odds uses the same helper
+assert "Fata plan (Eve): upgrades for +15%" in format_camping_odds(res2, x=9, y=13, citizen="Eve", town_id=None)
+# chain: each night starts from the previous night's level after ALL its upgrades, -15
+chain = format_group_camping(res2, x=9, y=13, until_day=29, town_id=None)
+assert "Nights 26-29, Eve and Fay at [9|13]" in chain and "starts +38% now, then Eve's Fata plan upgrades for +15% -> +53%" in chain, chain
+nl = [l for l in chain.splitlines() if l.startswith("Night ")]
+assert len(nl) == 4
+level = 53   # after night 26 (plan upgrades counted, solver adds nothing)
+for l in nl[1:]:
+    st = int(re.search(r"starts \+(\d+)%", l).group(1))
+    assert st == level - 15, (l, level)
+    m_ = re.search(r"-> \+(\d+)%", l)
+    level = int(m_.group(1)) if m_ else st
+assert "AP per night: 5 (+3 if not done) / 5 / 5 / 5; the group has 12 a day (6 each)." in chain, chain
+# until_day == day is a single night (old layout); errors
+assert format_group_camping(res2, x=9, y=13, until_day=26, town_id=None) == one
+assert format_group_camping(res2, x=9, y=13, until_day=25, town_id=None).startswith("Error: until_day 25 is before the first night (day 26)")
+assert format_group_camping(res2, x=9, y=13, until_day=26 + MAX_NIGHTS, town_id=None).startswith(f"Error: {MAX_NIGHTS + 1} nights asked")
+assert "Nights 26-31" in format_group_camping(res2, x=9, y=13, until_day=25 + MAX_NIGHTS, town_id=None)
+# a real Fata plan for a later night on the zone wins over the chain (and is said)
+RAW3 = copy.deepcopy(RAW2)
+RAW3["town_camping"].append(fplan(21, 0, 27, 0, 4, 0, 12, [fplayer(1, "Eve", "book", "R2", 3, False, 0, False, 50, 50)]))
+c3 = format_group_camping(build_result(1, RAW3), x=9, y=13, until_day=27, town_id=None)
+assert "Fata plan for day 27 types +20%; the chain from night 26 gives +38%: the plan's number is used" in c3, c3
+assert "the Fata plan for day 27 has other campers: the first night's group is kept" in c3
+# finite pools: 2 defensive items, ap 1 a night -> an install each of the first two nights only
+pools = format_group_camping(res2, x=9, y=13, camp_level=0, ap=1, defense_items=2, group="Eve:n1:R2", until_day=28, town_id=None)
+assert pools.count("1× install (1 AP + 1 defensive item)") == 2 and "Items: defensive 2 used (2 available at the start)." in pools, pools
+night28 = next(l for l in pools.splitlines() if l.startswith("Night 28"))
+assert "install" not in night28, night28
+# steaks: one steak-fed dog use in the first night only
+st = format_group_camping(res2, x=9, y=13, camp_level=0, steaks=1, ap=2, group="Bob:n1:R2", until_day=28, town_id=None)
+assert st.count("steak-fed dog (+5%") == 1 and "steaks 1 used (1 available)" in st, st
+# AP warning: night over the group's 6
+w = format_group_camping(res2, x=9, y=13, camp_level=0, group="Eve:n0:R2", until_day=27, town_id=None)
+assert "WARNING Night 26 needs 11 AP, more than the 6 the group has (6 each): drink/eat for AP." in w, w
+# nN gets + k, a grave never carries (k > 0): _make_camper
+inf = {"name": "X", "job": "Resident", "skill": "reclusive2", "nights": 2, "tomb": True, "vest": False,
+       "tamer": False, "carried": 0, "hint": 0}
+ctx_ = {"panda": False, "lighthouse": False, "devastated": False, "km": 10}
+c0, c1 = _make_camper(inf, 0, ctx_, 0), _make_camper(inf, 1, ctx_, 0)
+assert c0.tomb and not c1.tomb
+assert c1.base == _make_camper({**inf, "nights": 3, "tomb": False}, 0, ctx_, 0).base
+assert c0.base - c1.base == (8 + (prev(nights=2, skill="reclusive2", panda=False) - prev(nights=3, skill="reclusive2", panda=False))), (c0, c1)
+# the AP warning names how many improves the night before could take over
+_sol = lambda lvl, ap_, imp: SimpleNamespace(level=lvl, ap=ap_, improves=imp)
+_n = lambda t, sol, fut=False: SimpleNamespace(target=t, sol=sol, plan_ap=0, future=fut, ap_total=sol.ap)
+assert _absorbable(40) == 2 and _absorbable(50) == 0 and _absorbable(44) == 2 and _absorbable(0) == 10
+wtxt = _ap_warning(_n(28, _sol(30, 9, 9)), _n(27, _sol(30, 2, 2)), 1)
+assert "Night 28 needs 9 AP, more than the 6 the group has (6 each)" in wtxt and "do 3 of these improves the night before (night 27;" in wtxt, wtxt
+assert _ap_warning(_n(28, _sol(30, 6, 6)), None, 1) == ""
+# nearby defensive items: distance, round trip, nearest first, 3 shown + "more", tiers, hint, pointer
+def zn(x, y, *names, day=26):
+    return {"coords": f"[{x}|{y}]", "x": x, "y": y, "updated_day": day, "zombies": 0, "seen_today": True,
+            "items": [{"name": n, "count": 1, "category": "Armor", "heavy": True} for n in names]}
+nd = {"meta": {"day": 26}, "zones": [zn(5, 5, "Old Door"), zn(4, 5, "Trestle"), zn(5, 7, "Mattress"), zn(8, 5, "Old Door"),
+                                      zn(20, 20, "Old Door"), zn(7, 7), zn(0, 0, "Old Door")]}
+nb = nearby_defense_lines(nd, (5, 6), [26, 27], 3, multi=True)
+body = [l for l in nb if l.startswith("  [")]
+assert [l.split()[0] for l in body] == ["[5|5]", "[5|7]", "[4|5]"], body
+assert "[5|5] 1 away, 2 AP round trip: Old Door (heavy, defense)" in body[0] and "[4|5] 2 away, 4 AP" in body[2]
+assert any("+1 more zone at 4-4 away" in l for l in nb) and any(l.startswith("  Heavy items: one per camper") for l in nb)
+assert any("d <= 3 with the day's 6 AP; d <= 6" in l for l in nb)
+assert "Good nights to fetch (AP to spare for the nearest round trip + 1): 26, 27. With 3 campers, one can fetch while the others upgrade." in nb
+assert nb[-1].startswith("For an exact route: find_expedition_path / plan_expedition_supplies with start = the camp (x,y)")
+assert nearby_defense_lines(nd, (5, 6), [], 2)[-2].startswith("  +1 more zone") and not any("fetch" in l for l in nearby_defense_lines(nd, (5, 6), [], 2))
+assert nearby_defense_lines({"meta": {"day": 26}, "zones": [zn(20, 20, "Old Door")]}, (5, 6)) == []   # beyond 12 moves
+# only what a camper can install: no pets, no assembly parts
+assert nearby_defense_lines({"meta": {"day": 26}, "zones": [zn(5, 5, "Mangy Dachshund", "Bag of Cement", "Flatpacked Furniture")]}, (5, 6)) == []
+assert not any("[5|6]" in l for l in nb)   # the camp zone itself is the pool, not the block
 
 print("camping checks: ok")

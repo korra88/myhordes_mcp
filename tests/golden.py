@@ -303,6 +303,22 @@ CASES += [
      {"town_id": V13[0][1], "x": 10, "y": -8, "ap": 4, "defense_items": 1}, {"fixture": "v13"}),
     ("v13_group_err_zones", "plan_group_camping", {"town_id": V13[0][1]}, {"fixture": "v13"}),
 ]
+# Multi-night chain (docs/camping-multinight-plan.md): three campers with finite defensive items and
+# nearby items, the five-camper plan zone (Fata plan upgrades counted, AP per night), the errors.
+CASES += [
+    ("v13_group_multinight", "plan_group_camping",
+     {"town_id": V13[0][1], "x": 14, "y": 13, "day": 26, "until_day": 29, "camp_level": 0, "ap": 6, "defense_items": 2,
+      "group": f"Korra:R2:n2, {_G3}"}, {"fixture": "v13"}),
+    ("v13_group_multinight_plan_zone", "plan_group_camping",
+     {"town_id": V13[0][1], "x": 10, "y": -8, "day": 26, "until_day": 28, "ap": 6}, {"fixture": "v13"}),
+    ("v13_group_multinight_unlimited_ap", "plan_group_camping",
+     {"town_id": V13[0][1], "x": 14, "y": 13, "day": 27, "until_day": 31, "camp_level": 0,
+      "group": f"Korra:n4:none, {_v13_name(5325)}:R4:n3, {_v13_name(35153)}:R2:n4"}, {"fixture": "v13"}),
+    ("v13_group_err_until_before", "plan_group_camping",
+     {"town_id": V13[0][1], "x": 14, "y": 13, "day": 27, "until_day": 26}, {"fixture": "v13"}),
+    ("v13_group_err_too_many_nights", "plan_group_camping",
+     {"town_id": V13[0][1], "x": 14, "y": 13, "until_day": 40}, {"fixture": "v13"}),
+]
 # Camping odds (rules verified in the game source: docs/camping-plan.md section 1.2).
 CASES += [
     ("camping_ruin_plan", "get_camping_odds",
