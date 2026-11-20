@@ -1,6 +1,6 @@
 """Group camping planner: who hides in which order, who digs a grave, who carries which camp item.
 
-Plan and rules: docs/group-camping-plan.md. The odds are `camping.camping_terms` (verified in the
+Plan and rules: docs/group-camping-plan.md. The odds are `game.camping_terms` (verified in the
 game source); this module only chooses the decisions:
 
   - the hiding order (crowd malus and the ruin room depend on how many are hidden before);

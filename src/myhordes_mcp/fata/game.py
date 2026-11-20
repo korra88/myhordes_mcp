@@ -6,10 +6,12 @@ the planners and formatters (risk, camping, supplies, pathing, kills ...) import
 Sources: myhordes-docker (v5.0.6) `src/` and docs/source-map.md. Index by topic:
 docs/mechanics-in-code.md.
 
-Sections: zombies · camping · action points and thirst · other.
+Sections: zombies · Beyond (CP, Observation Platform, hero skills, EP) · camping · action points,
+EP and thirst · other (kill weapons, scout detection, wind, heavy items, town size).
 """
 
 import heapq
+import math
 from dataclasses import dataclass
 from typing import NamedTuple
 
@@ -260,7 +262,6 @@ def _unvisited(cell: Cell, day, zmap: dict[Cell, dict], arrival: dict[Cell, Arri
     return Estimate(0, 0, 0, "never visited, surrounded by clear zones", "unknown")
 
 
-
 # Global respawn (MapMaker::aboveMinNumberOfZombies, rules.yml modifiers): at night, after
 # the attack and before zombies spread, if the whole map holds fewer than
 # massive_respawn_threshold × day × massive_respawn_factor zombies (50 × 0.5 = 25 per day;
@@ -291,8 +292,6 @@ def ep_zone(x: int, y: int) -> bool:
 
 CP_PER_CITIZEN = 2  # base, used when the zone has no usable CP reading
 MAX_CP_PER_CITIZEN = 8
-
-
 OBSERVATION_PLATFORM = "Observation platform"
 
 
@@ -619,3 +618,97 @@ def use_second_wind(ap: int, ep: int, max_ap: int, max_ep: int, sw_ap: int, sw_e
     """Second Wind (hero action): (ap, ep, AP wasted). AP up to max (never above), EP even above max."""
     new = max(ap, min(ap + sw_ap, max_ap))
     return new, min(ep + sw_ep, max_ep + sw_ep), sw_ap - (new - ap)
+
+
+# ===========================================================================
+# Other: killing, scouting, wind, hero carrying, town size
+# ===========================================================================
+
+# Kill runs (docs/kill-route-plan.md; the weapons' action effects in ActionDataService)
+
+@dataclass(frozen=True)
+class Weapon:
+    key: str
+    label: str            # Fata name_en, before the " (state)" suffix
+    bucket: str           # pair: 2 kills per use; single: 1 kill per use
+    kind: str             # counted (N charges / shots, Empty), loaded (loaded / empty), plain
+    ready: tuple[float, float] = (0, 0)       # (average, worst) uses of a plain / loaded weapon
+    reload: str | None = None                 # item that refills it: battery | water
+    reload_cap: tuple[float, float] = (0, 0)  # (average, worst) uses per reload item
+    repairable: bool = False
+
+
+WEAPONS = {w.key: w for w in (
+    Weapon("laser", "Burning Laser Pointer", "pair", "counted", reload="battery", reload_cap=(3.25, 2)),
+    Weapon("machete", "Machete", "pair", "plain", ready=(4, 1), repairable=True),
+    Weapon("launcher", "Battery Launcher Mk. II", "single", "loaded", ready=(5, 1),
+           reload="battery", reload_cap=(5, 1)),
+    Weapon("knife", "Serrated Knife", "single", "plain", ready=(3, 1), repairable=True),
+    Weapon("splash", "Aqua-Splash", "single", "counted", reload="water", reload_cap=(5, 5)),
+    Weapon("pistol", "Water Pistol", "single", "counted", reload="water", reload_cap=(3, 3)),
+)}
+
+
+def state_cap(w: Weapon, state: int) -> tuple[float, float]:
+    """(average, worst) uses a weapon in this state gives, before any reload or repair."""
+    if w.kind == "counted":
+        return state, state
+    if state == 0:
+        return 0, 0
+    return w.ready
+
+
+def kill_buckets(n: float) -> tuple[int, int]:
+    """(pairs, singles) for n zombies in one zone (n rounded half up): a 2-kill weapon on a single
+    zombie wastes a kill."""
+    n = int(n + 0.5)
+    return n // 2, n % 2
+
+
+# Scout with Camouflage Vest: detection chance in a zone with zombies above the group's CP.
+
+def scout_detection(zone_zombies: int, total_cp: int) -> tuple[float, float]:
+    """Estimate scout camouflage detection probability (day, night).
+
+    Returns (day_pct, night_pct) as floats in [0.0, 1.0].
+    Assumes scout_level=0 (worst case — actual level unavailable from Fata Morgana).
+    """
+    if zone_zombies <= total_cp:
+        return (0.0, 0.0)
+    zeds_above = zone_zombies - total_cp
+    delta_base = math.floor(zeds_above * 1.3)
+
+    def _calc(night: bool) -> float:
+        d = delta_base
+        if night:
+            d -= 5
+        if d <= 6:
+            d *= 0.5
+        return max(0.0, d) / 100.0
+
+    return (_calc(False), _calc(True))
+
+
+# Wind refill (docs/camping-plan.md 1.2; NightlyHandler.php, BuildingQueryListener.php): each
+# night one sector; zones in it farther than WIND_DISTANCE km regain digs with this chance by
+# Searchtower level (0 = none), x WIND_NOT_DEPLETED if the zone is not depleted.
+WIND_REFILL = {0: 0.25, 1: 0.37, 2: 0.49, 3: 0.61, 4: 0.73, 5: 0.85}
+WIND_DISTANCE = 2
+WIND_NOT_DEPLETED = 0.33
+
+
+def wind_refill_chance(level: int) -> float:
+    """The chance a depleted zone in the wind sector regains digs, by Searchtower level (0-5)."""
+    return WIND_REFILL[max(0, min(5, level))]
+
+
+# A citizen carries one heavy item (a bike or trolley counts); a Guardian with the shield lowered
+# carries two, and the group loses the shield's 2 CP from the moment the 2nd is carried.
+GUARDIAN_CP_LOSS = 2
+
+
+def heavy_cap(guardian: bool) -> int:
+    return 2 if guardian else 1
+
+
+TOWN_SIZE = 40   # citizens a standard town needs before its first attack

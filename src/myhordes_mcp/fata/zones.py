@@ -3,7 +3,7 @@
 from ..utils.fmt import header, heading, plural, ruin_label, updated
 from ..utils.clock import data_updated
 from .bank import summary_lines
-from .game import DANGER_LEVELS, zone_is_today
+from .game import DANGER_LEVELS, WIND_DISTANCE, WIND_NOT_DEPLETED, wind_refill_chance, zone_is_today
 from .geo import fmt_xy, km, moves, xy
 from .risk import (
     _staleness_tag,
@@ -27,14 +27,6 @@ def _by_day(zs: list[dict], fmt) -> list[str]:
             for d in sorted(days, key=lambda d: -(d if d is not None else -1))]
 
 
-# Wind refill (docs/camping-plan.md 1.2; NightlyHandler.php, BuildingQueryListener.php): each
-# night one sector; zones in it farther than WIND_DISTANCE km regain digs with this chance by
-# Searchtower level (0 = none), x WIND_NOT_DEPLETED if the zone is not depleted.
-WIND_REFILL = {0: 0.25, 1: 0.37, 2: 0.49, 3: 0.61, 4: 0.73, 5: 0.85}
-WIND_DISTANCE = 2
-WIND_NOT_DEPLETED = 0.33
-
-
 def _last_wind(data: dict) -> dict | None:
     """Wind of the night that led into the data's day (None = no entry)."""
     day = data["meta"].get("day")
@@ -42,7 +34,7 @@ def _last_wind(data: dict) -> dict | None:
 
 
 def _wind_chance(wind: dict) -> int:
-    return round(100 * WIND_REFILL[max(0, min(5, wind["level"]))])
+    return round(100 * wind_refill_chance(wind["level"]))
 
 
 def wind_line(data: dict) -> str | None:

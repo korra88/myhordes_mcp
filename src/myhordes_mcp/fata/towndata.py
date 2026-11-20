@@ -89,7 +89,7 @@ Field meanings checked against the game with players in town 8212:
                      r_value "R1".."R4" (= Reclusive level), previous_campings, camouflaged_scout
                      (vest worn), camping_aids (camp items carried), tomb, effective_chances (%,
                      capped, floored at 0), theoretical_chances (%, uncapped sum)}]}}.
-                     Parsed into result["camp_plans"], see _parse_camp_plans. camping.camping_terms
+                     Parsed into result["camp_plans"], see _parse_camp_plans. game.camping_terms
                      reproduces both chance fields for all 60 players of town 8299 day 26
                      (skill = R-value, hidden_before = index in the order, level = round((pre +
                      new) * 5), ruin = the building_data entry, camp_items = camping_aids).
@@ -99,6 +99,7 @@ Field meanings checked against the game with players in town 8212:
 from datetime import datetime
 
 from ..utils.clock import GAME_TZ
+from .game import IMPROVE_LEVEL
 from .geo import fmt_xy
 
 # death_type → cause of death. The game's CauseOfDeath ids (myhordes
@@ -557,12 +558,9 @@ def _parse_routes(routes: list[dict], rel, who) -> list[dict]:
     return out
 
 
-# Camp planner units: improve campsite = 1.0, defensive item = 1.8, percent = units x 5.
-UNIT_PCT = 5
-
-
+# Camp planner units: improve campsite = 1.0, defensive item = 1.8, percent = units x IMPROVE_LEVEL (5).
 def _units_pct(units) -> int:
-    return round(float(units or 0) * UNIT_PCT)
+    return round(float(units or 0) * IMPROVE_LEVEL)
 
 
 def _parse_camp_plans(plans, ruin_types: list[dict], rel, who) -> list[dict]:

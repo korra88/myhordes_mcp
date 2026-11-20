@@ -4,8 +4,8 @@ import heapq
 from dataclasses import dataclass, field
 
 from ..utils.fmt import header, plural, ruin_label
-from .game import (CP_PER_CITIZEN, age_days, pays_ep, platform_level, teleport_range, thirst_counter_at, zombie_arrival,
-                   zone_estimate)
+from .game import (CP_PER_CITIZEN, age_days, pays_ep, platform_level, scout_detection, teleport_range,
+                   thirst_counter_at, zombie_arrival, zone_estimate)
 from .geo import MAX_PATH_AP, NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km, map_bounds, moves, zone_map
 from .risk import _staleness_tag, fmt_items, threat_text
 from .supplies import thirst_state
@@ -38,29 +38,6 @@ def dig_weight(dig: bool) -> float:
     after the first. dig: the player digs on the way, a zone still to dig is worth a move;
     else only a tiebreak among the routes of fewest AP."""
     return WALK["revisit"] if dig else WALK["dried"]
-
-
-def _scout_detection(zone_zombies: int, total_cp: int) -> tuple[float, float]:
-    """Estimate scout camouflage detection probability (day, night).
-
-    Returns (day_pct, night_pct) as floats in [0.0, 1.0].
-    Assumes scout_level=0 (worst case — actual level unavailable from Fata Morgana).
-    """
-    import math
-    if zone_zombies <= total_cp:
-        return (0.0, 0.0)
-    zeds_above = zone_zombies - total_cp
-    delta_base = math.floor(zeds_above * 1.3)
-
-    def _calc(night: bool) -> float:
-        d = delta_base
-        if night:
-            d -= 5
-        if d <= 6:
-            d *= 0.5
-        return max(0.0, d) / 100.0
-
-    return (_calc(False), _calc(True))
 
 
 def _classify_cell(
@@ -128,7 +105,7 @@ def walkability(
     if tag in ("TRAPPED", "TRAP_RISK"):
         w += max(0, zombies - group_cp) * WALK["over_cp"]
         if scout_mode:
-            day_pct, _ = _scout_detection(zombies, group_cp)
+            day_pct, _ = scout_detection(zombies, group_cp)
             return w + max(day_pct, 0.01) * WALK["scout_detection"] * (1.0 if tag == "TRAPPED" else 0.5)
         return w + WALK["trap" if tag == "TRAPPED" else "trap_risk"]
     if zombies > 0 and zombies >= group_cp:
@@ -160,7 +137,7 @@ def _cell_risk(
     c = _classify_cell(zone, current_day, coords, arrival, group_cp)
     if c["tag"] in ("TRAPPED", "TRAP_RISK"):
         if scout_mode:
-            day_pct, _ = _scout_detection(c["zombies"] or 0, group_cp)
+            day_pct, _ = scout_detection(c["zombies"] or 0, group_cp)
             return 1.0 + day_pct * WALK["scout_detection"] * 0.01
         return float("inf")
     return 1.0 + walkability(zone, current_day, coords, arrival, group_cp=group_cp) * 0.001
@@ -605,14 +582,14 @@ def find_safe_path(
         elif tag == "TRAPPED":
             if scout_mode:
                 zm_est = cc.get("zombies") or 0
-                day_pct, night_pct = _scout_detection(zm_est, group_cp)
+                day_pct, night_pct = scout_detection(zm_est, group_cp)
                 tag_str = f" [SCOUT OK: {night_pct:.0%}-{day_pct:.0%}]"
             else:
                 tag_str = " [TRAPPED]"
         elif tag == "TRAP_RISK":
             if scout_mode:
                 zm_est = cc.get("zombies") or 0
-                day_pct, night_pct = _scout_detection(zm_est, group_cp)
+                day_pct, night_pct = scout_detection(zm_est, group_cp)
                 if day_pct > 0:
                     tag_str = f" [SCOUT OK: {night_pct:.0%}-{day_pct:.0%}]"
                 else:

@@ -12,7 +12,7 @@ knowledge/tactics/weapons.md and opti-town-meta.md (Zombie Zoo).
 - A weapon kills min(zombies in the zone, its kills) (ProcessZoneEffect): a 2-kill weapon on
   a zone of 1 wastes the second kill. A zone with n zombies = n // 2 pairs + n % 2 single.
 - Zombie estimates: game.zone_estimate (growth and spread rules live in game.py).
-- Weapons (WEAPONS below): using one costs 0 AP, reloading too (also outside). Burning Laser
+- Weapons (game.WEAPONS): using one costs 0 AP, reloading too (also outside). Burning Laser
   Pointer: 2 kills per charge, a Battery loads 4 (50%), 3 (25%) or 2 (25%) charges
   (load_lpointer). Machete: 2 kills, breaks 25% per use (throw_b_cutcut, g_break_25).
   Battery Launcher Mk. II: 1 kill, always empties, 80% to get the Battery back
@@ -28,11 +28,10 @@ knowledge/tactics/weapons.md and opti-town-meta.md (Zombie Zoo).
 
 import math
 import re
-from dataclasses import dataclass
 
 from .pathing import loop_return
 from .geo import MAX_PATH_AP, NEIGHBOURS8, Cell, fmt_xy, in_bounds, map_bounds, zone_map
-from .game import CP_PER_CITIZEN, Estimate, zombie_arrival, zone_estimate
+from .game import CP_PER_CITIZEN, WEAPONS, Estimate, Weapon, kill_buckets, state_cap, zombie_arrival, zone_estimate
 from .risk import never_visited, respawn_check, respawn_totals
 from .towndata import expand_route
 from . import supplies
@@ -56,12 +55,6 @@ def _estimates(data: dict, zmap: dict[Cell, dict], *, final: bool = False):
     def est(cell: Cell) -> Estimate:
         return zone_estimate(zmap.get(cell), cell, day, zmap, arrival, final=final)
     return est
-
-
-def buckets(n: float) -> tuple[int, int]:
-    """(pairs, singles) for n zombies in one zone (n rounded half up)."""
-    n = int(n + 0.5)
-    return n // 2, n % 2
 
 
 def _range(e: Estimate) -> str:
@@ -90,10 +83,10 @@ def analyse_route(data: dict, path: list[Cell]) -> dict:
             banded.append((step, cell, est))   # a past day's totals are counts, not bands
         elif est.max > 0:
             rows.append({"step": step, "zone": cell, "est": est,
-                         "pairs": buckets(est.avg)[0], "singles": buckets(est.avg)[1]})
+                         "pairs": kill_buckets(est.avg)[0], "singles": kill_buckets(est.avg)[1]})
     totals = {}
     for k in ("min", "avg", "max"):
-        pb = [buckets(getattr(r["est"], k)) for r in rows]
+        pb = [kill_buckets(getattr(r["est"], k)) for r in rows]
         totals[k] = {"zombies": sum(int(getattr(r["est"], k) + 0.5) for r in rows),
                      "pairs": sum(p for p, _ in pb), "singles": sum(s for _, s in pb)}
     return {"rows": rows, "unknown": unknown, "banded": banded, "totals": totals, "zones": len(seen)}
@@ -143,27 +136,6 @@ def edge_gap(data: dict, path: list[Cell]) -> str | None:
 # Weapons and the kit
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
-class Weapon:
-    key: str
-    label: str            # Fata name_en, before the " (state)" suffix
-    bucket: str           # pair: 2 kills per use; single: 1 kill per use
-    kind: str             # counted (N charges / shots, Empty), loaded (loaded / empty), plain
-    ready: tuple[float, float] = (0, 0)       # (average, worst) uses of a plain / loaded weapon
-    reload: str | None = None                 # item that refills it: battery | water
-    reload_cap: tuple[float, float] = (0, 0)  # (average, worst) uses per reload item
-    repairable: bool = False
-
-
-WEAPONS = {w.key: w for w in (
-    Weapon("laser", "Burning Laser Pointer", "pair", "counted", reload="battery", reload_cap=(3.25, 2)),
-    Weapon("machete", "Machete", "pair", "plain", ready=(4, 1), repairable=True),
-    Weapon("launcher", "Battery Launcher Mk. II", "single", "loaded", ready=(5, 1),
-           reload="battery", reload_cap=(5, 1)),
-    Weapon("knife", "Serrated Knife", "single", "plain", ready=(3, 1), repairable=True),
-    Weapon("splash", "Aqua-Splash", "single", "counted", reload="water", reload_cap=(5, 5)),
-    Weapon("pistol", "Water Pistol", "single", "counted", reload="water", reload_cap=(3, 3)),
-)}
 RELOADS = {"battery": "Battery", "water": "Water Ration (as ammunition, not for drinking)",
            "repair": "Repair Kit / Kwik-fix"}
 BROKEN = -1   # a repairable weapon in the bank marked broken: repair it in town first
@@ -188,15 +160,6 @@ def _state(w: Weapon, name: str, broken: bool) -> int | None:
         return 1 if low == "loaded" else None
     m = re.match(r"(\d+) (?:charges?|shots?)$", low)
     return int(m.group(1)) if m else None
-
-
-def state_cap(w: Weapon, state: int) -> tuple[float, float]:
-    """(average, worst) uses a weapon in this state gives, before any reload or repair."""
-    if w.kind == "counted":
-        return state, state
-    if state == 0:
-        return 0, 0
-    return w.ready
 
 
 def stock_from_bank(bank: list[dict]) -> dict[str, int]:
@@ -549,8 +512,8 @@ def zoo_clusters(data: dict) -> list[dict]:
 
 def _side_line(d: str, zones: list[Cell], est: dict) -> str:
     z = sum(int(est[c].avg + 0.5) for c in zones)
-    p = sum(buckets(est[c].avg)[0] for c in zones)
-    s = sum(buckets(est[c].avg)[1] for c in zones)
+    p = sum(kill_buckets(est[c].avg)[0] for c in zones)
+    s = sum(kill_buckets(est[c].avg)[1] for c in zones)
     return f"    {d}: {plural(len(zones), 'zone')}, ~{z} zombies ({plural(p, 'pair')} + {plural(s, 'single')}): {_zones_text(zones)}"
 
 

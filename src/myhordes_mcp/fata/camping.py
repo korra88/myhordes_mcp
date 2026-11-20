@@ -1,11 +1,9 @@
 """Camping odds and the zone upgrade plan.
 
-Rules verified in the game source (myhordes-docker/myhordes), see docs/camping-plan.md §1.2:
-`CitizenHandler::getCampingOdds` / `getCampingValues` (sum of the terms / 100, clamped to
-[0, cap]) and `getZoneBuildingBonus`. The odds are frozen the moment the citizen hides.
-
-The pure functions (`camping_terms`, `camping_odds`, `plan_upgrades`) take plain values;
-`format_camping_odds` reads a parsed Fata town (`data`) and prints the answer.
+The rules (the odds terms, tables, caps, upgrade levels) are in fata/game.py, "Camping"; see
+docs/camping-plan.md §1.2. This module resolves the night, the zombies and the camp level from a
+parsed Fata town, searches the upgrades (`plan_upgrades`, `max_level_plan`); `format_camping_odds` reads a parsed Fata
+town (`data`) and prints the answer.
 
 Fata v1.3 sends the players' saved camp plans (`data["camp_plans"]`) and a camp-level
 estimate per zone (`zone["camp_level"]`): see docs/camping-plan.md "Fata camp plans (v1.3)".

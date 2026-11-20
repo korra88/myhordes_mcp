@@ -20,10 +20,10 @@ from ..utils.fmt import plural
 from ..utils.lookup import ambiguous, lookup
 from . import supplies
 from .pathing import reach_indices
+from .game import GUARDIAN_CP_LOSS, heavy_cap
 from .geo import fmt_xy, zone_map
 from .risk import is_defense
 
-GUARDIAN_CP_LOSS = 2
 DEFENSE_WORDS = {"defense", "defence", "defenses", "defences", "defensive"}
 
 
@@ -113,7 +113,7 @@ def heavy_check(picks: list[Pickup], *, bike: bool, trolley: bool, guardian: boo
     {'drop_from': points index from which the group CP is 2 lower (None = never),
      'at_pickup': Pickup that causes it (None = from departure), 'max': heavy items at most}."""
     held = [n for n, f in (("bike", bike), ("trolley", trolley)) if f]
-    cap = 2 if guardian else 1
+    cap = heavy_cap(guardian)
     drop, cause = (0, None) if len(held) >= 2 else (None, None)
     most = len(held)
 

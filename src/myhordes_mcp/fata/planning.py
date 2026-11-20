@@ -4,6 +4,7 @@ Deterministic numbers for the build-plan and building-report skills, so the
 model reasons over a ranked list instead of doing arithmetic.
 """
 
+from .game import MAX_AP
 from .bank import _CLEAN_WATER, _sum_items, defense_count, totals
 from ..gesthordes.format import at_day, atk_series, has_error
 from .buildings import (WATER_FILTERS, has_blueprint, is_buildable, upgrades_by_day,
@@ -11,7 +12,7 @@ from .buildings import (WATER_FILTERS, has_blueprint, is_buildable, upgrades_by_
 from ..utils.fmt import est_status, estimate, header, plural
 
 # Daily AP of one citizen used for town budgets (6 AP base + food/water/drugs).
-AP_PER_CITIZEN = 18
+AP_PER_CITIZEN = 3 * MAX_AP
 # Share of the town's daily AP that usually goes to construction.
 CONSTRUCTION_SHARE = 0.20
 AP_SOFT_CAP = 240

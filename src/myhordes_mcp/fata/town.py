@@ -3,6 +3,7 @@
 from ..utils.fmt import est_status, estimate, header, plural, town_name
 from ..utils.clock import data_updated
 from .cp import cp_label
+from .game import TOWN_SIZE
 from .towndata import plans_for_day
 from .risk import (
     _staleness_tag,
@@ -30,7 +31,6 @@ def _stale(c: dict, meta: dict) -> str:
     return _staleness_tag(c.get("last_update_day"), meta.get("day"))
 
 
-TOWN_SIZE = 40  # citizens a standard town needs before its first attack
 
 
 def roster_line(data: dict) -> str:

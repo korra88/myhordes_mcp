@@ -1,4 +1,6 @@
-"""Shared zone helpers: coordinates, data freshness, zombie spread and threat estimates."""
+"""Shared zone helpers: data freshness, night alerts, trapped citizens, threat texts, respawn check.
+
+The rules they apply (zombie spread and estimates, danger bands, CP, Observation Platform) are in fata/game.py."""
 
 from datetime import datetime
 
