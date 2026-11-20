@@ -423,6 +423,10 @@ async def find_expedition_path(
     town_id: int = 0,
 ) -> str:
     """
+    Route only: no water, food, drugs or rucksack. For a trip a player will walk (an "N AP"
+    budget, supplies, items to bring back) call plan_expedition_supplies instead: it walks
+    the same safest route and plans the supplies. Use this tool for a bare route, the risk
+    on the way, or a group trapped outside. start_ap is AP at departure (6), never "N AP".
     Runs CP-aware Dijkstra pathfinding between two map coordinates, through waypoints if given.
     Returns up to two paths:
     - Safest path: minimises zombie exposure, avoids traps entirely.
@@ -542,6 +546,12 @@ async def plan_expedition_supplies(
 ) -> str:
     """
     Plans when to drink, eat and use drugs along an expedition route, and what to carry.
+    This is THE tool for a trip a player will walk; it plans the route itself (no
+    find_expedition_path call needed first). Two things to settle before the first call:
+    - A player's "N AP" (18, 19, 24...) is the day's budget: start_ap stays 6 and the budget
+      goes in `available` ("water=1, food6=1" for 18, "water=1, food7=1" for 19).
+    - Anything brought back (a blueprint, defensive objects, an item to fetch) goes in
+      `pickups` as well as `waypoints`: without `pickups` the rucksack is not checked.
     Use this whenever a trip needs water/food/drugs: do NOT place consumables yourself —
     report this tool's plan. It applies the game's rules exactly (verified in the game code):
     water and food give AP only once a day and only raise AP to the max (never add), so they

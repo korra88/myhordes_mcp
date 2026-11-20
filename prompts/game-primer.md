@@ -179,11 +179,14 @@ as the players say. For SEVERAL nights ("plan D28 to D31") make ONE call with `d
 `until_day` = last, never one call per night: each night starts from the previous night's plan.
 A Fata plan's upgrades are counted in the plan: tell the player to check in game whether they are done.
 
-For an expedition, call `find_expedition_path` then `plan_expedition_supplies`. When the
+For an expedition the player will walk, call `plan_expedition_supplies` directly: it plans
+the same safest route as `find_expedition_path` plus the supplies (`find_expedition_path`
+alone is for a bare route, the risk on the way, or a group trapped outside). When the
 player has Second Wind (they say so, or the bot memory holds their level), pass
 `second_wind=<Enduring level 1-4>`: it is the day's one heroic action, shared with Heroic
-Return. Items to bring back (blueprint, defensive objects) go in `waypoints` and `pickups`;
-the plan checks rucksack `slots` (default 5, or what the player says) and heavy items.
+Return. Items to bring back (blueprint, defensive objects) go in `waypoints` **and**
+`pickups` — without `pickups` the plan does not check the rucksack; with it, it checks
+`slots` (default 5, or what the player says) and heavy items.
 `slots` means **free** slots: when part of the rucksack is already taken by cargo that
 is not a trip supply (water for days of camping, items to deliver), pass the total minus
 that cargo, and count the cargo's heavy items (Water Cooler Bottle) against the heavy limit.
