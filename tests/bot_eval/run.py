@@ -232,7 +232,9 @@ def run_turn(claude, s: dict, turn: dict, index: int, session: str, channel: str
 def run_scenario(config, s: dict, args, repeat: int, now_iso: str) -> dict:
     tier = tier_of(s, args.tier)
     claude = eval_claude(config, tier, args.model, args.allow_extra, args.max_budget)
-    missing = [t for g in s["tools_any"] for t in [PREFIX + g] if t not in claude.allowed_tools]
+    # tools_any: a list of names, or a list of lists (grade.py tool_groups)
+    wanted = [t for g in s["tools_any"] for t in ([g] if isinstance(g, str) else g)]
+    missing = [PREFIX + t for t in wanted if PREFIX + t not in claude.allowed_tools]
     if missing:
         print(f"  WARNING {s['id']}: not in the {tier} allowed_tools of discord-listener.toml "
               f"(the model will be denied them): {', '.join(missing)}", file=sys.stderr)

@@ -66,6 +66,7 @@ myhordes_mcp/
 | [source-map.md](source-map.md) | Navigation guide for the game's PHP source |
 | [future-improvements.md](future-improvements.md) | Ideas not actionable yet |
 | [mechanics-in-code.md](mechanics-in-code.md) | Which game rules the tools compute, and which to move from prose to code next |
+| [bot-eval.md](bot-eval.md) | Bot evaluation suite: freeze a fixture, write a scenario, run, grade, judge ([plan](bot-eval-plan.md)) |
 
 ## Game source
 
