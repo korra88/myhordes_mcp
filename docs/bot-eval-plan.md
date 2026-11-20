@@ -1,6 +1,6 @@
 # Bot evaluation suite — plan
 
-Status (2026-11-20): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 implemented, awaiting review. Written so that
+Status (2026-11-20): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation). Written so that
 an agent with no prior context can implement it phase by phase (section 8).
 
 **Changes since the plan was written (2026-11-14), read first.** The server now has **28**
@@ -21,6 +21,7 @@ are stable). Gap G9 is closed, C1 is rewritten, C3/C4 and F18–F20 are new (202
 | 3 offline MCP server + expectations | committed 6078a46 (implemented 2026-11-20): `tests/bot_eval/{server,mcp_config,scenario}.py`, `scenario.example.json`, `freeze.py --expect [--check]`, `make bot-eval-expect[-check]`, `bot-eval-server`, `bot-eval-mcp-config`; fixture `8299-d26` (local cache, v1.3 camp plans, 0 Fata requests; 15 fixtures); C3/C4 drafts in `towns/_eval/scenarios/`; `claude -p` lists 28 tools on it; `make golden` 223 same |
 | 4 runner | committed e58207e (implemented 2026-11-20): `tests/bot_eval/run.py`, `make bot-eval`, `suite` field in the scenario schema, `server.py --now` and SIGTERM-safe manifest, private scenario I1; smoke runs on Haiku 5.5 (I1, C4) green, real `towns/` untouched, `make golden` 223 same |
 | 5 deterministic grader | implemented 2026-11-20, not committed: `tests/bot_eval/grade.py` (D1-D13), `grade_checks.py` (148 unit assertions + the old bench runs through an adapter), `make bot-eval-grade RUN=…`, `make bot-eval-grade-checks`; scenario fields `hard_checks`, `names_max`, `names_expected`, `writes_allowed`, `tools_any` groups, argument predicates; grades go to `<run>.graded.json`; `make golden` 223 same |
+| 6 judge | implemented 2026-11-20, not committed: `tests/bot_eval/judge_prompt.md` (fixed rubric, v1), `judge.py` (`claude -p`, opus, no tools / MCP, one call per turn, J1-J6 + 4.3 score merged into `<run>.graded.json`), `calibrate.py`; `make bot-eval-judge RUN=…`, `make bot-eval-calibrate`; smoke runs I1 and C4 judged; 10-item calibration set judged (10 calls, $0.6411); calibration: blind hand grades agreed 5/10, all 11 differing grades (6 of them `?`) re-checked against `items.json` and the judge was right on each, sheet reconciled → 10/10 (judge prompt unchanged, rubric v1). J6 (not in the criterion): judge equal or 1 lower than the hand grade, never higher (lower on K02 K04 K06 K08 K10) |
 
 Goal: a small, offline, reproducible set of real-town scenarios that scores the Discord
 advisor's answers, so a change to `prompts/game-primer.md`, `prompts/discord.md`,
@@ -381,7 +382,45 @@ The judge does **not** see the model name, tier or run label. Output: strict JSO
 Calibration before trusting it: hand-grade 10 answers (5 from the existing
 `run-day18-sonnet.json` / `run-day18-haiku55.json`, 5 from the first baseline run), compare
 with the judge, adjust the prompt until J1/J2 agree on ≥ 9/10. Record the judge prompt
-hash in every run file. Judge cost: **guess** ~10k input tokens per call.
+hash in every run file. Judge cost: measured, see "As implemented (phase 6)".
+
+**As implemented (phase 6).** `make bot-eval-judge RUN=towns/_eval/runs/<run>.json [ONLY=I1,C4] [FORCE=1] [DRY=1]`
+(`tests/bot_eval/judge.py`; calls opus, a person runs it, never scheduled). It reads `<run>.graded.json` (made on the fly if
+missing), judges every scenario turn and merges the verdicts into that file: `judge` per scenario (`turns[]` with the raw
+attempts, `j1`/`j2` per item, `j3`-`j6`, `cost_usd`) and `judge_meta` on the document (model, SHA-256 of `judge_prompt.md`
+and of `persona.md`, CLI version, calls, retries, CLI cost, tokens). A scenario already judged with the same prompt hash is
+skipped (`FORCE=1` redoes it); `make bot-eval-grade` keeps the judge blocks of the file it rewrites.
+- **Call**: `claude -p --model claude-opus-5-5 --system-prompt <judge_prompt.md> --tools "" --strict-mcp-config
+  --disable-slash-commands --setting-sources "" --no-session-persistence --output-format json --max-budget-usd 1.5`, run from an
+  empty temp dir, prompt on stdin. Checked with a probe call: no tools, no MCP servers, no skills, no CLAUDE.md / memory in the
+  context (713 input tokens for an empty prompt). The persona text and the Discord-rules summary: the rules are in the rubric
+  itself, the persona (`persona.md`, private) is pasted in the input.
+- **Input** (headings `EARLIER TURNS`, `LAST USER MESSAGE` with its language tag, `FINAL ANSWER`, `TOOL TRACE`, `MUST`,
+  `HARD_FAIL`, `PERSONA`): the trace is the turn's own calls without `ToolSearch`, each output cut to 3000 characters with a
+  `[... cut, N chars in all]` mark. The judge never sees model, tier, label, deterministic grades or cost.
+- **Output**: strict JSON checked against the schema (item counts and numbering, `v` in {0, 1, null}, J5/J6 in 0-2); one ```json
+  fence around the object is tolerated, anything else is invalid. One retry on invalid JSON; a second failure stops the run
+  without further calls. Spans are checked for being verbatim in the answer or trace; a misquote is recorded (`bad_spans`),
+  not fatal. `null` = cannot decide from the input (cut output, item about another turn).
+- **Multi-turn**: one call per turn, every turn sees all `must` / `hard_fail` items (items about another turn come back
+  null). Merge: J1 = satisfied in any turn that decided, J2 = triggered in any turn, J3/J4 = lowest decided turn value,
+  J5/J6 = mean over the turns (to 0.5); per-turn values stay under `judge.turns`.
+- **Score** (`grade.py:score_of`): 0 when a hard D-check failed or any J2 = 1; else `0.5 x det passed/applicable + 0.5 x J1 mean`
+  (null items left out, the det rate alone when no J1 item was decided). J3-J6 are only reported. The summary has the `J1`
+  (`satisfied/decided`, `?` when some were null) and `score` columns, J2 hits in the note, and mean J3-J6 on the totals line.
+- **Calibration** (private, `towns/_eval/calibration/`): `items.json` = 10 answers K01-K10 in shuffled order (the 2 smoke runs
+  I1 and C4 + 8 answers of the old bench: Sonnet q14 (Dutch), Haiku q14, Sonnet q29 (`start_ap=18`), Haiku q29, Haiku q26,
+  defame "before" d2 and d6, Haiku c1 control miss), each with its `must` / `hard_fail` lists written in the scenario style;
+  `judge.json` = the judge's verdicts; `sheet.md` = the empty hand-grading sheet (question, answer, calls, numbered items,
+  empty boxes; no verdict, no deterministic grade, no model name). `make bot-eval-calibrate` (`tests/bot_eval/calibrate.py`,
+  no model call) parses the filled sheet, prints per-item agreement on J1/J2 (an item agrees when every J1 and J2 value
+  matches; `?` = null), the disagreements with the judge's quoted spans, and "J1/J2 agree on N/10 items". `ARGS="--sheet FILE"`
+  reads another sheet, `ARGS="--judge [--only K01] [--redo]"` calls the judge on the items again. The old-bench traces were cut
+  to 1500 characters per output and hold literal `\n` in the outputs: the judge answers null when the cut hides what it needs.
+  The parser was tested on a filled copy of the sheet made from the judge's own output (10/10) and with two flipped values (8/10).
+- **Measured cost** (CLI `total_cost_usd`, opus-5-5): the 2 smoke answers $0.0650 (I1) and $0.0550 (C4); the 10 calibration
+  items $0.0262-$0.1680 each, **$0.6411 in all, mean $0.0641 per call** (a long answer with 17 big tool outputs is the $0.1680 one);
+  0 retries in 13 calls. Output 13 683 tokens over the 10 calibration calls.
 
 ### 4.3 Score
 
@@ -561,6 +600,8 @@ make bot-eval SUITE=core MODEL=claude-haiku-5-5 TIER=public LABEL=baseline
 make bot-eval ONLY=E1,K1 REPEAT=3 LABEL=primer-v2
 make bot-eval-grade RUN=towns/_eval/runs/<run>.json          # deterministic checks D1-D13, writes <run>.graded.json, no model call
 make bot-eval-grade-checks                                   # unit tests of the grader + old bench runs through it
+make bot-eval-judge RUN=towns/_eval/runs/<run>.json          # LLM judge J1-J6 + score into <run>.graded.json (opus, costs; ONLY=I1,C4 FORCE=1 DRY=1)
+make bot-eval-calibrate                                      # hand-graded towns/_eval/calibration/sheet.md vs the judge's stored verdicts (no model call)
 make bot-eval-compare A=runs/<a>.json B=runs/<b>.json
 ```
 
@@ -614,7 +655,7 @@ Never from cron, a timer or CI: a person runs it (`CLAUDE.md` hard constraints; 
 Core run = 16 scenarios, 19 turns. Sonnet: between ~$1.8 (19 × $0.097) and ~$21 (19 ×
 $1.11); **guess** $4–8, since fresh sessions are lighter than the $1.11 turn but
 expedition scenarios call more tools than the bench questions. Haiku: **guess** under $1
-at list price. Judge: 19 calls, **guess** $1–3. On the subscription these are usage-limit
+at list price. Judge: 19 calls, **measured** $0.026–$0.168 per call, mean $0.064 over 10 calibration calls, so ≈ $1.2 (13 calls measured: $0.7863 in all). On the subscription these are usage-limit
 weight, not charges. The first baseline replaces these guesses with measurements; the run
 file records tokens per model and computes cost from a price table in
 `tests/bot_eval/prices.json` (do not trust `total_cost_usd` for Haiku 5.5).
@@ -765,7 +806,7 @@ Done when: those known defects are caught and the known false positives listed i
 `RESULTS.md` (q05, q17, q10) are not.
 
 **Phase 6 — judge.** `tests/bot_eval/judge.py` + `judge_prompt.md`; calibration (4.2).
-Done when: J1/J2 agree with hand grades on ≥ 9/10.
+Done when: J1/J2 agree with hand grades on ≥ 9/10. (Done 2026-11-20, see "As implemented (phase 6)" in 4.2: blind 5/10, 10/10 after the maintainer re-checked the 11 differing grades against the tool outputs; the judge read the outputs more closely, not more leniently. J6 runs strict, by 1 on half the items. If the rubric changes: `calibrate.py --judge --redo`, compare again.)
 
 **Phase 7 — core scenarios + baseline.** Write the 16 core scenario files in
 `towns/_eval/scenarios/`, materialise expectations, run Sonnet (trusted) and Haiku 5.5

@@ -1,5 +1,5 @@
 """Deterministic grader of bot-eval run files: checks D1-D13 of docs/bot-eval-plan.md section 4.1.
-No model call, no network. The LLM judge (J columns) is phase 6.
+No model call, no network. The LLM judge (J1-J6, the 4.3 score) is tests/bot_eval/judge.py; its verdicts are merged into the same graded file.
 
     .venv/bin/python tests/bot_eval/grade.py RUN.json [--out FILE] [--ground FILE,FILE] [--quiet]
 or `make bot-eval-grade RUN=towns/_eval/runs/<run>.json`.
@@ -946,13 +946,49 @@ def failures(rec: dict) -> list[tuple[str, str, str]]:
     return out
 
 
+def judge_hits(rec: dict) -> list[int]:
+    """Numbers of the HARD_FAIL items the judge marked as triggered (J2 = 1)."""
+    return [x["item"] for x in (rec.get("judge") or {}).get("j2", []) if x.get("v") == 1]
+
+
+def j1_stats(rec: dict) -> tuple[int, int, int] | None:
+    """(satisfied, decided, total) over the MUST items, None without a judge verdict or without MUST items."""
+    j = rec.get("judge")
+    if not j or not j.get("j1"):
+        return None
+    vals = [x.get("v") for x in j["j1"]]
+    decided = [v for v in vals if v is not None]
+    return sum(1 for v in decided if v == 1), len(decided), len(vals)
+
+
+def score_of(rec: dict) -> float | None:
+    """Section 4.3. 0 on a hard fail (a hard D-check failed or any J2 = 1); else 0.5 x det pass rate + 0.5 x J1 mean;
+    the det rate alone when there is no decided J1 item. None when the scenario has not been judged."""
+    if not rec.get("judge"):
+        return None
+    g = rec["grades"]
+    if g["hard_failed"] or judge_hits(rec):
+        return 0.0
+    det = g["det_passed"] / g["det_applicable"] if g["det_applicable"] else 1.0
+    st = j1_stats(rec)
+    if st is None or st[1] == 0:
+        return det
+    return 0.5 * det + 0.5 * st[0] / st[1]
+
+
+def _mean(xs):
+    xs = [x for x in xs if x is not None]
+    return sum(xs) / len(xs) if xs else None
+
+
 def summary(doc: dict) -> str:
     m = doc["meta"]
     lines = [f"suite={m['suite']} model={m['model_requested']} tier={m.get('tier_override') or 'per scenario'} "
              f"label={m['label']} sha={m['git_sha'][:7]}"]
-    lines.append(f"{'ID':<5}{'lang':<7}{'HF':<4}{'det':<7}{'calls':<7}{'secs':<7}{'out_chars':<11}note")
+    lines.append(f"{'ID':<5}{'lang':<7}{'HF':<4}{'det':<7}{'J1':<7}{'score':<7}{'calls':<7}{'secs':<7}{'out_chars':<11}note")
     hf = wrong = 0
-    ung_ids, dets = [], []
+    ung_ids, dets, scores, judged, j2_ids = [], [], [], 0, []
+    jx = {k: [] for k in ("j3", "j4", "j5", "j6")}
     for rec in doc["scenarios"]:
         g = rec["grades"]
         turns = rec["turns"]
@@ -960,8 +996,10 @@ def summary(doc: dict) -> str:
         secs = round(sum(t.get("secs") or 0 for t in turns), 1)
         chars = len(turns[-1].get("answer", ""))
         langs = ",".join(t.get("lang", "") for t in turns)
-        flag = "HF" if g["hard_failed"] else "-"
-        hf += bool(g["hard_failed"])
+        hits = judge_hits(rec)
+        is_hf = bool(g["hard_failed"] or hits)
+        flag = "HF" if is_hf else "-"
+        hf += is_hf
         fails = failures(rec)
         wrong += sum(1 for k, sc, _ in fails if k == "D7")
         if any(k == "D6" for k, _, _ in fails):
@@ -969,13 +1007,40 @@ def summary(doc: dict) -> str:
         dets.append(g["det_passed"] / g["det_applicable"] if g["det_applicable"] else 1.0)
         note = "; ".join(f"{k}{'*' if k in g['hard_failed'] or any(h.startswith(k + ':') for h in g['hard_failed']) else ''}"
                          for k, _, _ in fails)
+        st, sc_ = j1_stats(rec), score_of(rec)
+        if rec.get("judge"):
+            judged += 1
+            for k in jx:
+                jx[k].append((rec["judge"].get(k) or {}).get("v"))
+        if hits:
+            j2_ids.append(rec["id"])
+            note += ("; " if note else "") + "J2*" + ",".join(map(str, hits))
+        if st:
+            j1s = f"{st[0]}/{st[1]}" + ("?" if st[1] < st[2] else "")
+        else:
+            j1s = "-"
+        if sc_ is not None:
+            scores.append(sc_)
         lines.append(f"{rec['id']:<5}{langs:<7}{flag:<4}{str(g['det_passed']) + '/' + str(g['det_applicable']):<7}"
+                     f"{j1s:<7}{('%.2f' % sc_) if sc_ is not None else '-':<7}"
                      f"{calls:<7}{secs:<7}{chars:<11}{note}")
     n = len(doc["scenarios"])
     ung_count = sum(t["grades"]["D6"]["counts"]["numbers"] for r in doc["scenarios"] for t in r["turns"])
-    lines.append(f"hard fails {hf}/{n} · mean det {sum(dets) / n:.2f} · wrong language {wrong} · "
-                 f"ungrounded numbers {ung_count}" + (f" ({', '.join(ung_ids)})" if ung_ids else "")
-                 + " · judge J1: not yet (phase 6)")
+    tail = (f"hard fails {hf}/{n} · mean det {sum(dets) / n:.2f} · wrong language {wrong} · "
+            f"ungrounded numbers {ung_count}" + (f" ({', '.join(ung_ids)})" if ung_ids else ""))
+    if judged:
+        tail += f" · judged {judged}/{n} · mean score {sum(scores) / len(scores):.2f}"
+        extra = []
+        for k in jx:
+            mv = _mean(jx[k])
+            extra.append(f"{k.upper()} " + (f"{mv:.2f}" if mv is not None else "n/a"))
+        tail += " · " + " ".join(extra)
+    else:
+        tail += " · judge: not run (make bot-eval-judge)"
+    lines.append(tail)
+    jm = doc.get("judge_meta")
+    if jm:
+        lines.append(f"judge {jm['model']} prompt {jm['prompt_sha256'][:12]} · {jm['calls']} call(s) · CLI cost ${jm['cli_cost_usd']:.4f}")
     tot = doc.get("totals") or {}
     if tot:
         lines.append(f"tokens by model {json.dumps(tot.get('per_model'))} · CLI cost ${tot.get('cli_cost_usd')} · wall {tot.get('secs')}s")
@@ -997,6 +1062,17 @@ def main() -> int:
         sys.exit(str(exc))
     graded = grade_run(doc, scenarios, [f for f in args.ground.split(",") if f] or None)
     out = Path(args.out) if args.out else path.with_name(path.stem + ".graded.json")
+    if out.is_file():   # keep the judge verdicts (paid calls) of an earlier judge.py run on the same run file
+        try:
+            prev = json.loads(out.read_text(encoding="utf-8"))
+            kept = {r["id"]: r["judge"] for r in prev.get("scenarios", []) if r.get("judge")}
+            for r in graded["scenarios"]:
+                if r["id"] in kept:
+                    r["judge"] = kept[r["id"]]
+            if kept and prev.get("judge_meta"):
+                graded["judge_meta"] = prev["judge_meta"]
+        except (OSError, json.JSONDecodeError, KeyError):
+            pass
     out.write_text(json.dumps(graded, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(summary(graded))
     if not args.quiet:

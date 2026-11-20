@@ -14,6 +14,8 @@
 #   make bot-eval-mcp-config ID=7365-d22 [ARGS="--clock 14:30"]  Print the --mcp-config JSON for claude -p
 #   make bot-eval [SUITE=core] [ONLY=I1,C4] [MODEL=claude-haiku-5-5] [TIER=public|trusted] [LABEL=x] [REPEAT=n]  Run scenarios through the listener's code (calls claude: costs; a person runs it)
 #   make bot-eval-grade RUN=towns/_eval/runs/<run>.json  Deterministic grader D1-D13 on a run file (no model call; tests/bot_eval/grade.py)
+#   make bot-eval-judge RUN=towns/_eval/runs/<run>.json [ONLY=I1,C4] [FORCE=1] [DRY=1]  LLM judge J1-J6 + score into <run>.graded.json (calls claude-opus-5-5: costs; a person runs it)
+#   make bot-eval-calibrate [ARGS="--sheet FILE"]  Compare the maintainer's hand-graded sheet with the judge (towns/_eval/calibration/; no model call)
 #   make golden       Check every tool's output against the recorded goldens (tests/golden.py)
 
 -include .env
@@ -40,7 +42,7 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 	discord-service-install discord-service-disable discord-service-uninstall \
 	towns-commit towns-commit-install towns-commit-disable towns-commit-uninstall \
 	golden golden-update golden-freeze golden-anyseed bot-memory-migrate bot-eval-freeze \
-	bot-eval-expect bot-eval-expect-check bot-eval-server bot-eval-mcp-config bot-eval bot-eval-grade bot-eval-grade-checks
+	bot-eval-expect bot-eval-expect-check bot-eval-server bot-eval-mcp-config bot-eval bot-eval-grade bot-eval-grade-checks bot-eval-judge bot-eval-calibrate
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -197,6 +199,13 @@ bot-eval-grade: ## Grade a run file with the deterministic checks D1-D13, no mod
 
 bot-eval-grade-checks: ## Unit tests of the grader + the old bench runs through it (tests/bot_eval/grade_checks.py)
 	@.venv/bin/python tests/bot_eval/grade_checks.py
+
+bot-eval-judge: ## LLM judge on a run file: J1-J6 + 4.3 score merged into <run>.graded.json (RUN=towns/_eval/runs/<run>.json ONLY=I1,C4 FORCE=1 DRY=1); calls opus, never scheduled
+	@test -n "$(RUN)" || { echo "usage: make bot-eval-judge RUN=towns/_eval/runs/<run>.json"; exit 2; }
+	@.venv/bin/python tests/bot_eval/judge.py "$(RUN)" $(if $(ONLY),--only $(ONLY)) $(if $(FORCE),--force) $(if $(DRY),--dry-run)
+
+bot-eval-calibrate: ## Compare the hand-graded towns/_eval/calibration/sheet.md with the stored judge verdicts (no model call; ARGS="--sheet FILE")
+	@.venv/bin/python tests/bot_eval/calibrate.py $(ARGS)
 
 golden-anyseed: ## Golden check with a random string-hash seed (finds set order leaking into outputs)
 	@.venv/bin/python tests/golden.py --any-seed
