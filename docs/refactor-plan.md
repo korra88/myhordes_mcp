@@ -1,6 +1,6 @@
 # Piano: normalizzazione e riuso del codice
 
-Stato: **piano approvato dall'utente 2026-10-30.** B1–B3 fatti; fase A fatta (20 commit da 89daf98 a 16be11f, eseguita da Sonnet, rivista da Opus; resti sotto); fase B fatta (3e19d37, 0d686a9 identici; 879f471 + correzione Opus: regola "Not feasible as asked"); fase C fatta il 2026-10-30 (8 commit 782bd60…b67d755, golden 193, da rivedere e poi deploy; C5 non fatto per decisione); fase D aggiornata e avviata il 2026-11-20 (sotto). Ogni fase va
+Stato: **piano approvato dall'utente 2026-10-30.** B1–B3 fatti; fase A fatta (20 commit da 89daf98 a 16be11f, eseguita da Sonnet, rivista da Opus; resti sotto); fase B fatta (3e19d37, 0d686a9 identici; 879f471 + correzione Opus: regola "Not feasible as asked"); fase C fatta il 2026-10-30 (8 commit 782bd60…b67d755, golden 193, da rivedere e poi deploy; C5 non fatto per decisione); fase D fatta e deployata 07c59f9 (2026-11-20); fase E fatta lo stesso giorno (5522d12…36ddf5f, `fata/game.py`, golden identici). Ogni fase va
 avviata su conferma dell'utente; le fasi C e D cambiano testi o numeri che il bot legge e vanno
 approvate punto per punto.
 
@@ -366,6 +366,45 @@ prima/dopo e il motivo. A mano su 8299 giorno 6: la tabella SA1–4 di `docs/kil
 (19 / 8 / 3 su SA3) deve restare, o il cambio va spiegato. `tests/camping_checks.py` ok.
 Tempo: misura `make golden` prima/dopo (il Dijkstra su ~730 celle una volta per dati).
 Niente `--update`: lo fa Opus dopo l'approvazione dell'utente.
+
+## Fase E — le regole del gioco in `fata/game.py` (M, golden identici)
+
+**Approvata 2026-11-20** (dopo D, deploy 07c59f9). Scopo: ordine. Un solo file con le regole di
+"simulazione" del gioco: costanti e funzioni pure verificate sul sorgente (`myhordes-docker/`,
+`z_myhordes_original_src/`), ognuna con la classe/metodo del gioco citato. Niente testi per il
+bot, niente lettura di Fata, niente pianificatori: quelli restano nei loro moduli e importano
+da `game.py`. Se `game.py` supera ~1000 righe, proporre la divisione in pacchetto `fata/game/`
+(stessi nomi importabili da `fata.game`).
+
+Cosa va in `game.py` (verifica i nomi reali con grep; la lista non è esaustiva, cerca altre
+regole duplicate o sparse e segnalale):
+- Zombie (oggi `risk.py`): GROWTH_*, zombie_growth, zombie_sources, Arrival, zombie_arrival,
+  earliest_zombie_day, Estimate, zone_estimate (+ _by_arrival, _unvisited), DANGER_BAND /
+  DANGER_TOP / danger_band (e DANGER_LEVELS se è una regola, non un testo), soglia del respawn
+  (RESPAWN_PER_DAY, la formula di respawn_totals: il conteggio dei dati resta in risk),
+  CP_PER_CITIZEN, Osservatorio (platform_level se legge solo l'edificio, teleport_range), EP
+  da km. `threat_text` è un testo: resta in risk.
+- Campeggio (oggi `camping.py`, `camp_zones.py`, `groupcamp.py`): PREVIOUS, DISTANCE, CROWD,
+  PRO_CAMPER_LIMIT, ruin_term, camping_terms, odds_cap, is_pro_camper, TOMB_BONUS,
+  CAMP_ITEM_BONUS, IMPROVE_LEVEL, INSTALL_LEVEL, MAX_LEVEL_TO_ACT, NIGHTLY_DROP, bonus panda /
+  faro / notte, INSTALLABLE, ITEM_UIDS / STEAK_UID se sono dati di gioco.
+- AP e sete (oggi `supplies.py`): MAX_AP, WOUNDED_MAX_AP, ITEMS (livelli AP), SECOND_WIND,
+  THIRST_STEP e stati, regole EP (refill). La macchina a stati di `supplies.plan` resta lì; se
+  una regola è scritta dentro il pianificatore e si estrae in una funzione pura senza cambiare
+  output, estraila, altrimenti segnalala.
+- Distanze: `geo.py` resta (coordinate e mappa delle zone); `game.py` le importa. moves/km/
+  spread_steps restano in geo (già un posto solo).
+- Kill/armi (oggi `kills.py`): tabelle armi e probabilità se sono dati del gioco.
+- CP/pathing: formule di gioco in pathing (es. rilevamento scout) se pure.
+
+Regole:
+- **Golden identici** (`make golden`: 223 same, 0 different, `_tools` compreso) e
+  `make golden-anyseed`; `tests/camping_checks.py` ok.
+- Nessun alias o re-export di compatibilità che duplichi i nomi: aggiorna gli import in src/,
+  tests/, scripts/, main.py, .claude/. Un solo nome per regola.
+- `docs/mechanics-in-code.md`: diventa l'indice di `game.py` (sezione per tema).
+- Un commit per gruppo (zombie, campeggio, AP, altro), messaggio "no output change".
+- Niente commit/push: li fa Opus dopo la revisione.
 
 ## Non vale la pena
 
