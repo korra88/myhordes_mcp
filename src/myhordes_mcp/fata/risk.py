@@ -1,10 +1,13 @@
 """Shared zone helpers: coordinates, data freshness, zombie spread and threat estimates."""
 
+import heapq
+from dataclasses import dataclass
 from datetime import datetime
+from typing import NamedTuple
 
 from ..utils.clock import age_text, data_datetime, fmt_epoch, now
 from ..utils.fmt import plural, updated
-from .geo import EP_MIN_KM, NEIGHBOURS8, km, moves, spread_steps, xy
+from .geo import EP_MIN_KM, NEIGHBOURS8, Bounds, Cell, fmt_xy, in_bounds, km, map_bounds, moves, spread_steps, xy, zone_map
 
 # Evening alerts. By day an open gate, citizens far out and defense below the
 # estimate are all normal; they become alarms as the attack (23:59, game time)
@@ -164,7 +167,7 @@ def _staleness_tag(last_update_day: int | None, current_day: int | None) -> str:
 # Nightly growth (MapMaker::spreadCycleMH, day >= 2): a zone with zombies gets +1 (90%), +0 (5%)
 # or +2 (5%); an empty zone next to a zone with more zombies gets 1-2 (or none); an empty zone
 # without infected neighbours stays empty. The 8 surrounding zones are neighbours.
-# Average +1.0 per night, worst case +2. One place for every estimate (map, route risks, kills).
+# Average +1.0 per night, worst case +2. One place for every estimate (zone_estimate: map, route risks, kills, camping).
 GROWTH_AVG = 1.0
 GROWTH_MAX = 2
 
@@ -175,28 +178,14 @@ def zombie_growth(zombies: int, nights: int) -> tuple[int, float, int]:
     return zombies, zombies + GROWTH_AVG * n, zombies + GROWTH_MAX * n
 
 
-def _zombie_max_estimate(zombies: int, last_day: int | None, current_day: int | None) -> int | None:
-    """Return a pessimistic max zombie estimate for a stale zone (+2 per night, the
-    game's worst case, see zombie_growth).
-
-    Returns None if the zone is current or days elapsed is 0.
-    """
-    age = age_days(last_day, current_day)
-    if age is None or age <= 0:
-        return None
-    return zombie_growth(zombies, age)[2]
-
-
-
-
-def zombie_sources(zone_map: dict[tuple[int, int], dict], current_day: int | None, *,
-                   danger: bool = False) -> list[tuple[tuple[int, int], int | None, int]]:
+def zombie_sources(zone_map: dict[Cell, dict], current_day: int | None, *,
+                   danger: bool = False) -> list[tuple[Cell, int | None, int]]:
     """Zones known to hold zombies: (cell, day of the reading, pessimistic count now).
 
     A zone counted with zombies (> 0) on an earlier day is grown to its worst case since
     (zombie_growth). danger=True also takes zones known only by a danger level > 0 (lower
-    bound of the band, read today when seen today). One list for every spread estimate
-    (the spread map of the map and route tools, the camping projection)."""
+    bound of the band, read today when seen today). The seeds of zombie_arrival, and the
+    camping projection's list of nearby zombies."""
     out = []
     for cell, z in zone_map.items():
         if cell == (0, 0):
@@ -204,162 +193,217 @@ def zombie_sources(zone_map: dict[tuple[int, int], dict], current_day: int | Non
         zm = z.get("zombies", -1)
         last_day = z.get("updated_day") or z.get("scouted_day")
         if zm > 0:
-            est = _zombie_max_estimate(zm, last_day, current_day)
-            out.append((cell, last_day, est if est is not None else zm))
+            age = age_days(last_day, current_day)
+            out.append((cell, last_day, zombie_growth(zm, age)[2] if age and age > 0 else zm))
         elif danger and z.get("danger", 0) > 0 and (zm < 0 or z.get("danger_today")):
             seen = current_day if zone_is_today(z, current_day) else last_day
             out.append((cell, seen, danger_band(z["danger"], DANGER_TOP)[0]))
     return out
 
 
-def earliest_zombie_day(zone_map: dict[tuple[int, int], dict], cell: tuple[int, int], current_day: int | None,
-                        bounds=None) -> tuple[int, tuple[int, int], int] | None:
-    """(day, source cell, source reading day): the first day zombies can stand on `cell` at
-    hiding time, or None when no dated source is known.
+class Arrival(NamedTuple):
+    """The first day zombies can stand on a zone at hiding time (day), the zone they spread
+    from (src) and the day of that zone's reading (seen)."""
+    day: int
+    src: Cell
+    seen: int
 
-    Game rules (MapMaker::spreadCycleMH, NightlyHandler): one spread a night, after the
-    camping check, only to the 8 zones around (NEIGHBOURS8). So a zone holding zombies on day
+
+def zombie_arrival(zone_map: dict[Cell, dict], current_day: int | None,
+                   bounds: Bounds | None = None) -> dict[Cell, Arrival]:
+    """For every zone of the grid the earliest day zombies can be on it, from the zones known to
+    hold zombies (zombie_sources, danger bands included). Zones nobody can reach are absent.
+
+    THE spread model (MapMaker::spreadCycleMH, NightlyHandler): one spread a night, after the
+    camping check, only to the 8 zones around (NEIGHBOURS8). A zone holding zombies on day
     E(n) can pass them to a neighbour for day E(n) + 1, and a zone seen EMPTY on day t gets
     zombies on day t + 1 at the earliest: E(c) = max(t_c + 1, min over neighbours E(n) + 1),
-    sources (zombie_sources, danger included) at their reading day. Solved as a shortest path
-    (the max/+1 step keeps it monotone). Zones never visited relay the spread (no reading); the
-    town never holds zombies. `bounds` (geo.Bounds) limits the grid, else the known zones + 1."""
-    import heapq
-    empty: dict[tuple[int, int], int] = {}
+    sources at their reading day. Solved as a shortest path (the max/+1 step keeps it
+    monotone). Zones never visited relay the spread (no reading); the town never holds
+    zombies. `bounds` limits the grid, else the known zones + 1. Compute it once per data
+    snapshot and day; zone_estimate reads it."""
+    empty: dict[Cell, int] = {}
     for c, z in zone_map.items():
         zm, danger = z.get("zombies", -1), z.get("danger", 0)
         seen = current_day if zone_is_today(z, current_day) else (z.get("updated_day") or z.get("scouted_day"))
         if seen is not None and (zm == 0 or (zm < 0 and not danger and zone_is_today(z, current_day))):
             empty[c] = seen
     if bounds is None:
-        xs = [c[0] for c in zone_map] + [cell[0]]
-        ys = [c[1] for c in zone_map] + [cell[1]]
-        inside = lambda c: min(xs) - 1 <= c[0] <= max(xs) + 1 and min(ys) - 1 <= c[1] <= max(ys) + 1  # noqa: E731
-    else:
-        inside = lambda c: bounds.xmin <= c[0] <= bounds.xmax and bounds.ymin <= c[1] <= bounds.ymax  # noqa: E731
+        xs = [c[0] for c in zone_map] or [0]
+        ys = [c[1] for c in zone_map] or [0]
+        bounds = Bounds(min(xs) - 1, max(xs) + 1, min(ys) - 1, max(ys) + 1)
     heap = [(seen, src, src, seen) for src, seen, _n in zombie_sources(zone_map, current_day, danger=True)
             if seen is not None]
     heapq.heapify(heap)
-    done: set[tuple[int, int]] = set()
+    out: dict[Cell, Arrival] = {}
     while heap:
         e, c, src, seen = heapq.heappop(heap)
-        if c in done:
+        if c in out:
             continue
-        if c == cell:
-            return e, src, seen
-        done.add(c)
+        out[c] = Arrival(e, src, seen)
         for dx, dy in NEIGHBOURS8:
             n = (c[0] + dx, c[1] + dy)
-            if n == (0, 0) or n in done or not inside(n):
+            if n == (0, 0) or n in out or not in_bounds(bounds, n):
                 continue
             heapq.heappush(heap, (max(e + 1, empty.get(n, e) + 1), n, src, seen))
-    return None
+    return out
 
 
-def _build_spread_map(
-    zone_map: dict[tuple[int, int], dict],
-    current_day: int | None,
-) -> dict[tuple[int, int], tuple[int, int]]:
-    """BFS from all known zombie zones to compute minimum spread distance.
-
-    For each cell in zone_map that currently has zombies (zm > 0), we BFS
-    outward in 8 directions (the game's neighbours). The result maps (x, y) -> (bfs_dist, source_zm)
-    where bfs_dist is the minimum number of spread steps from any zombie source
-    and source_zm is the (pessimistic) zombie count at that source.
-
-    Only cells present in zone_map are seeded — we don't spread into unknown
-    territory beyond the explored map. Unknown cells adjacent to zombie zones
-    are not included (we can't confirm or deny infection there).
-
-    Used to determine whether a clear zone could plausibly be infected:
-    if age >= bfs_dist, zombies could have reached it by now.
-    """
-    from collections import deque
-
-    # Seed: all zones with confirmed zombies, using their pessimistic current count
-    seeds = [(x, y, zm) for (x, y), _day, zm in zombie_sources(zone_map, current_day)]
-
-    # BFS: spread only through cells that exist in zone_map (explored territory)
-    result: dict[tuple[int, int], tuple[int, int]] = {}
-    queue: deque[tuple[int, int, int, int]] = deque()  # (x, y, dist, source_zm)
-    for x, y, zm in seeds:
-        if (x, y) not in result:
-            result[(x, y)] = (0, zm)
-            queue.append((x, y, 0, zm))
-
-    while queue:
-        x, y, dist, source_zm = queue.popleft()
-        for dx, dy in NEIGHBOURS8:
-            nx, ny = x + dx, y + dy
-            if (nx, ny) not in zone_map:
-                continue  # only spread through explored cells
-            if (nx, ny) in result:
-                continue  # already reached via shorter/equal path
-            result[(nx, ny)] = (dist + 1, source_zm)
-            queue.append((nx, ny, dist + 1, source_zm))
-
-    return result
+def earliest_zombie_day(zone_map: dict[Cell, dict], cell: Cell, current_day: int | None,
+                        bounds: Bounds | None = None) -> tuple[int, Cell, int] | None:
+    """(day, source cell, source reading day) of `cell` in zombie_arrival, or None when no
+    dated source reaches it. Without `bounds` the grid is the known zones + `cell` + 1."""
+    if bounds is None:
+        xs = [c[0] for c in zone_map] + [cell[0]]
+        ys = [c[1] for c in zone_map] + [cell[1]]
+        bounds = Bounds(min(xs) - 1, max(xs) + 1, min(ys) - 1, max(ys) + 1)
+    return zombie_arrival(zone_map, current_day, bounds).get(cell)
 
 
-def _spread_risk_for_clear(
-    coords: tuple[int, int],
-    age: int,
-    spread_map: dict[tuple[int, int], tuple[int, int]],
-) -> tuple[int, int] | None:
-    """Return (bfs_dist, est_max_zombies) if a clear zone could be infected by spread.
-
-    A clear zone at coords is at risk if age >= bfs_dist (zombies could have
-    reached it in that many nights). Returns None if not reachable.
-    """
-    entry = spread_map.get(coords)
-    if entry is None:
-        return None
-    bfs_dist, source_zm = entry
-    if bfs_dist == 0:
-        # This cell itself has zombies — should not be called for clear zones
-        return None
-    if age >= bfs_dist:
-        # Worst case: the first night spawns 2 (1-2), then +2 per night, capped at source count
-        nights_of_growth = age - bfs_dist  # nights the zone could have grown after first infection
-        est = min(GROWTH_MAX + GROWTH_MAX * nights_of_growth, source_zm)
-        return bfs_dist, max(1, est)
-    return None
+@dataclass(frozen=True)
+class Estimate:
+    """Zombies a zone can hold: min / avg / max, where the numbers come from (`source`, a
+    short text) and what they are (`kind`, for threat_text and the callers)."""
+    min: float
+    avg: float
+    max: float
+    source: str
+    kind: str = "unknown"    # unknown | danger_today | count | grown | clear | early | spread | band |
+                             # band_grown | exposed
+    killed_today: int = 0    # exact count of a zone partly cleared today (zombies_max - zombies)
+    count: int | None = None   # the zombies counted on the reading (kinds count, grown)
+    danger: int = 0          # the danger level (kinds danger_today, band, band_grown)
+    dist: int | None = None  # zones between the zone and the zombies it can come from (spread)
 
 
-def _zone_threat(zone: dict, current_day: int | None = None, spread_map: dict | None = None, coords: tuple[int, int] | None = None) -> str:
-    """Format zombie count or danger estimate for a zone.
+def _by_arrival(arr: Arrival | None, cell: Cell, target) -> tuple[int, float, int, int | None, str | None]:
+    """(nights, avg, max, dist, early text) of a zone no zombie was seen on, from its arrival:
+    from day arr.day it can hold 1-2 zombies, then +GROWTH_AVG (at most GROWTH_MAX) a night."""
+    if arr is None or not isinstance(target, int):
+        return 0, 0, 0, None, None
+    dist = spread_steps(arr.src, cell)
+    if arr.day > target:
+        return 0, 0, 0, dist, f"can't have zombies yet: the nearest are {plural(dist, 'zone')} away"
+    n = target - arr.day + 1
+    return n, GROWTH_AVG * n, GROWTH_MAX * n, dist, None
 
-    If an exact zombie count was reported (zm >= 0), show it.
-    For stale zones with zombies, appends a pessimistic max estimate (+2/night).
-    For stale clear zones, checks spread_map: if zombie neighbors could have
-    reached this cell within the elapsed days, shows a spread risk warning.
-    Otherwise fall back to the danger level from in-game map exploration.
-    """
-    if zone.get("danger_today"):
-        # Today's estimate beats the count from an older update.
-        danger = zone.get("danger", 0)
-        return f", ~{DANGER_LEVELS.get(danger, f'danger {danger}')} today" if danger else ", clear today"
-    zm = zone.get("zombies", 0)
-    if zm is not None and zm >= 0:
-        last_day = zone.get("updated_day")
-        age = age_days(last_day, current_day) or 0
-        if zm == 0:
-            # Check spread risk: could a zombie zone have reached this cell?
-            if spread_map is not None and coords is not None and age > 0:
-                spread = _spread_risk_for_clear(coords, age, spread_map)
-                if spread is not None:
-                    bfs_dist, est = spread
-                    return f", clear→≤{est} zom (spread risk, {bfs_dist}d away)"
-            return ""
-        est = _zombie_max_estimate(zm, last_day, current_day)
-        if est:
-            return f", {zm} zom→≤{est} (est.)"
-        return f", {zm} zom"
-    # No exact count — use danger level from exploration
-    danger = zone.get("danger", 0)
-    if danger:
-        return f", ~{DANGER_LEVELS.get(danger, f'danger {danger}')}"
-    return ""
+
+def zone_estimate(zone: dict | None, cell: Cell, day, zmap: dict[Cell, dict] | None,
+                  arrival: dict[Cell, Arrival], *, final: bool = False, at: int | None = None) -> Estimate:
+    """THE zombie estimate of a zone, for the map, the zone details, the route searches, the kill
+    runs and the camping projection. `arrival` is zombie_arrival(zmap, day, bounds); `zmap`
+    (the zones by cell) is only read for a zone never visited (zone None). `day` is the day of
+    the readings; `at` a later day to project to (camping), when no reading is today's.
+
+    - counted today: exact (a zone partly cleared today: the count now, killed_today the rest;
+      final: the data is a finished day, so the day's maximum before the kills);
+    - counted > 0 on an earlier day: zombie_growth for the nights since;
+    - counted 0 on an earlier day: only what zombie_arrival lets reach it: from its arrival day,
+      1-2 zombies, then +GROWTH_AVG (at most GROWTH_MAX) a night; before that none;
+    - only a danger band: its bounds, grown the same way if not today's;
+    - never visited (zone None): see _unvisited (exposed: top danger band at least; enclosed by
+      clear zones: the arrival rule)."""
+    target = day if at is None else at
+    arrival = {} if arrival is None else arrival
+    if zone is None:
+        return _unvisited(cell, day, zmap or {}, arrival, final, at, target)
+    z, zmax = zone.get("zombies", -1), zone.get("zombies_max")
+    upd, danger = zone.get("updated_day") or zone.get("scouted_day"), zone.get("danger", 0)
+    projected = isinstance(day, int) and isinstance(target, int) and target > day
+    nights = target - upd if isinstance(target, int) and upd is not None else 0
+    if zone.get("danger_today") and not projected:
+        lo, hi = danger_band(danger, DANGER_TOP)
+        return Estimate(lo, (lo + hi) / 2, hi, f"danger {danger} today" if danger else "clear today",
+                        "danger_today", danger=danger)
+    if z >= 0 and not projected and zone_is_today(zone, day):
+        if zmax and zmax > z:
+            if final:
+                return Estimate(zmax, zmax, zmax, f"day {day} (max, before kills)", "count", count=zmax)
+            return Estimate(z, z, z, "today", "count", killed_today=zmax - z, count=z)
+        return Estimate(z, z, z, "today", "count", count=z)
+    if z >= 0:
+        if upd is None or nights <= 0:
+            return Estimate(z, z, z, f"day {upd}" if upd is not None else "counted", "count", count=z)
+        src = f"day {upd} (+{plural(nights, 'night')})"
+        if z > 0:
+            return Estimate(*zombie_growth(z, nights), src, "grown", count=z)
+        _n_, avg, hi, dist, early = _by_arrival(arrival.get(cell), cell, target)
+        if early:
+            return Estimate(0, 0, 0, early, "early", dist=dist)
+        if hi:
+            return Estimate(0, avg, hi, src, "spread", dist=dist)
+        return Estimate(0, 0, 0, src, "clear")
+    lo, hi = danger_band(danger, DANGER_TOP)
+    if danger and nights > 0:
+        return Estimate(lo, (lo + hi) / 2 + GROWTH_AVG * nights, hi + GROWTH_MAX * nights,
+                        f"danger {danger} (+{plural(nights, 'night')})", "band_grown", danger=danger)
+    return Estimate(lo, (lo + hi) / 2, hi, f"danger {danger}" if danger else "clear (danger 0)", "band",
+                    danger=danger)
+
+
+def _unvisited(cell: Cell, day, zmap: dict[Cell, dict], arrival: dict[Cell, Arrival], final: bool,
+               at: int | None, target) -> Estimate:
+    """A zone never visited (zone_estimate). Its own zombies are unknowable (the day-1 spawn
+    may be there), so its neighbours decide: next to zombies, to another zone never visited or
+    to the map edge (a neighbour missing from `zmap`), it is EXPOSED: max at least the top
+    danger band, avg from the neighbours and the spread. Surrounded by visited zones without
+    zombies: only what the spread (zombie_arrival) lets reach it."""
+    _n_, avg, hi, dist, _early = _by_arrival(arrival.get(cell), cell, target)
+    x, y = cell
+    around = [(x + dx, y + dy) for dx, dy in NEIGHBOURS8 if (x + dx, y + dy) != (0, 0)]
+    near = [zone_estimate(zmap[c], c, day, zmap, arrival, final=final, at=at) for c in around if c in zmap]
+    infected = [e for e in near if e.avg > 0]
+    open_sides = sum(1 for c in around if c not in zmap)
+    if infected or open_sides:
+        why = ", ".join(w for w in ((f"{plural(len(infected), 'neighbour')} with zombies" if infected else ""),
+                                    (f"{plural(open_sides, 'side')} unexplored or map edge" if open_sides else "")) if w)
+        return Estimate(0, max([avg] + ([sum(e.avg for e in infected) / len(infected)] if infected else [])),
+                        max([hi, DANGER_TOP[1]] + [e.max for e in infected]),
+                        f"never visited, exposed ({why})", "exposed", dist=dist)
+    if hi:
+        return Estimate(0, avg, hi, f"never visited, spread from {fmt_xy(arrival[cell].src)}", "spread", dist=dist)
+    return Estimate(0, 0, 0, "never visited, surrounded by clear zones", "unknown")
+
+
+def threat_text(est: Estimate, style: str = "map") -> str:
+    """One text for a zone's zombies. style "map": appended to a zone line (', 3 zom→≤9 (est.)',
+    nothing for a clear zone); style "route": the zone's zombie column ('3 zom→≤9 (est.)',
+    'clear')."""
+    k = est.kind
+    if k == "danger_today":
+        text = f"~{DANGER_LEVELS.get(est.danger, f'danger {est.danger}')} today" if est.danger else "clear today"
+    elif k == "count":
+        text = f"{est.count} zom" if est.count else "clear"
+    elif k == "grown":
+        text = f"{est.count} zom→≤{_n(est.max)} (est.)"
+    elif k == "exposed":
+        text = f"unexplored, high risk (≤{_n(est.max)} zom)"
+    elif k in ("spread", "early"):
+        text = (f"clear→≤{_n(est.max)} zom (spread risk, {est.dist}d away)" if est.max
+                else "clear")
+    elif k in ("band", "band_grown"):
+        text = "" if not est.danger and style == "map" else f"~{DANGER_LEVELS.get(est.danger, f'danger {est.danger}')}"
+        if k == "band_grown":
+            text += f"→≤{_n(est.max)} (est.)"
+    else:
+        text = "clear"
+    if style == "map":
+        return f", {text}" if text and text != "clear" else ""
+    return text
+
+
+def _n(x: float) -> str:
+    return str(int(x)) if x == int(x) else f"{x:g}"
+
+
+def zone_threats(data: dict):
+    """A function zone -> threat_text(zone_estimate(zone), "map") for the zones of `data`:
+    the zombie spread (zombie_arrival) is solved once, here."""
+    day = data["meta"].get("day")
+    day = day if isinstance(day, int) else None
+    zmap = zone_map(data)
+    arrival = zombie_arrival(zmap, day, map_bounds(data))
+    return lambda z: threat_text(zone_estimate(z, xy(z), day, zmap, arrival), "map")
 
 
 def _zone_freshness(zone: dict, current_day: int | None) -> str:

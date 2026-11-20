@@ -8,17 +8,14 @@ from .geo import (EP_MIN_KM, MAX_PATH_AP, NEIGHBOURS4, Bounds, fmt_xy, in_bounds
                   map_bounds, moves, zone_map)
 from .risk import (
     CP_PER_CITIZEN,
-    DANGER_LEVELS,
-    DANGER_TOP,
-    _build_spread_map,
-    _spread_risk_for_clear,
     _staleness_tag,
-    _zombie_max_estimate,
     age_days,
-    danger_band,
     fmt_items,
     platform_level,
     teleport_range,
+    threat_text,
+    zombie_arrival,
+    zone_estimate,
 )
 from .supplies import THIRST_STEP, thirst_state
 
@@ -41,8 +38,6 @@ WALK = {
     "dried": 0.01,            # depleted, nothing to dig: tiebreak among routes of equal AP
     "scout_detection": 50.0,  # Scout with Camouflage Vest in a trap zone: x detection chance
 }
-# Zones known only by a danger band, without an estimate (0 / 1-2 / 3-5 / 6+ zombies).
-_DANGER_WALK = {0: 0, 1: 1.5, 2: 4.0, 3: 6.0}
 # Cost of one move on the walkability scale.
 _AP_COST = 1.0
 
@@ -81,80 +76,64 @@ def _classify_cell(
     zone: dict | None,
     current_day: int | None,
     coords: tuple[int, int] | None,
-    spread_map: dict | None,
+    arrival: dict,
     group_cp: int,
 ) -> dict:
     """Classify a cell for CP-aware pathfinding.
 
     Returns a dict with:
       tag: "CLEAR" | "SAFE" | "TRAPPED" | "TRAP_RISK" | "STALE" | "UNKNOWN"
-      zombies: int | None — best zombie estimate (current or projected)
+      zombies: int | None — the pessimistic zombie estimate (risk.zone_estimate max)
       fresh: bool — whether data is from the current day
       age: int — days since last update (-1 if unknown)
     """
     if zone is None:
         return {"tag": "UNKNOWN", "zombies": None, "fresh": False, "age": -1}
 
+    est = zone_estimate(zone, coords, current_day, None, arrival).max
+
     if zone.get("danger_today"):
         # Today's danger estimate (Observation Platform radius): current, not exact.
-        est = danger_band(zone.get("danger", 0), DANGER_TOP)[1]
         tag = "TRAP_RISK" if est > group_cp else ("CLEAR" if est == 0 else "SAFE")
         return {"tag": tag, "zombies": est, "fresh": True, "age": 0}
 
-    zm = zone.get("zombies", -1)
-
     # Explored but unscouted — only danger level available
-    if zm < 0:
-        danger = zone.get("danger", 0)
-        band = danger_band(danger)   # unknown level: no estimate (not the top band, unlike kills)
-        est = band[1] if band else None
-        tag = "TRAP_RISK" if est is not None and est > group_cp else "STALE"
+    if zone.get("zombies", -1) < 0:
+        tag = "TRAP_RISK" if est > group_cp else "STALE"
         return {"tag": tag, "zombies": est, "fresh": False, "age": -1}
 
     last_day = zone.get("updated_day") or zone.get("scouted_day")
     age = age_days(last_day, current_day) or 0
     fresh = age == 0
 
-    if zm == 0:
-        # Check spread risk
-        if spread_map is not None and coords is not None and age > 0:
-            spread = _spread_risk_for_clear(coords, age, spread_map)
-            if spread is not None:
-                _, est = spread
-                if est > group_cp:
-                    return {"tag": "TRAP_RISK", "zombies": est, "fresh": False, "age": age}
-                return {"tag": "SAFE", "zombies": est, "fresh": False, "age": age}
+    if zone["zombies"] == 0:
+        if est > 0:   # the spread (risk.zombie_arrival) can have reached it
+            return {"tag": "TRAP_RISK" if est > group_cp else "SAFE", "zombies": est, "fresh": False, "age": age}
         return {"tag": "CLEAR", "zombies": 0, "fresh": fresh, "age": age}
 
-    # zm > 0: compute pessimistic estimate
-    est = _zombie_max_estimate(zm, last_day, current_day)
-    effective = est if est is not None else zm
-
-    if effective > group_cp:
+    if est > group_cp:
         if fresh:
-            return {"tag": "TRAPPED", "zombies": effective, "fresh": True, "age": 0}
-        return {"tag": "TRAP_RISK", "zombies": effective, "fresh": False, "age": age}
+            return {"tag": "TRAPPED", "zombies": est, "fresh": True, "age": 0}
+        return {"tag": "TRAP_RISK", "zombies": est, "fresh": False, "age": age}
 
-    return {"tag": "SAFE", "zombies": effective, "fresh": fresh, "age": age}
+    return {"tag": "SAFE", "zombies": est, "fresh": fresh, "age": age}
 
 
 def walkability(
     zone: dict | None,
     current_day: int | None = None,
     coords: tuple[int, int] | None = None,
-    spread_map: dict | None = None,
+    arrival: dict | None = None,
     *,
     group_cp: int = CP_PER_CITIZEN,
     scout_mode: bool = False,
 ) -> float:
     """Sum of the WALK weights that apply to entering this zone (0 = nothing to avoid)."""
-    c = _classify_cell(zone, current_day, coords, spread_map, group_cp)
+    c = _classify_cell(zone, current_day, coords, arrival, group_cp)
     tag, zombies = c["tag"], c["zombies"]
     w = 0.0
     if tag == "UNKNOWN":
         return w + WALK["unknown"]
-    if zombies is None:
-        return w + _DANGER_WALK.get(zone.get("danger", 0), WALK["unknown"])
     if tag in ("TRAPPED", "TRAP_RISK"):
         w += max(0, zombies - group_cp) * WALK["over_cp"]
         if scout_mode:
@@ -172,7 +151,7 @@ def _cell_risk(
     zone: dict | None,
     current_day: int | None = None,
     coords: tuple[int, int] | None = None,
-    spread_map: dict | None = None,
+    arrival: dict | None = None,
     *,
     group_cp: int = CP_PER_CITIZEN,
     scout_mode: bool = False,
@@ -185,15 +164,15 @@ def _cell_risk(
                  unless scout_mode, which pays the detection risk instead.
     """
     if mode != "shortest":
-        return walkability(zone, current_day, coords, spread_map, group_cp=group_cp,
+        return walkability(zone, current_day, coords, arrival, group_cp=group_cp,
                            scout_mode=scout_mode)
-    c = _classify_cell(zone, current_day, coords, spread_map, group_cp)
+    c = _classify_cell(zone, current_day, coords, arrival, group_cp)
     if c["tag"] in ("TRAPPED", "TRAP_RISK"):
         if scout_mode:
             day_pct, _ = _scout_detection(c["zombies"] or 0, group_cp)
             return 1.0 + day_pct * WALK["scout_detection"] * 0.01
         return float("inf")
-    return 1.0 + walkability(zone, current_day, coords, spread_map, group_cp=group_cp) * 0.001
+    return 1.0 + walkability(zone, current_day, coords, arrival, group_cp=group_cp) * 0.001
 
 
 @dataclass(frozen=True)
@@ -202,7 +181,7 @@ class ZoneGrid:
     call (`zone_grid(data)`), never cache it across calls. The zone class depends on the
     group CP, so `cell_class(cp)` is computed once per CP and kept on the grid."""
     zone_map: dict
-    spread_map: dict
+    arrival: dict   # risk.zombie_arrival of the zones
     day: int | None
     bounds: Bounds | None
     _classes: dict = field(default_factory=dict, repr=False, compare=False)
@@ -210,7 +189,7 @@ class ZoneGrid:
     def cell_class(self, cp: int) -> dict:
         classes = self._classes.get(cp)
         if classes is None:
-            classes = {c: _classify_cell(z, self.day, c, self.spread_map, cp)
+            classes = {c: _classify_cell(z, self.day, c, self.arrival, cp)
                        for c, z in self.zone_map.items()}
             self._classes[cp] = classes
         return classes
@@ -221,7 +200,9 @@ def zone_grid(data: dict) -> ZoneGrid:
     current_day = data["meta"].get("day")
     zmap = zone_map(data, scout=True)
     cd = current_day if isinstance(current_day, int) else None
-    return ZoneGrid(zmap, _build_spread_map(zmap, cd), cd, map_bounds(data))
+    bounds = map_bounds(data)
+    return ZoneGrid(zmap, zombie_arrival(zmap, cd, bounds), cd, bounds)
+    
 
 
 def _leg_search(grid: ZoneGrid, cp: int, a: tuple[int, int], b: tuple[int, int], f0: int, *, mode: str,
@@ -232,7 +213,7 @@ def _leg_search(grid: ZoneGrid, cp: int, a: tuple[int, int], b: tuple[int, int],
     budget is 0). Cost is the (pri, sec) tuple; AP is capped at MAX_PATH_AP per leg.
     `seen` zones cost rw to enter; on a dig_leg so do depleted zones (no dig either way),
     elsewhere they cost WALK["dried"]."""
-    zone_map, spread_map, cd, bounds = grid.zone_map, grid.spread_map, grid.day, grid.bounds
+    zone_map, arrival, cd, bounds = grid.zone_map, grid.arrival, grid.day, grid.bounds
     margin = 3
     bx = (min(a[0], b[0]) - margin, max(a[0], b[0]) + margin)
     by = (min(a[1], b[1]) - margin, max(a[1], b[1]) + margin)
@@ -274,11 +255,11 @@ def _leg_search(grid: ZoneGrid, cp: int, a: tuple[int, int], b: tuple[int, int],
                         continue
                     nf, step = f + 1, (1.0, extra)
                 else:
-                    step = (1.0, _cell_risk(zone_map.get(n), cd, coords=n, spread_map=spread_map,
+                    step = (1.0, _cell_risk(zone_map.get(n), cd, coords=n, arrival=arrival,
                                             group_cp=cp, scout_mode=scout_mode, mode="shortest") + extra)
             else:
                 # Risk and moves weighed together (walkability + _AP_COST), AP as tiebreak.
-                step = (walkability(zone_map.get(n), cd, coords=n, spread_map=spread_map,
+                step = (walkability(zone_map.get(n), cd, coords=n, arrival=arrival,
                                     group_cp=cp, scout_mode=scout_mode) + _AP_COST + extra, 1.0)
             cand = (pri + step[0], sec + step[1])
             nkey = (n[0], n[1], nf)
@@ -351,7 +332,7 @@ def search_route(data: dict, points: list[tuple[int, int]], *, cp: int | list[in
     risk, k = 0.0, 1
     for c, n in zip(cps, lens):
         for cell in route[k:k + n]:
-            risk += _cell_risk(grid.zone_map.get(cell), grid.day, coords=cell, spread_map=grid.spread_map,
+            risk += _cell_risk(grid.zone_map.get(cell), grid.day, coords=cell, arrival=grid.arrival,
                                group_cp=c, scout_mode=scout_mode, mode="safest")
         k += n
     return {"route": route, "ap": len(route) - 1, "flashes": f, "flash_cells": set(flashed),
@@ -552,7 +533,7 @@ def find_safe_path(
 
     # -- Shared pre-computation (formatting) and the two searches --
     grid = zone_grid(data)
-    zone_map, spread_map, cd = grid.zone_map, grid.spread_map, grid.day
+    zone_map, arrival, cd = grid.zone_map, grid.arrival, grid.day
     cell_class = grid.cell_class(group_cp)
     ap_limit = MAX_PATH_AP
     points = [(x1, y1)] + list(waypoints or []) + [(x2, y2)]
@@ -611,27 +592,6 @@ def find_safe_path(
         lines.append("Shortest path is identical to safest.")
     lines.append("")
 
-    def _format_zom_str(z: dict | None, px: int, py: int) -> str:
-        if z is None:
-            return "unexplored"
-        if z.get("danger_today"):
-            danger = z.get("danger", 0)
-            return f"~{DANGER_LEVELS.get(danger, 'unknown')} today" if danger else "clear today"
-        zm = z.get("zombies", -1)
-        if zm >= 0:
-            last_day = z.get("updated_day") or z.get("scouted_day")
-            age = age_days(last_day, cd) or 0
-            if zm == 0:
-                spread = _spread_risk_for_clear((px, py), age, spread_map) if age > 0 else None
-                if spread is not None:
-                    bfs_dist, est = spread
-                    return f"clear→≤{est} zom (spread risk, {bfs_dist}d away)"
-                return "clear"
-            est = _zombie_max_estimate(zm, last_day, cd)
-            return f"{zm} zom→≤{est} (est.)" if est is not None else f"{zm} zom"
-        danger = z.get("danger", 0)
-        return f"~{DANGER_LEVELS.get(danger, 'unknown')}"
-
     def _format_step(
         i: int, px: int, py: int,
         flash_cells: set[tuple[int, int]] | None = None,
@@ -640,7 +600,7 @@ def find_safe_path(
     ) -> str:
         z = zone_map.get((px, py))
         coord_str = fmt_xy((px, py))
-        zom_str = _format_zom_str(z, px, py)
+        zom_str = "unexplored" if z is None else threat_text(zone_estimate(z, (px, py), cd, None, arrival), "route")
 
         # CP status tag
         cc = cell_class.get((px, py), {"tag": "UNKNOWN"})

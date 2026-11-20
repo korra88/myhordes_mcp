@@ -1,6 +1,6 @@
 # Piano: normalizzazione e riuso del codice
 
-Stato: **piano approvato dall'utente 2026-10-30.** B1–B3 fatti; fase A fatta (20 commit da 89daf98 a 16be11f, eseguita da Sonnet, rivista da Opus; resti sotto); fase B fatta (3e19d37, 0d686a9 identici; 879f471 + correzione Opus: regola "Not feasible as asked"); fase C fatta il 2026-10-30 (8 commit 782bd60…b67d755, golden 193, da rivedere e poi deploy; C5 non fatto per decisione); prossimo: fase D con l'utente. Ogni fase va
+Stato: **piano approvato dall'utente 2026-10-30.** B1–B3 fatti; fase A fatta (20 commit da 89daf98 a 16be11f, eseguita da Sonnet, rivista da Opus; resti sotto); fase B fatta (3e19d37, 0d686a9 identici; 879f471 + correzione Opus: regola "Not feasible as asked"); fase C fatta il 2026-10-30 (8 commit 782bd60…b67d755, golden 193, da rivedere e poi deploy; C5 non fatto per decisione); fase D aggiornata e avviata il 2026-11-20 (sotto). Ogni fase va
 avviata su conferma dell'utente; le fasi C e D cambiano testi o numeri che il bot legge e vanno
 approvate punto per punto.
 
@@ -322,25 +322,50 @@ ruin_label), `utils/lookup.py` (lookup/ambiguous). Scelte e resti:
 
 ## Fase D — una sola stima degli zombie (M–L, cambia i numeri: ultima)
 
-Due modelli per la stessa domanda:
-- `risk._zombie_max_estimate` (148-159), `_build_spread_map` (165-214),
-  `_spread_risk_for_clear` (217-239): per i percorsi (tag TRAP_RISK, deviazioni) e per mappa e
-  dettagli zona.
-- `kills.zone_estimate` (58-93) e `unvisited_estimate` (96-107): per le uccisioni.
+**Aggiornata 2026-11-20, approvata dall'utente ("unifica anche mappa e percorsi").** Base: il
+modello di arrivo introdotto per il campeggio in 94d5058 (`risk.zombie_sources`,
+`risk.earliest_zombie_day`, `geo.spread_steps`), verificato sul sorgente: `MapMaker::
+dailyZombieSpawn` = 1 ciclo `spreadCycleMH` a notte; zona con zombie +1 (90%) / +0 o +2 (5%);
+zona a 0 riceve 1-2 (da giorno 2, diagonali incluse) solo da un vicino con PIÙ zombie;
+`NightlyHandler` stage1 campeggio prima di stage3 spread; respawn globale sotto soglia
+(`risk.respawn_totals`).
 
-Differenze: zona vuota vecchia — risk usa la distanza BFS e `min(2 + 2·(età − d), sorgente)`,
-kills solo i vicini diretti e `2·notti` senza tetto (a 2+ zone di distanza kills dà 0 dove pathing
-segna TRAP_RISK); zona con sola banda di pericolo — pathing nessuna crescita (107), kills +1/+2
-per notte (90-92); i semi di spread ignorano le zone solo-banda e `danger_today`; radar scout (B4).
-- Una `risk.zone_estimate(zone, day, zmap, spread_map, *, final) -> Estimate(min, avg, max,
-  source)`: pathing usa `.max`, kills tutti e tre, la mappa il `max`. Scegliere un solo modello per
-  le zone vuote: quello a 8 vicini segue `spreadCycleMH` (lo spread avanza di una zona per notte).
-- Prerequisiti: A2, A3, A7 (età). Lo stesso testo di zona oggi è scritto in tre posti
-  (`risk._zone_threat` 242-275, `pathing._format_zom_str` 598-617, `pathing._classify_cell`
-  78-135): unificarlo qui, con `threat_text(t, style)`.
-- Verifica: diff dei golden (attesi cambi su mappa, dettagli zona, percorsi, uccisioni) + a mano
-  su 8299 giorno 6: la tabella SA1–4 di `docs/kill-route-plan.md` (19 / 8 / 3 su SA3) deve
-  restare.
+Oggi tre modelli per la stessa domanda ("quanti zombie può avere questa zona adesso?"):
+- `risk._zombie_max_estimate` + `_build_spread_map` (BFS senza date, solo celle esplorate) +
+  `_spread_risk_for_clear`: percorsi (TRAP_RISK, deviazioni), mappa, dettagli zona.
+- `kills.zone_estimate` / `unvisited_estimate`: uccisioni (solo vicini diretti, `2·notti`).
+- `risk.earliest_zombie_day` (Dijkstra con date e zone viste vuote): campeggio.
+
+Obiettivo: **un solo modello in `risk.py`**, usato da tutti.
+1. `risk.zombie_arrival(zmap, day, bounds) -> dict[Cell, Arrival(day, src, seen)]`: lo stesso
+   Dijkstra di `earliest_zombie_day` ma su tutte le celle (calcolato una volta per dati+giorno,
+   come la griglia di pathing); `earliest_zombie_day` diventa una lettura di quella mappa.
+2. `risk.zone_estimate(zone, cell, day, zmap, arrival, *, final) -> Estimate(min, avg, max,
+   source)` (sposta qui `kills.zone_estimate`):
+   - contata oggi: esatta (con `zombies_max`/`final` come oggi in kills);
+   - contata > 0 in un giorno vecchio: `zombie_growth` (invariato);
+   - contata 0 (vecchia) o mai visitata: se `arrival[cell].day > day` → 0/0/0 ("can't have
+     zombies yet: the nearest are N zones away"); altrimenti n = day − arrival.day + 1 notti
+     di crescita possibili: min 0, avg `GROWTH_AVG·n`, max `GROWTH_MAX·n`;
+   - mai visitata: in più, la regola dei vicini di kills (spawn del giorno 1 possibile):
+     max = max(quello sopra, il max dei vicini infetti) — **punto da far approvare** col diff;
+   - solo banda di pericolo: banda + crescita per notte se vecchia (versione kills; pathing
+     oggi non cresce: cambia, va mostrato).
+3. Percorsi/mappa/dettagli zona: `_build_spread_map` e `_spread_risk_for_clear` sostituiti da
+   `zone_estimate(...).max` (pathing `_classify_cell`, `walkability`, `_cell_risk`, `ZoneGrid`
+   tiene `arrival` al posto di `spread_map`); kills usa `zone_estimate` di risk.
+   `_zombie_max_estimate` resta solo se ancora usato (altrimenti via).
+4. Un solo testo di zona: `risk._zone_threat`, `pathing._format_zom_str`, testo in
+   `pathing._classify_cell` → `threat_text(estimate, style)`.
+5. Campeggio: `camping._project_zombies` usa lo stesso `zone_estimate` per la notte futura
+   (oggi: crescita `zombie_growth` + `earliest_zombie_day`): stesso numero, nessuna regola doppia.
+
+Verifica: `make golden` prima (223 same); dopo, il diff è il cambiamento voluto (attesi: mappa,
+dettagli zona, percorsi, uccisioni, campeggio). Per ogni gruppo di casi cambiati: 1-2 estratti
+prima/dopo e il motivo. A mano su 8299 giorno 6: la tabella SA1–4 di `docs/kill-route-plan.md`
+(19 / 8 / 3 su SA3) deve restare, o il cambio va spiegato. `tests/camping_checks.py` ok.
+Tempo: misura `make golden` prima/dopo (il Dijkstra su ~730 celle una volta per dati).
+Niente `--update`: lo fa Opus dopo l'approvazione dell'utente.
 
 ## Non vale la pena
 

@@ -32,7 +32,7 @@ from .camping import (
     camping_terms, fata_plan_upgrades, is_panda, lighthouse_built, odds_cap, plan_upgrade_text, resolve_camp_level,
     resolve_night, ruin_term, skill_label, typed_plan, zone_reading,
 )
-from .risk import _zone_freshness, _zone_threat, fmt_items
+from .risk import _zone_freshness, fmt_items, zone_threats
 from .cp import citizen_key
 from .geo import fmt_xy, km, moves, xy
 from .supplies import ITEMS, MAX_AP
@@ -570,13 +570,14 @@ def nearby_defense_lines(data: dict, cell: tuple, spare_nights: list[int] | None
     hits = nearby_installable(data, cell)
     if not hits:
         return []
+    threat = zone_threats(data)
     lines = ["Defensive items near the camp (round trip from the camp; +1 AP to install each; the AP of the trip "
              "are not available for upgrades):",
              "  Reach: " + "; ".join(f"d <= {d} with {w}" for d, w in REACH_TIERS)
              + ". Inventory unknown: not assumed. EP not counted (scouts, bikes go further); zombies on the way are ignored."]
     for d, coords, z, found in hits[:NEARBY_ZONES]:
         lines.append(f"  {coords} {d} away, {2 * d} AP round trip: {fmt_items(found)}"
-                     f"{_zone_threat(z, day)}{_zone_freshness(z, day)}")
+                     f"{threat(z)}{_zone_freshness(z, day)}")
     if any(i.get("heavy") for _, _, _, f in hits[:NEARBY_ZONES] for i in f):
         lines.append("  Heavy items: one per camper per trip.")
     if len(hits) > NEARBY_ZONES:

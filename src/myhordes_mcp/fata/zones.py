@@ -3,19 +3,18 @@
 from ..utils.fmt import header, heading, plural, ruin_label, updated
 from ..utils.clock import data_updated
 from .bank import summary_lines
-from .geo import fmt_xy, km, moves, xy, zone_map
+from .geo import fmt_xy, km, moves, xy
 from .risk import (
     DANGER_LEVELS,
-    _build_spread_map,
     _staleness_tag,
     _zone_freshness,
     _zone_status,
-    _zone_threat,
     fmt_items,
     is_stale,
     never_visited,
     respawn_check,
     zone_is_today,
+    zone_threats,
     zone_reach,
 )
 
@@ -176,11 +175,11 @@ def format_scout(data: dict) -> str:
     return "\n".join(lines).rstrip()
 
 
-def _ruin_line(z: dict, current_day) -> str:
+def _ruin_line(z: dict, current_day, threat) -> str:
     r = z["ruin"]
     x, y = xy(z)
     return (f"  {z['coords']} {moves((x, y))} AP: {ruin_label(r)}"
-            f"{_zone_threat(z)}{_zone_status(z)}{_zone_freshness(z, current_day)}")
+            f"{threat(z)}{_zone_status(z)}{_zone_freshness(z, current_day)}")
 
 
 NOTES_SHOWN = 15
@@ -243,7 +242,8 @@ def format_zones(data: dict, item: str = "") -> str:
 
     if ruins:
         lines.append(f"### Ruins ({len(ruins)}, nearest first)")
-        lines += [_ruin_line(z, current_day) for z in ruins]
+        threat = zone_threats(data)
+        lines += [_ruin_line(z, current_day, threat) for z in ruins]
         lines.append("")
     if notes:
         lines += _notes_lines(notes) + [""]
@@ -322,8 +322,8 @@ def format_zone_path(
 
     current_day = meta.get("day")
 
-    # Build full zone_map for spread simulation (all explored zones, not just bbox)
-    spread_map = _build_spread_map(zone_map(data), current_day if isinstance(current_day, int) else None)
+    # The spread model reads every explored zone, not just the box
+    zone_threat = zone_threats(data)
 
     header_parts = [heading(f"Zone Path {fmt_xy((x1, y1))} → {fmt_xy((x2, y2))}", meta)]
     if max_ap is not None:
@@ -346,7 +346,7 @@ def format_zone_path(
 
     def _render_zone(ap: int, z: dict, rx: int, ry: int, budget_exceeded: bool = False) -> list[str]:
         budget_flag = " [OVER BUDGET]" if budget_exceeded else ""
-        threat = _zone_threat(z, current_day, spread_map=spread_map, coords=(rx, ry))
+        threat = zone_threat(z)
         fresh = _zone_freshness(z, current_day)
         dried = " (dried)" if z.get("dried") else ""
         ruin = z.get("ruin")
@@ -377,7 +377,7 @@ def format_zone_path(
             if z.get("ruin") or z.get("items") or z.get("note"):
                 detailed.append((ap, z, rx, ry))
                 continue
-            threat = _zone_threat(z, current_day, spread_map=spread_map, coords=(rx, ry))
+            threat = zone_threat(z)
             key = (threat, z.get("updated_day"), bool(z.get("dried")), z.get("zombies", -1) < 0,
                    bool(z.get("danger_today")))
             groups.setdefault(key, []).append((ap, z))

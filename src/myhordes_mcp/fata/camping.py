@@ -22,8 +22,8 @@ from . import camp_zones, camplog
 from .cp import citizen_key
 from .geo import fmt_xy, in_bounds, km, map_bounds, spread_steps, xy, zone_map
 from .camp_zones import NIGHTLY_DROP
-from .risk import (DANGER_BAND, GROWTH_AVG, GROWTH_MAX, earliest_zombie_day, respawn_totals, zombie_growth,
-                   zombie_sources, zone_is_today)
+from .risk import (GROWTH_AVG, GROWTH_MAX, danger_band, respawn_totals, zombie_arrival, zombie_sources,
+                   zone_estimate, zone_is_today)
 from .towndata import plans_for_citizen, plans_for_zone
 
 # Previous campings (index = camping nights survived, capped at the end of the whole table).
@@ -230,7 +230,7 @@ def _zombie_reading(z: dict | None, day) -> tuple[int, str]:
         return 0, "zone never visited by anyone on Fata: zombies assumed 0"
     n = z.get("zombies", -1)
     if z.get("danger_today") or n < 0:
-        lo, hi = DANGER_BAND.get(z.get("danger"), (0, 9))
+        lo, hi = danger_band(z.get("danger"), (0, 9))
         band = f"{lo}-{hi}" if lo != hi else f"{lo}"
         return hi, f"no count today, danger level {band}: counted {hi}" + ("" if lo == hi else " (worst case)")
     if zone_is_today(z, day):
@@ -273,18 +273,18 @@ def zone_reading(data: dict, cell: tuple, night: dict) -> tuple:
 def _project_zombies(data: dict, cell: tuple, z: dict | None, zombies: int, note: str,
                      day: int, target: int) -> tuple[int, str]:
     """Zombies on the zone the night of `target`, from today's reading. Game rules in
-    risk.py (zombie_growth: a zone with zombies grows; earliest_zombie_day: an empty zone
-    gets some only once the spread front, one ring a night, reaches it)."""
-    nights = target - day
+    risk.py: the number is zone_estimate at the later day (a zone with zombies grows, an empty
+    zone gets some only once the spread front, zombie_arrival, reaches it)."""
     if not z or not zone_is_today(z, day) or z.get("danger_today") or z.get("zombies", -1) < 0:
         return zombies, note + "; zombies grow at night, the real count that night is probably higher"
-    if zombies > 0:
-        n = round(zombie_growth(zombies, nights)[1])
-        return n, (f"{zombies} today (d{day}), +{GROWTH_AVG:g} a night is the usual growth (90%): "
-                   f"counted {n} that night")
     zones = zone_map(data)
     bounds = map_bounds(data) if data.get("meta") else None
-    first = earliest_zombie_day(zones, cell, day, bounds)
+    arrival = zombie_arrival(zones, day, bounds)
+    if zombies > 0:
+        n = round(zone_estimate(z, cell, day, zones, arrival, at=target).avg)
+        return n, (f"{zombies} today (d{day}), +{GROWTH_AVG:g} a night is the usual growth (90%): "
+                   f"counted {n} that night")
+    first = arrival.get(cell)
     if first is None:
         text, reach = "none today and no zombies known on the map", 2
     else:

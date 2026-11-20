@@ -11,8 +11,7 @@ knowledge/tactics/weapons.md and opti-town-meta.md (Zombie Zoo).
   always counts EVERY zombie of every zone on the route.
 - A weapon kills min(zombies in the zone, its kills) (ProcessZoneEffect): a 2-kill weapon on
   a zone of 1 wastes the second kill. A zone with n zombies = n // 2 pairs + n % 2 single.
-- Nightly growth (risk.zombie_growth): +1 on average, +2 at most per night per zone with
-  zombies; an empty zone next to a zone with more grows 1-2 (or 0).
+- Zombie estimates: risk.zone_estimate (growth and spread rules live in risk.py).
 - Weapons (WEAPONS below): using one costs 0 AP, reloading too (also outside). Burning Laser
   Pointer: 2 kills per charge, a Battery loads 4 (50%), 3 (25%) or 2 (25%) charges
   (load_lpointer). Machete: 2 kills, breaks 25% per use (throw_b_cutcut, g_break_25).
@@ -32,9 +31,9 @@ import re
 from dataclasses import dataclass
 
 from .pathing import loop_return
-from .geo import MAX_PATH_AP, NEIGHBOURS8, Cell, fmt_xy, in_bounds, map_bounds, xy, zone_map
-from .risk import (CP_PER_CITIZEN, DANGER_TOP, GROWTH_AVG, GROWTH_MAX, danger_band, never_visited,
-                   respawn_check, respawn_totals, zombie_growth, zone_is_today)
+from .geo import MAX_PATH_AP, NEIGHBOURS8, Cell, fmt_xy, in_bounds, map_bounds, zone_map
+from .risk import (CP_PER_CITIZEN, Estimate, never_visited, respawn_check, respawn_totals, zombie_arrival,
+                   zone_estimate)
 from .towndata import expand_route
 from . import supplies
 from ..utils.fmt import header, plural
@@ -48,60 +47,15 @@ from ..utils.clock import data_updated
 # Zombie counts per zone
 # ---------------------------------------------------------------------------
 
-def _est(lo: float, avg: float, hi: float, source: str, **extra) -> dict:
-    return {"min": lo, "avg": avg, "max": hi, "source": source, **extra}
+def _estimates(data: dict, zmap: dict[Cell, dict], *, final: bool = False):
+    """(estimate of a cell, zone or never visited) for this snapshot: the spread model
+    (risk.zombie_arrival) is solved once."""
+    day = data["meta"].get("day")
+    arrival = zombie_arrival(zmap, day if isinstance(day, int) else None, map_bounds(data))
 
-
-def zone_estimate(zone: dict | None, day, zmap: dict[Cell, dict], *, final: bool = False) -> dict:
-    """{min, avg, max, source[, killed_today]} zombies in a zone.
-
-    Counted today: exact. Counted on an earlier day: grown by risk.zombie_growth for the
-    nights since (an empty zone only if a neighbour had zombies at its last count).
-    Only a danger band: its bounds, grown the same way if not today's. Never visited
-    (zone None): source "unknown". final: the data is a finished day, so the day's maximum
-    (before the kills) is what the zone held."""
-    if zone is None:
-        return _est(0, 0, 0, "unknown")
-    z, zmax = zone.get("zombies", -1), zone.get("zombies_max")
-    upd, danger = zone.get("updated_day"), zone.get("danger", 0)
-    nights = day - upd if isinstance(day, int) and upd is not None else 0
-    if zone.get("danger_today"):
-        lo, hi = danger_band(danger, DANGER_TOP)
-        return _est(lo, (lo + hi) / 2, hi, f"danger {danger} today" if danger else "clear today")
-    if z >= 0 and zone_is_today(zone, day):
-        if zmax and zmax > z:
-            if final:
-                return _est(zmax, zmax, zmax, f"day {day} (max, before kills)")
-            return _est(z, z, z, "today", killed_today=zmax - z)
-        return _est(z, z, z, "today")
-    if z >= 0 and upd is not None and nights > 0:
-        src = f"day {upd} (+{plural(nights, 'night')})"
-        if z > 0:
-            return _est(*zombie_growth(z, nights), src)
-        x, y = xy(zone)
-        near = any(zmap.get((x + dx, y + dy), {}).get("zombies", 0) > 0 for dx, dy in NEIGHBOURS8)
-        return _est(0, GROWTH_AVG * nights if near else 0, GROWTH_MAX * nights if near else 0, src)
-    if z >= 0:
-        return _est(z, z, z, f"day {upd}" if upd is not None else "counted")
-    lo, hi = danger_band(danger, DANGER_TOP)
-    if danger and nights > 0:
-        return _est(lo, (lo + hi) / 2 + GROWTH_AVG * nights, hi + GROWTH_MAX * nights,
-                    f"danger {danger} (+{plural(nights, 'night')})")
-    return _est(lo, (lo + hi) / 2, hi, f"danger {danger}" if danger else "clear (danger 0)")
-
-
-def unvisited_estimate(cell: Cell, day, zmap: dict[Cell, dict], *, final: bool = False) -> dict:
-    """A zone never visited. Zombies only spread to the zones next to them (spreadCycleMH),
-    so it is estimated from its known neighbours (8): min 0, avg the mean of the infected
-    ones, max the highest of them. No infected neighbour known: source "unknown" (0)."""
-    x, y = cell
-    near = [zone_estimate(zmap[n], day, zmap, final=final) for dx, dy in NEIGHBOURS8
-            if (n := (x + dx, y + dy)) in zmap and n != (0, 0)]
-    infected = [e for e in near if e["avg"] > 0]
-    if not infected:
-        return _est(0, 0, 0, "unknown")
-    return _est(0, sum(e["avg"] for e in infected) / len(infected), max(e["max"] for e in infected),
-                f"never visited, from {plural(len(infected), 'neighbour')}")
+    def est(cell: Cell) -> Estimate:
+        return zone_estimate(zmap.get(cell), cell, day, zmap, arrival, final=final)
+    return est
 
 
 def buckets(n: float) -> tuple[int, int]:
@@ -110,38 +64,37 @@ def buckets(n: float) -> tuple[int, int]:
     return n // 2, n % 2
 
 
-def _range(e: dict) -> str:
-    if e["min"] == e["max"]:
-        return _fmt(e["avg"])
-    return f"{_fmt(e['min'])}–{_fmt(e['max'])} (avg {_fmt(e['avg'])})"
+def _range(e: Estimate) -> str:
+    if e.min == e.max:
+        return _fmt(e.avg)
+    return f"{_fmt(e.min)}–{_fmt(e.max)} (avg {_fmt(e.avg)})"
 
 
 def analyse_route(data: dict, path: list[Cell]) -> dict:
     """The zones of `path` (town excluded, each counted once on its first step) that hold
     zombies, the ones never visited with no infected neighbour, and totals (zombies, pairs,
     singles) by min/avg/max. A never-visited zone next to infected ones is a row, estimated
-    from them (unvisited_estimate)."""
-    day = data["meta"].get("day")
+    from them (risk.zone_estimate)."""
     final = data["meta"].get("live") is False
     zmap = zone_map(data)
+    estimate = _estimates(data, zmap, final=final)
     rows, unknown, banded, seen = [], [], [], set()
     for step, cell in enumerate(path, 1):
         if cell == (0, 0) or cell in seen:
             continue
         seen.add(cell)
-        est = zone_estimate(zmap[cell], day, zmap, final=final) if cell in zmap \
-            else unvisited_estimate(cell, day, zmap, final=final)
-        if est["source"] == "unknown":
+        est = estimate(cell)
+        if est.source == "unknown":
             unknown.append((step, cell))
-        elif final and est["source"].startswith("danger") and est["max"] > 0:
+        elif final and est.source.startswith("danger") and est.max > 0:
             banded.append((step, cell, est))   # a past day's totals are counts, not bands
-        elif est["max"] > 0:
+        elif est.max > 0:
             rows.append({"step": step, "zone": cell, "est": est,
-                         "pairs": buckets(est["avg"])[0], "singles": buckets(est["avg"])[1]})
+                         "pairs": buckets(est.avg)[0], "singles": buckets(est.avg)[1]})
     totals = {}
     for k in ("min", "avg", "max"):
-        pb = [buckets(r["est"][k]) for r in rows]
-        totals[k] = {"zombies": sum(int(r["est"][k] + 0.5) for r in rows),
+        pb = [buckets(getattr(r["est"], k)) for r in rows]
+        totals[k] = {"zombies": sum(int(getattr(r["est"], k) + 0.5) for r in rows),
                      "pairs": sum(p for p, _ in pb), "singles": sum(s for _, s in pb)}
     return {"rows": rows, "unknown": unknown, "banded": banded, "totals": totals, "zones": len(seen)}
 
@@ -154,8 +107,8 @@ def edge_gap(data: dict, path: list[Cell]) -> str | None:
     cells = [c for c in path if c != (0, 0)]
     if not bounds or not cells:
         return None
-    day = data["meta"].get("day")
     zmap = zone_map(data)
+    estimate = _estimates(data, zmap)
     x0, x1 = min(c[0] for c in cells), max(c[0] for c in cells)
     y0, y1 = min(c[1] for c in cells), max(c[1] for c in cells)
     gaps = []
@@ -168,9 +121,8 @@ def edge_gap(data: dict, path: list[Cell]) -> str | None:
                 continue
             zones = [(o, a) if axis == 1 else (a, o)
                      for a in range(far + step, edge + step, step) for o in range(olo, ohi + 1)]
-            est = {c: zone_estimate(zmap[c], day, zmap) if c in zmap else unvisited_estimate(c, day, zmap)
-                   for c in zones}
-            bad = [c for c in zones if est[c]["max"] > 0 or c not in zmap]
+            est = {c: estimate(c) for c in zones}
+            bad = [c for c in zones if est[c].max > 0 or c not in zmap]
             if bad:
                 gaps.append((("y" if axis == 1 else "x"), far, edge, bad, est))
     if not gaps:
@@ -178,7 +130,7 @@ def edge_gap(data: dict, path: list[Cell]) -> str | None:
     parts = []
     for name, far, edge, bad, est in gaps:
         unseen = [c for c in bad if c not in zmap]
-        lo, avg, hi = (sum(est[c][k] for c in bad) for k in ("min", "avg", "max"))
+        lo, avg, hi = (sum(getattr(est[c], k) for c in bad) for k in ("min", "avg", "max"))
         parts.append(f"from {name}={far} to the edge {name}={edge}: {plural(len(bad), 'zone')} with zombies or "
                      f"never visited, ~{_fmt(avg)} zombies ({_fmt(lo)}–{_fmt(hi)})"
                      + (f", {len(unseen)} never visited" if unseen else "") + f": {_zones_text(bad)}")
@@ -552,16 +504,16 @@ def zoo_clusters(data: dict) -> list[dict]:
     biggest first. Each: zones, zombies (min/avg/max), bbox, unseen (never-visited zones
     next to it, inside the map), edge (touches the map border), sides {N,S,E,W: zones next
     to a visited clean zone in that direction}, zoo (the likely zoo)."""
-    day = data["meta"].get("day")
     final = data["meta"].get("live") is False
     zmap = zone_map(data)
-    est = {c: zone_estimate(z, day, zmap, final=final) for c, z in zmap.items() if c != (0, 0)}
-    infected = {c for c, e in est.items() if e["avg"] > 0 or zmap[c].get("danger", 0) > 0}
+    estimate = _estimates(data, zmap, final=final)
+    est = {c: estimate(c) for c in zmap if c != (0, 0)}
+    infected = {c for c, e in est.items() if e.avg > 0 or zmap[c].get("danger", 0) > 0}
     bounds = map_bounds(data)
     inside = (lambda c: in_bounds(bounds, c)) if bounds else (lambda c: False)
 
     def clean(c: Cell) -> bool:
-        return c in zmap and c not in infected and (c == (0, 0) or est[c]["avg"] == 0)
+        return c in zmap and c not in infected and (c == (0, 0) or est[c].avg == 0)
 
     clusters, todo = [], set(infected)
     while todo:
@@ -583,7 +535,7 @@ def zoo_clusters(data: dict) -> list[dict]:
             zs = [c for c in comp if clean((c[0] + dx, c[1] + dy))]
             if zs:
                 sides[d] = zs
-        tot = {k: sum(est[c][k] for c in comp) for k in ("min", "avg", "max")}
+        tot = {k: sum(getattr(est[c], k) for c in comp) for k in ("min", "avg", "max")}
         xs, ys = [c[0] for c in comp], [c[1] for c in comp]
         clusters.append({"zones": sorted(comp), "zombies": tot, "unseen": sorted(unseen), "edge": edge,
                          "bbox": (min(xs), max(xs), min(ys), max(ys)), "sides": sides, "est": est,
@@ -596,9 +548,9 @@ def zoo_clusters(data: dict) -> list[dict]:
 
 
 def _side_line(d: str, zones: list[Cell], est: dict) -> str:
-    z = sum(int(est[c]["avg"] + 0.5) for c in zones)
-    p = sum(buckets(est[c]["avg"])[0] for c in zones)
-    s = sum(buckets(est[c]["avg"])[1] for c in zones)
+    z = sum(int(est[c].avg + 0.5) for c in zones)
+    p = sum(buckets(est[c].avg)[0] for c in zones)
+    s = sum(buckets(est[c].avg)[1] for c in zones)
     return f"    {d}: {plural(len(zones), 'zone')}, ~{z} zombies ({plural(p, 'pair')} + {plural(s, 'single')}): {_zones_text(zones)}"
 
 
@@ -755,7 +707,7 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
         lines += ["", "| Step | Zone | Zombies | Source | Pairs | Singles |", "|---|---|---|---|---|---|"]
         for row in a["rows"]:
             e, (x, y) = row["est"], row["zone"]
-            src = e["source"] + (f", {e['killed_today']} killed today" if e.get("killed_today") else "")
+            src = e.source + (f", {e.killed_today} killed today" if e.killed_today else "")
             lines.append(f"| {row['step']} | {fmt_xy((x, y))} | {_range(e)} | {src} | {row['pairs']} | {row['singles']} |")
     else:
         lines += ["", "No zone with zombies on this route."]
@@ -772,7 +724,7 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
                      + " ".join(f"{fmt_xy(c)} (step {s})" for s, c in a["unknown"]))
     if a["banded"]:
         lines.append("Danger band only, left out of the totals (past day): "
-                     + " ".join(f"{fmt_xy(c)} ~{_fmt(e['min'])}–{_fmt(e['max'])}" for _, c, e in a["banded"]))
+                     + " ".join(f"{fmt_xy(c)} ~{_fmt(e.min)}–{_fmt(e.max)}" for _, c, e in a["banded"]))
     if a["rows"] or given is not None:
         kl, kslots, kit_used = kit_lines(a, data.get("bank", []), given, slots)
         lines += [""] + kl
@@ -781,9 +733,9 @@ def plan_kill_route(data: dict, *, route: str = "", waypoints: list[Cell] | None
     warns = respawn_after_kills(data, avg["zombies"])
     if gap := edge_gap(data, path):
         warns.insert(0, gap)
-    blocked = [r for r in a["rows"] if r["est"]["max"] > group_cp]
+    blocked = [r for r in a["rows"] if r["est"].max > group_cp]
     if blocked:
-        zs = ", ".join(f"{fmt_xy(r['zone'])} ({_fmt(r['est']['max'])})" for r in blocked[:MAX_LISTED])
+        zs = ", ".join(f"{fmt_xy(r['zone'])} ({_fmt(r['est'].max)})" for r in blocked[:MAX_LISTED])
         warns.append(f"Zones with more zombies than the group's {group_cp} CP block it there until they are "
                      f"killed: {zs}" + (f" +{len(blocked) - MAX_LISTED}" if len(blocked) > MAX_LISTED else "")
                      + ". Kill everything before leaving the zone; an empty weapon means stuck.")

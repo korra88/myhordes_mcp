@@ -331,6 +331,20 @@ _g[(6, 1)] = _g[(6, 2)] = _g[(6, 3)] = {"zombies": 0, "updated_day": 26, "seen_t
 assert earliest_zombie_day(_g, (2, 2), 26, _b) == (31, (8, 2), 2)   # [7|2] empty only on d10: one night gained
 # zones never visited relay the spread unchecked: without the bounds the front goes round the grid
 assert earliest_zombie_day(_g, (2, 2), 26)[0] == 28
+# the one zombie estimate (risk.zone_estimate) on the same grid: [8|2] counted 5 on day 2, now day 26
+from myhordes_mcp.fata.risk import zombie_arrival, zone_estimate, threat_text
+_a = zombie_arrival(_g, 26, _b)
+_e = zone_estimate(_g[(7, 2)], (7, 2), 26, _g, _a)        # [7|2] counted empty d10, next to [8|2] (counted d2): from day 11, 16 nights
+assert (_e.min, _e.avg, _e.max, _e.kind) == (0, 16, 32, "spread") and threat_text(_e, "map") == ", clear→≤32 zom (spread risk, 1d away)", _e
+_g2 = dict(_g)
+_g2[(2, 2)] = {"zombies": 0, "updated_day": 20, "seen_today": False}
+_e = zone_estimate(_g2[(2, 2)], (2, 2), 26, _g2, zombie_arrival(_g2, 26, _b))   # the front reaches [2|2] on day 31 > 26
+assert (_e.max, _e.kind) == (0, "early") and "can't have zombies yet: the nearest are 6 zones away" in _e.source, _e
+_e = zone_estimate({"zombies": 3, "updated_day": 24, "seen_today": False}, (1, 1), 26, _g, _a)
+assert (_e.min, _e.avg, _e.max) == (3, 5, 7) and threat_text(_e, "map") == ", 3 zom→≤7 (est.)", _e
+_e = zone_estimate({"zombies": -1, "danger": 2, "updated_day": 24, "seen_today": False}, (1, 1), 26, _g, _a)
+assert (_e.min, _e.max) == (3, 9) and threat_text(_e, "route") == "~moderate (3-5 zombies)→≤9 (est.)", _e   # a band grows +2 a night
+assert threat_text(zone_estimate({"zombies": 0, "updated_day": 26, "seen_today": True}, (1, 1), 26, _g, _a), "route") == "clear"
 assert "Night of day 26 (tonight)." in format_camping_odds(res, x=8, y=13, town_id=None)
 assert format_camping_odds(res, x=8, y=13, day_arg=26, town_id=None) == format_camping_odds(res, x=8, y=13, town_id=None)
 err = format_camping_odds(res, x=8, y=13, day_arg=20, town_id=None)
@@ -719,4 +733,13 @@ assert nearby_defense_lines({"meta": {"day": 26}, "zones": [zn(20, 20, "Old Door
 assert nearby_defense_lines({"meta": {"day": 26}, "zones": [zn(5, 5, "Mangy Dachshund", "Bag of Cement", "Flatpacked Furniture")]}, (5, 6)) == []
 assert not any("[5|6]" in l for l in nb)   # the camp zone itself is the pool, not the block
 
+# never visited: exposed (a neighbour unexplored / off the map / with zombies) = top danger band at least;
+# enclosed by visited clear zones = only the spread
+from myhordes_mcp.fata.risk import zone_estimate as _ze
+_enc = {(x, y): {"zombies": 0, "updated_day": 26, "seen_today": True} for x in range(3, 8) for y in range(3, 8) if (x, y) != (5, 5)}
+_e = _ze(None, (5, 5), 26, _enc, {})
+assert _e.kind == "unknown" and _e.max == 0 and "surrounded by clear zones" in _e.source, _e
+_e = _ze(None, (3, 5), 26, {c: v for c, v in _enc.items() if c != (3, 5)}, {})   # on the grid's edge
+assert _e.kind == "exposed" and _e.max == 9 and "3 sides unexplored or map edge" in _e.source, _e
+assert threat_text(_e, "route") == "unexplored, high risk (≤9 zom)"
 print("camping checks: ok")
