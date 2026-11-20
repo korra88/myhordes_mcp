@@ -490,6 +490,8 @@ async def find_expedition_path(
         wps = parse_zones(waypoints.split(";"))
         if isinstance(wps, str):
             return wps
+    if err := day_budget_error(start_ap, "path"):
+        return err
     data = await fata.fetch_town_data(tid, day=day or None)
     group_cp, breakdown = fata.resolve_group_cp(data, tid, group_cp, party)
     return fata.find_safe_path(
@@ -720,7 +722,7 @@ async def plan_kill_route(
         wps = parse_zones(waypoints.split(";"))
         if isinstance(wps, str):
             return wps
-    if err := day_budget_error(start_ap, kill_route=True):
+    if err := day_budget_error(start_ap, "kill"):
         return err
     data = await fata.fetch_town_data(tid, day=day or None)
     group_cp, breakdown = fata.resolve_group_cp(data, tid, group_cp, party)

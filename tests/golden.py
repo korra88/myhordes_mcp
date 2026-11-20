@@ -177,6 +177,7 @@ CASES = [
     ("kill_err_slots", "plan_kill_route", {"waypoints": "-3,0", "slots": 0}),
     ("kill_err_sw", "plan_kill_route", {"waypoints": "-3,0", "second_wind": 9}),
     ("kill_err_budget", "plan_kill_route", {"waypoints": "-3,0", "start_ap": 19}),
+    ("path_err_budget", "find_expedition_path", {"x1": 0, "y1": 0, "x2": 2, "y2": 2, "start_ap": 19}),
     ("zone_reach_near", "get_zone_details", {"x1": 1, "y1": 1, "x2": 1, "y2": 1}),
     ("zone_reach_nobuild", "get_zone_details", {"town_id": OTHER, "day": 1, "x1": 1, "y1": 0, "x2": 1, "y2": 0}),
     ("zone_reach_lvl1", "get_zone_details", {"day": 2, "x1": 1, "y1": 0, "x2": 1, "y2": 0}),

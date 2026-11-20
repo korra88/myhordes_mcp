@@ -34,22 +34,30 @@ def walked_again(route: list[tuple[int, int]]) -> list[tuple[int, int]]:
     return again
 
 
-def day_budget_error(start_ap: int, kill_route: bool = False) -> str | None:
+def day_budget_error(start_ap: int, tool: str = "supplies") -> str | None:
     """An error when start_ap is a player's day budget ("19 AP"), not AP at departure.
 
-    The kill route plans its own supplies from an empty `available`, so its message must not
-    teach the budget-to-`available` mapping of plan_expedition_supplies (bot eval 2026-11-20,
-    scenario K1: both models passed available='water=1, food6=1' after this error)."""
+    `tool` picks the advice: "supplies" (plan_expedition_supplies: the budget maps to
+    `available`), "kill" (plan_kill_route plans its own supplies from an empty `available`)
+    or "path" (find_expedition_path has no supplies: the trip belongs to the supplies tool).
+    Bot eval 2026-11-20: every model's first call put the budget in start_ap; K1 learnt the
+    supplies mapping from the shared message, and in E1 Haiku stopped at a path planned
+    with start_ap=19, which this tool used to accept."""
     # Twinoid 8 + coffee 4 is the most anyone leaves with.
     if start_ap <= 12:
         return None
-    if kill_route:
-        return (f"Error: start_ap={start_ap} is not AP at departure (12 at most). A player's "
-                "'N AP' is the day's budget with food and water included. Plan again with "
-                "start_ap=6 and leave `available` empty: the plan adds the water, food and "
-                "boosters the route needs.")
-    return (f"Error: start_ap={start_ap} is not AP at departure (12 at most). A player's "
-            "'N AP' is the day's budget with food and water included: 18 = start_ap=6, "
+    head = (f"Error: start_ap={start_ap} is not AP at departure (12 at most). A player's "
+            "'N AP' is the day's budget with food and water included")
+    if tool == "kill":
+        return (head + ". Plan again with start_ap=6 and leave `available` empty: the plan "
+                "adds the water, food and boosters the route needs.")
+    if tool == "path":
+        return (head + ", and this tool plans no food or water. For the trip, call "
+                "plan_expedition_supplies with start_ap=6 and the budget as `available` "
+                "(18 = 'water=1, food6=1'; 19 = 'water=1, food7=1'; 20/21 = the same with "
+                "scout=True; 24 = add 'steroid=1'). For a bare path, call this tool again "
+                "with start_ap=6.")
+    return (head + ": 18 = start_ap=6, "
             "available='water=1, food6=1'; 19 = 'water=1, food7=1'; 20/21 = the same with "
             "scout=True; 24 = add 'steroid=1'. Plan again with start_ap=6.")
 
