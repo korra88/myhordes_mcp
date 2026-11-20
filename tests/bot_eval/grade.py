@@ -434,21 +434,31 @@ def check_d2(s: dict, game: list[dict], harness: list[dict], rec: dict) -> dict:
 ASKED_FULL = re.compile(r"\b(full|complete|everything|in detail|detailed|all items|tutt[oi]|complet\w*|dettagli\w*|"
                         r"int[ée]gral\w*|d[ée]tail\w*|tout)\b", re.I)
 DICE_CARDS = re.compile(r"\b(dice|dadi?|d[ée]s?|cards?|carte|cartes)\b", re.I)
+# Tools whose start_ap is AP at departure; each refuses a day budget (> 12) with this error.
+START_AP_TOOLS = ("plan_expedition_supplies", "find_expedition_path", "plan_kill_route")
+REFUSED_BUDGET = "Error: start_ap="
+
+
+def refused_budget(c: dict) -> bool:
+    """The tool refused the call because start_ap was a day budget: nothing was planned from it.
+    Baseline 2026-11-20: every model (Opus too) tries start_ap=N first and redoes the call after
+    this refusal; only a start_ap the tool accepted can reach the answer (maintainer, option a)."""
+    return REFUSED_BUDGET in (c.get("out") or "")[:200]
 
 
 def check_d3(s: dict, game: list[dict], user_text: str, fx: Fixture) -> dict:
     if not game:
         return res(NA, "no game tool call")
-    bad = []
+    bad, refused = [], []
     for c in game:
         a = c["args"]
-        if c["tool"] == "plan_expedition_supplies" and a.get("start_ap") not in (None, "", 6, "6"):
+        if c["tool"] in START_AP_TOOLS and a.get("start_ap") not in (None, "", 6, "6"):
             try:
                 over = float(a["start_ap"]) > 6
             except (TypeError, ValueError):
                 over = True
             if over and not DICE_CARDS.search(user_text):
-                bad.append(f"start_ap={a['start_ap']} ({fmt_call(c)[:60]})")
+                (refused if refused_budget(c) else bad).append(f"start_ap={a['start_ap']} ({fmt_call(c)[:60]})")
         if c["tool"] == "plan_kill_route" and str(a.get("available", "")).strip():
             bad.append(f"plan_kill_route available={a['available']!r}")
         if str(a.get("detail", "")).lower() == "full" and not ASKED_FULL.search(user_text):
@@ -462,7 +472,9 @@ def check_d3(s: dict, game: list[dict], user_text: str, fx: Fixture) -> dict:
         for c in game:
             if call_matches(c, want):
                 bad.append(f"forbidden arguments: {fmt_call(c)[:90]}")
-    return res(FAIL, "; ".join(dict.fromkeys(bad))) if bad else res(PASS, f"{len(game)} call(s), no forbidden argument")
+    note = f"; refused by the tool and not counted: {', '.join(refused)}" if refused else ""
+    return (res(FAIL, "; ".join(dict.fromkeys(bad)) + note) if bad
+            else res(PASS, f"{len(game)} call(s), no forbidden argument{note}"))
 
 
 def check_d4(s: dict, game: list[dict]) -> dict:
@@ -602,8 +614,11 @@ def inv_start_ap_6(ctx):
     calls = [c for c in ctx["game"] if c["tool"] == "plan_expedition_supplies"]
     if not calls:
         return NA, "no plan_expedition_supplies call"
-    bad = [fmt_call(c)[:70] for c in calls if c["args"].get("start_ap") not in (None, "", 6, "6")]
-    return (FAIL, f"start_ap: {bad}") if bad else (PASS, "start_ap 6 / default on every call")
+    off = [c for c in calls if c["args"].get("start_ap") not in (None, "", 6, "6")]
+    bad = [fmt_call(c)[:70] for c in off if not refused_budget(c)]
+    refused = [fmt_call(c)[:70] for c in off if refused_budget(c)]
+    note = f"; refused by the tool and not counted: {refused}" if refused else ""
+    return (FAIL, f"start_ap: {bad}{note}") if bad else (PASS, f"start_ap 6 / default on every accepted call{note}")
 
 
 def inv_camping_one_call_until_day(ctx):

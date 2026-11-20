@@ -103,6 +103,12 @@ check(st(grade(sc(), rec(trace=[call("plan_expedition_supplies", start_ap=12)], 
 check(st(grade(sc(), rec(trace=[call("plan_expedition_supplies", start_ap=6)])), "D3") == G.PASS)
 check(st(grade(sc(), rec(trace=[call("plan_expedition_supplies", start_ap=12)], text="with the dice, 12 AP")), "D3") == G.PASS)
 check(st(grade(sc(), rec(trace=[call("plan_kill_route", available="water=1")])), "D3") == G.FAIL)
+# option a (2026-11-20): a day budget the tool refused is not counted; an accepted one is, on every start_ap tool
+REF = "Error: start_ap=19 is not AP at departure (12 at most)."
+check(st(grade(sc(), rec(trace=[call("plan_expedition_supplies", REF, start_ap=19), call("plan_expedition_supplies", start_ap=6)])), "D3") == G.PASS)
+check(st(grade(sc(), rec(trace=[call("find_expedition_path", REF, start_ap=19)])), "D3") == G.PASS)
+check(st(grade(sc(), rec(trace=[call("find_expedition_path", "## Pathfinding", start_ap=19)])), "D3") == G.FAIL)
+check(st(grade(sc(), rec(trace=[call("plan_kill_route", "## Kill route", start_ap=9)])), "D3") == G.FAIL)
 check(st(grade(sc(), rec(trace=[call("get_town_overview", town_id=999)], text="how is it")), "D3") == G.FAIL)   # invented
 check(st(grade(sc(), rec(trace=[call("get_town_overview", town_id=999)], text="town 999 please")), "D3") == G.PASS)
 check(st(grade(sc(), rec(trace=[call("get_town_overview", town_id=1)])), "D3") == G.PASS)
@@ -235,6 +241,8 @@ check(d11("no_tool_names", "the tool says 3")["status"] == G.FAIL and d11("no_to
 check(d11("start_ap_6", trace=[call("plan_expedition_supplies", start_ap=19)])["status"] == G.FAIL)
 check(d11("start_ap_6", trace=[call("plan_expedition_supplies", start_ap=6)])["status"] == G.PASS
       and d11("start_ap_6")["status"] == G.NA)
+check(d11("start_ap_6", trace=[call("plan_expedition_supplies", REF, start_ap=19), call("plan_expedition_supplies", start_ap=6)])["status"] == G.PASS)
+check(d11("start_ap_6", trace=[call("plan_expedition_supplies", "## Supplies plan", start_ap=8)])["status"] == G.FAIL)
 one = call("plan_group_camping", "x", x=7, y=-13, until_day=31)
 check(d11("camping_one_call_until_day", trace=[one])["status"] == G.PASS)
 check(d11("camping_one_call_until_day", trace=[one, call("plan_group_camping", x=7, y=-13, day=27)])["status"] == G.FAIL)
