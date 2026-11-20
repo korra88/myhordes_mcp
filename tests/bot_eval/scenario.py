@@ -14,11 +14,12 @@ SCENARIOS = ROOT / "towns" / "_eval" / "scenarios"
 FIXTURES = ROOT / "towns" / "_eval" / "fixtures"
 
 TIERS = ("public", "trusted")
+SUITES = ("core", "extended")
 CONTEXTS = ("thread", "dm")
 # field -> (type, default); a field without a default is required
 FIELDS = {
     "id": (str, None), "fixture": (str, None), "turns": (list, None),
-    "clock": (str, ""), "tier": (str, "public"), "context": (str, "thread"),
+    "suite": (str, "core"), "clock": (str, ""), "tier": (str, "public"), "context": (str, "thread"),
     "memory": (str, ""), "user_town": (int, 0),
     "tools_any": (list, []), "tools_forbidden": (list, []),
     "args_required": (list, []), "args_forbidden": (list, []),
@@ -54,6 +55,8 @@ def validate(data: dict, where: str = "scenario", check_fixture: bool = True) ->
     if not errors:
         if out["tier"] not in TIERS:
             errors.append(f"tier must be one of {TIERS}")
+        if out["suite"] not in SUITES:
+            errors.append(f"suite must be one of {SUITES}")
         if out["context"] not in CONTEXTS:
             errors.append(f"context must be one of {CONTEXTS}")
         if out["memory"] and out["context"] != "dm":

@@ -11,6 +11,7 @@ Started by `claude -p --mcp-config <file from mcp_config.py>`; configured by the
                       temporary towns/ before the first call, e.g. "_user_towns/<id>": "7365",
                       "_bot/memory/<id>.md": "..."  (the scenario's `memory` / `user_town`)
   BOT_EVAL_MANIFEST   on exit, the temporary towns/ manifest is written there (check D13)
+`server.py --now` (same environment) prints the frozen time (UTC ISO) and exits.
 stdout carries only the MCP protocol: everything this file prints goes to stderr.
 The patches are process-wide: one fixture per process.
 """
@@ -18,8 +19,9 @@ The patches are process-wide: one fixture per process.
 import json
 import os
 import re
+import signal
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -99,6 +101,12 @@ def main() -> None:
         prepare(run, town, os.environ.get("BOT_EVAL_CLOCK", ""), user, context, files)
         print(f"bot-eval server: fixture {fid} town {town}, now {run.now['t']:%Y-%m-%d %H:%M}", file=sys.stderr)
         sys.stdout = real_stdout
+        if "--now" in sys.argv[1:]:
+            # The frozen time as UTC ISO text, for run.py's chat timestamp; no protocol.
+            print(run.now["t"].astimezone(timezone.utc).isoformat(timespec="seconds"))
+            return
+        # `claude` stops its servers with SIGTERM: turn it into a normal exit so `finally` runs.
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
         try:
             run.main.mcp.run()
         finally:

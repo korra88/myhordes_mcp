@@ -1,6 +1,6 @@
 # Bot evaluation suite — plan
 
-Status (2026-11-20): phases 0–2 done and committed; phase 3 implemented, awaiting review. Written so that
+Status (2026-11-20): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 implemented, awaiting review. Written so that
 an agent with no prior context can implement it phase by phase (section 8).
 
 **Changes since the plan was written (2026-11-14), read first.** The server now has **28**
@@ -19,6 +19,7 @@ are stable). Gap G9 is closed, C1 is rewritten, C3/C4 and F18–F20 are new (202
 | 1 `tests/offline.py` | committed 9130e8f |
 | 2 `tests/bot_eval/freeze.py`, `make bot-eval-freeze`, 14 fixtures in `towns/_eval/fixtures/`, `towns/.gitignore` negations | done and reviewed, committed 2026-11-17 (both repos) |
 | 3 offline MCP server + expectations | implemented 2026-11-20, not committed: `tests/bot_eval/{server,mcp_config,scenario}.py`, `scenario.example.json`, `freeze.py --expect [--check]`, `make bot-eval-expect[-check]`, `bot-eval-server`, `bot-eval-mcp-config`; fixture `8299-d26` (local cache, v1.3 camp plans, 0 Fata requests; 15 fixtures); C3/C4 drafts in `towns/_eval/scenarios/`; `claude -p` lists 28 tools on it; `make golden` 223 same |
+| 4 runner | implemented 2026-11-20, not committed: `tests/bot_eval/run.py`, `make bot-eval`, `suite` field in the scenario schema, `server.py --now` and SIGTERM-safe manifest, private scenario I1; smoke runs on Haiku 5.5 (I1, C4) green, real `towns/` untouched, `make golden` 223 same |
 
 Goal: a small, offline, reproducible set of real-town scenarios that scores the Discord
 advisor's answers, so a change to `prompts/game-primer.md`, `prompts/discord.md`,
@@ -531,6 +532,34 @@ own loader; replaces `mcp_config` with a generated JSON that starts
 where="dm", memory=True, files=[memory file])` and `child_env(..., "dm")`. Each scenario's
 tier is fixed in its file; `MODEL=`/`TIER=` override it for the comparison matrix. Use the
 full id `claude-haiku-5-5` (the CLI alias `haiku` is Haiku 4.5, `docs/discord.md`).
+
+**As implemented (phase 4).** Command: `make bot-eval [SUITE=core|extended|all] [ONLY=I1,C4]
+[MODEL=<full id>] [TIER=public|trusted] [LABEL=x] [REPEAT=n] [EXTRA_TOOLS=a,b] [DRY=1]`; it runs
+`tests/bot_eval/run.py` with the listener's interpreter (`DISCORD_PYTHON`, default
+`../discord_mcp/.venv/bin/python`, because the listener imports `mcp`). `bot-eval-compare` does not exist yet (phase 5+).
+- `SUITE` selects on the scenario's `suite` field (core | extended, default core); `ONLY` ignores it;
+  `REPEAT>1` is refused without `ONLY`. `DRY=1` builds argv, prompts and configs, calls nothing, writes nothing.
+- Per turn: the offline server's inputs (`BOT_EVAL_FILES`, `BOT_EVAL_MANIFEST`, config JSON, settings file) are in a
+  temp dir; `claude` runs from the tier's `cwd` (the repo root, as the listener does), so persona, prompts and KB are the
+  working tree's. A turn of a multi-turn scenario starts a new server (fresh temporary `towns/`: a `remember` of turn 1 is
+  not visible to the tools of turn 2; it is only in the session history).
+- The chat message carries the frozen game time (`server.py --now`), not the wall clock; author "Tester" with the
+  synthetic id; channel name `myhordes-ai`. A DM scenario's memory is pasted from the scenario text (synthetic).
+- `--max-budget` (default 3 USD per turn) replaces the toml's 100.
+- `EXTRA_TOOLS`: tools to add to the tier's allowed list. This machine's `discord-listener.toml` lacks
+  `plan_group_camping` in both tiers (the example has it), so C3/C4 need it; the runner prints a WARNING for any `tools_any` tool
+  not allowed, and records `extra_allowed` in the run file.
+- Run file `towns/_eval/runs/<date>-<label>-<model>.json` (a second run with the same name gets `-2`, never overwrites):
+  `meta` (git SHA + dirty files, system prompt SHA-256 per tier, model requested, CLI version, toml hash, allowed tools,
+  fixture hashes, `wiki/processed/` hash, scenario hashes), `real_towns_guard`, `totals`, and per scenario/turn: `prompt`,
+  `answer`, `trace` (tool, args, full output as the server returned it, `out_chars`, `is_error`; `ToolSearch` calls are
+  kept, the printed "calls" column excludes them), `usage` (listener's `usage_numbers`), `model_usage` per model,
+  `cli_cost_usd` (as reported), `permission_denials`, `manifest` (D13), `secs`. `modelUsage` can list a second, tiny model
+  (Haiku 4.5, ~1 000 input tokens) next to the one under test: it is the CLI's own helper call.
+- Cost from `tests/bot_eval/prices.json` `{model: {input, output, cache_read, cache_write}}` in USD per million tokens, only
+  if the file exists (it does not yet; tokens are printed).
+- Guard: the real `towns/` (without `.git` and `_eval/runs/`) is compared by path, size and mtime before/after; a
+  difference flags the run file and exits 2. The offline server also exits if it sees a change.
 
 Never from cron, a timer or CI: a person runs it (`CLAUDE.md` hard constraints; also cost).
 

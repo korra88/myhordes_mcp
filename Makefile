@@ -12,12 +12,14 @@
 #   make bot-eval-expect[-check]  Materialise / check the scenarios' expected facts (tests/bot_eval/freeze.py --expect)
 #   make bot-eval-server ID=7365-d22  Offline MCP server on a fixture, by hand (tests/bot_eval/server.py)
 #   make bot-eval-mcp-config ID=7365-d22 [ARGS="--clock 14:30"]  Print the --mcp-config JSON for claude -p
+#   make bot-eval [SUITE=core] [ONLY=I1,C4] [MODEL=claude-haiku-5-5] [TIER=public|trusted] [LABEL=x] [REPEAT=n]  Run scenarios through the listener's code (calls claude: costs; a person runs it)
 #   make golden       Check every tool's output against the recorded goldens (tests/golden.py)
 
 -include .env
 export
 
 PYTHON ?= python3
+comma := ,
 
 WIKI_DIR      := wiki/wiki
 PROC_DIR      := wiki/processed
@@ -37,7 +39,7 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 	discord-service-install discord-service-disable discord-service-uninstall \
 	towns-commit towns-commit-install towns-commit-disable towns-commit-uninstall \
 	golden golden-update golden-freeze golden-anyseed bot-memory-migrate bot-eval-freeze \
-	bot-eval-expect bot-eval-expect-check bot-eval-server bot-eval-mcp-config
+	bot-eval-expect bot-eval-expect-check bot-eval-server bot-eval-mcp-config bot-eval
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -180,6 +182,13 @@ bot-eval-server: ## Offline MCP server over stdio on a fixture (ID=<fixture-id>;
 
 bot-eval-mcp-config: ## Print the --mcp-config JSON for claude -p (ID=<fixture-id> ARGS="--clock HH:MM --user ID --context dm")
 	@.venv/bin/python tests/bot_eval/mcp_config.py $(ID) $(ARGS)
+
+# Runs with the listener's interpreter (needs the mcp package); never from cron or CI.
+DISCORD_PYTHON ?= ../discord_mcp/.venv/bin/python
+bot-eval: ## Run bot-eval scenarios with claude -p (SUITE=core|extended|all ONLY=I1,C4 MODEL=<full id> TIER=public|trusted LABEL=x REPEAT=n EXTRA_TOOLS=a,b DRY=1)
+	@$(DISCORD_PYTHON) tests/bot_eval/run.py --suite "$(or $(SUITE),core)" --label "$(or $(LABEL),run)" \
+		$(if $(ONLY),--only $(ONLY)) $(if $(MODEL),--model $(MODEL)) $(if $(TIER),--tier $(TIER)) \
+		$(if $(REPEAT),--repeat $(REPEAT)) $(foreach t,$(subst $(comma), ,$(EXTRA_TOOLS)),--allow-extra $(t)) $(if $(DRY),--dry-run)
 
 golden-anyseed: ## Golden check with a random string-hash seed (finds set order leaking into outputs)
 	@.venv/bin/python tests/golden.py --any-seed
