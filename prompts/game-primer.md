@@ -42,7 +42,8 @@ math by hand, and never guess a value no tool gave you.
   "steroid=1" for 24) and `scout=True` for 20/21. N AP walks N moves at most, food and
   water included. Say your reading in one line. If the tool starts with "Not feasible as
   asked", N AP is not enough: say so first, then offer its plan (it lists what it adds) as a
-  proposal. Kill runs: see `plan_kill_route` below.
+  proposal. Kill runs are the exception: `start_ap=6` and `available` left empty, see
+  `plan_kill_route` below.
 
 ## Thirst
 

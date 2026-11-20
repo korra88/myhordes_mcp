@@ -700,12 +700,13 @@ async def plan_kill_route(
         party: Comma-separated citizen names; their CP from the CP log (as find_expedition_path).
         group_cp: Total CP of the party, only when the player states it. Omit (-1) to use
                   `party`, else 2.
-        start_ap: AP at departure (default 6), never the player's day budget: "19 AP" =
-                  6 with available="water=1, food7=1".
+        start_ap: AP at departure (default 6), never the player's day budget: "18 AP" or
+                  "19 AP" = start_ap 6 and `available` left empty.
         slots: Free rucksack slots at departure (default 5); the kit's slots are taken off.
-        available: Water / food / drugs the player has, e.g. "water=2, food7=1" (as
-                   plan_expedition_supplies). Empty = water and one 7 AP food assumed, plus
-                   the boosters the route needs. Items given that fall short get boosters added.
+        available: Only the water / food / drugs the player says they carry, e.g.
+                   "water=2, food7=1"; never derived from an "N AP" budget. Empty = water and
+                   one 7 AP food assumed, plus the boosters the route needs. Items given that
+                   fall short get boosters added.
         second_wind: Enduring level 1-4 of the player, 0 = none (as plan_expedition_supplies).
         day: Specific day to inspect (a finished day is analysed from its maximum counts).
              Use 0 or omit for the current day.
@@ -719,7 +720,7 @@ async def plan_kill_route(
         wps = parse_zones(waypoints.split(";"))
         if isinstance(wps, str):
             return wps
-    if err := day_budget_error(start_ap):
+    if err := day_budget_error(start_ap, kill_route=True):
         return err
     data = await fata.fetch_town_data(tid, day=day or None)
     group_cp, breakdown = fata.resolve_group_cp(data, tid, group_cp, party)
