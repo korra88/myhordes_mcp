@@ -117,10 +117,21 @@ def parse_verdict(text: str, n_must: int, n_hard: int) -> dict:
     m = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", t, flags=re.S)
     if m:
         t = m.group(1)
+    repaired = False
     try:
         d = json.loads(t)
     except json.JSONDecodeError as exc:
-        raise BadVerdict(f"not JSON: {exc}; around it: {t[max(0, exc.pos - 80):exc.pos + 220]!r}")
+        # Opus sometimes closes the root object one brace early and goes on with `,"notes": ...}`
+        # (4 times on 2026-11-20). Only that shape is repaired: drop the early brace, and the
+        # schema check below still applies to the result.
+        head = t[:exc.pos].rstrip()
+        if exc.msg == "Extra data" and head.endswith("}") and re.match(r'\s*,\s*"\w+"\s*:', t[exc.pos:]):
+            try:
+                d, repaired = json.loads(head[:-1] + t[exc.pos:]), True
+            except json.JSONDecodeError:
+                d = None
+        if not repaired:
+            raise BadVerdict(f"not JSON: {exc}; around it: {t[max(0, exc.pos - 80):exc.pos + 220]!r}")
     if not isinstance(d, dict):
         raise BadVerdict("not an object")
 
@@ -156,7 +167,7 @@ def parse_verdict(text: str, n_must: int, n_hard: int) -> dict:
     return {"j1": item_list("j1", n_must), "j2": item_list("j2", n_hard),
             "j3": scalar("j3", (0, 1, None)), "j4": scalar("j4", (0, 1, None)),
             "j5": scalar("j5", (0, 1, 2, None)), "j6": scalar("j6", (0, 1, 2, None)),
-            "notes": str(d.get("notes", ""))}
+            "notes": str(d.get("notes", "")) + (" [parser: early root brace repaired]" if repaired else "")}
 
 
 def check_spans(v: dict, answer: str, trace: list[dict]) -> list[str]:
