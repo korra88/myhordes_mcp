@@ -41,6 +41,8 @@ and because the game forbids automated polling.
 | Judge | `make bot-eval-judge RUN=towns/_eval/runs/<run>.json [ONLY=I1,C4] [FORCE=1] [DRY=1]` | **yes** (Opus, no tools) |
 | Calibrate the judge against hand grades | `make bot-eval-calibrate` (reads `towns/_eval/calibration/sheet.md`) | no |
 | Unit tests of the grader | `make bot-eval-grade-checks` | no |
+| Compare two runs per scenario (regressions first, acceptance verdict) | `make bot-eval-compare A=towns/_eval/runs/<a>.json B=towns/_eval/runs/<b>.json [ONLY=E1,K1] [TARGET=E1,E2]` | no |
+| Unit tests of the compare script | `make bot-eval-compare-checks` | no |
 | Offline server by hand / its `--mcp-config` | `make bot-eval-server ID=<fixture>` / `make bot-eval-mcp-config ID=<fixture>` | no |
 
 `SUITE=core` is the default; `SUITE=extended` or `all` select the others, `ONLY=` ignores the suite.
@@ -106,6 +108,18 @@ scenario, each check as `pass` / `fail` / `n.a.` with its evidence, and after th
   first. One run per scenario is a direction, not a rate; use `ONLY=... REPEAT=3` on what a change targets.
 - A hard fail is read by a person and classed as a bot defect, a scenario defect or a grader defect
   before anything is changed.
+
+## Compare two runs
+
+`make bot-eval-compare A=<before> B=<after>` reads two graded files (a run file stands for its sibling
+`.graded.json`; grade and judge both runs first) and never calls a model. It prints a header (model, git SHA, system
+prompt SHA per tier, rubric hash: what differs between the runs is marked), then the scenarios with regressions first,
+improvements, unchanged, and the ones present on one side only. With `REPEAT=3` runs it reports, per scenario, hard fails
+over repeats (1/3), mean score, mean tool calls, mean answer length and mean CLI cost. The last lines are the acceptance
+rules of `bot-eval-plan.md` 6.3 step 5, each PASS or FAIL with the scenarios that broke it: no new hard fail anywhere;
+every scenario named in `TARGET=E1,E2` free of hard fails in at least 2/3 of its repeats; no score drop above 0.2. A
+change is measured like this: baseline run on `main`, the change, `ONLY=<targets> REPEAT=3` plus the core set once, judge
+both, compare. With n = 1 a result is a direction, not a rate.
 
 ## Cost
 

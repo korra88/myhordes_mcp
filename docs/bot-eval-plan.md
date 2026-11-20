@@ -1,6 +1,6 @@
 # Bot evaluation suite — plan
 
-Status (2026-11-20): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5). Written so that
+Status (2026-11-20): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 tooling half done 2026-11-20 (8 extended scenarios + `bot-eval-compare`; the A/B itself is pending). Written so that
 an agent with no prior context can implement it phase by phase (section 8).
 
 **Changes since the plan was written (2026-11-14), read first.** The server now has **28**
@@ -23,6 +23,7 @@ are stable). Gap G9 is closed, C1 is rewritten, C3/C4 and F18–F20 are new (202
 | 5 deterministic grader | implemented 2026-11-20, not committed: `tests/bot_eval/grade.py` (D1-D13), `grade_checks.py` (148 unit assertions + the old bench runs through an adapter), `make bot-eval-grade RUN=…`, `make bot-eval-grade-checks`; scenario fields `hard_checks`, `names_max`, `names_expected`, `writes_allowed`, `tools_any` groups, argument predicates; grades go to `<run>.graded.json`; `make golden` 223 same |
 | 6 judge | implemented 2026-11-20, not committed: `tests/bot_eval/judge_prompt.md` (fixed rubric, v1), `judge.py` (`claude -p`, opus, no tools / MCP, one call per turn, J1-J6 + 4.3 score merged into `<run>.graded.json`), `calibrate.py`; `make bot-eval-judge RUN=…`, `make bot-eval-calibrate`; smoke runs I1 and C4 judged; 10-item calibration set judged (10 calls, $0.6411); calibration: blind hand grades agreed 5/10, all 11 differing grades (6 of them `?`) re-checked against `items.json` and the judge was right on each, sheet reconciled → 10/10 (judge prompt unchanged, rubric v1). J6 (not in the criterion): judge equal or 1 lower than the hand grade, never higher (lower on K02 K04 K06 K08 K10) |
 | 7 core scenarios + baseline | done 2026-11-20: 18 core scenarios (+ extended M1b) in `towns/_eval/scenarios/`, expectations materialised, `docs/bot-eval.md`; baseline runs `towns/_eval/runs/2026-11-20-baseline-claude-{sonnet,haiku}-5-5.json` (+ `baseline-noskill` for A1/B1), graded and judged; measured cost in 6.2; hard fails classified in 6.5. Three harness fixes found by the baseline (6.5) |
+| 8 extended set + compare + first A/B | tooling half done 2026-11-20, not committed: the 8 extended scenarios E3 R2 S2 T1 T2 X1 P1 N2 in `towns/_eval/scenarios/` (`suite: "extended"`, 27 files with M1b; numbers from the current tool outputs, differences from the plan listed in 3 "Extended, as implemented"); `tests/bot_eval/compare.py` + `compare_checks.py`, `make bot-eval-compare`, `make bot-eval-compare-checks` (6.3). **Pending: the A/B itself** (baseline on the prompts, change, `REPEAT=3` on the targets, compare) |
 
 Goal: a small, offline, reproducible set of real-town scenarios that scores the Discord
 advisor's answers, so a change to `prompts/game-primer.md`, `prompts/discord.md`,
@@ -291,6 +292,26 @@ D12 (budget) apply to **every** scenario and are not repeated.
 | **X1** unknowable / nonexistent | `8299-d18` · public, 2 questions | (EN) "What does the Rusty Flamethrower Mk2 do?" · "How many zombies will attack on day 30?" | says it does not exist / cannot be known; forecast labelled as range or extrapolation | invented item stats; a single confident number |
 | **P1** promises and slash commands | `8299-d18` · trusted | (IT) "Domani mattina ricontrolla tu e avvisami. E come faccio ad aggiornare i log?" | cannot act on its own, says what to ask and when; logs are kept by the server on each fetch (`prompts/discord.md:14-17`) | promises to check; tells the reader to run `/inspect-town` |
 | **N2** night with 17 deaths | `7365-d23` (+ day 22) · trusted | (EN) "What happened last night, who died?" | 29 → 12 alive, 17 deaths in town in the attack, gate was open | "nobody died" (what the tool said before the G2 fix) |
+
+**Extended, as implemented (2026-11-20).** The 8 scenarios are files in `towns/_eval/scenarios/`, numbers taken from
+the tool outputs on the frozen fixtures (`make bot-eval-expect`), not from the table above. Differences from the table:
+- T1: `get_town_overview` prints no SAFE verdict (`get_defense_status` does), so the verdict is not a required fact; the
+  required facts are the data age (5 h with clock `+5h`, printed `5 h 00 min`), the `STALE` label, total defense and the
+  attack range as printed; more than 2 game tools is the hard fail.
+- T2: the three alarms (gate open at the last update, citizens still outside, defense short of the maximum) are printed by
+  the overview and by `get_defense_status`; the facts are numbers only (3 outside, 21:39, defense, 68 short, maximum),
+  the words OPEN / outside are J1 items because the question is Italian (a fact in the question's language must be a number).
+- N2: the tool prints `Result: SURVIVED`, `Defense 5529 vs attack ?`, `Alive: 29 ... -> 12 (17 died on day 22)` and 17 deaths
+  "Killed in the night attack". It does not print that the gate was open, so that is not required; inventing the gate
+  state is a hard fail item. D5 (hard) holds only the 12 and 17.
+- X1: no Gest'Hordes data on the fixture (HTTP 404), so a day-30 number can only be an extrapolation of the attack history;
+  `search_wiki` answers the invented item with its nearest page (a different item), which is part of the test.
+- E3: the dig zone is the model's choice among many 9 AP zones, so there is no single number to require (D5 n.a.); a dried
+  dig target cannot be checked by code (a dried zone is a legitimate pickup stop) and is a judge item.
+- R2: fixture `8299-d18` only gives the offline server a town (as R1); the tools' docstring for `get_citizen_cp` still says
+  thirsty -1 (gap G5), harmless here because every town-data tool is forbidden.
+- S2: a DM with a synthetic memory line, so `remember` is allowed by the bot and the test is real; `remember`, `forget`
+  and `log_feedback` are forbidden (D2) and D13 fails on any write.
 
 Coverage check against the brief: expedition + thirst/water E1 E2 E3 · camping C1 C2 C3 C4 ·
 kill routes K1 K2 · build plan B1 (+B2 blueprints) · defense vs forecast D1 D2 T2 · bank I1
@@ -603,7 +624,7 @@ make bot-eval-grade RUN=towns/_eval/runs/<run>.json          # deterministic che
 make bot-eval-grade-checks                                   # unit tests of the grader + old bench runs through it
 make bot-eval-judge RUN=towns/_eval/runs/<run>.json          # LLM judge J1-J6 + score into <run>.graded.json (opus, costs; ONLY=I1,C4 FORCE=1 DRY=1)
 make bot-eval-calibrate                                      # hand-graded towns/_eval/calibration/sheet.md vs the judge's stored verdicts (no model call)
-make bot-eval-compare A=runs/<a>.json B=runs/<b>.json
+make bot-eval-compare A=towns/_eval/runs/<a>.json B=towns/_eval/runs/<b>.json [ONLY=E1,K1] [TARGET=E1,E2]   # no model call
 ```
 
 `run.py` (port of `probe_claude.py`): loads `discord-listener.toml` through the listener's
@@ -618,7 +639,7 @@ full id `claude-haiku-5-5` (the CLI alias `haiku` is Haiku 4.5, `docs/discord.md
 **As implemented (phase 4).** Command: `make bot-eval [SUITE=core|extended|all] [ONLY=I1,C4]
 [MODEL=<full id>] [TIER=public|trusted] [LABEL=x] [REPEAT=n] [EXTRA_TOOLS=a,b] [DRY=1]`; it runs
 `tests/bot_eval/run.py` with the listener's interpreter (`DISCORD_PYTHON`, default
-`../discord_mcp/.venv/bin/python`, because the listener imports `mcp`). `bot-eval-compare` does not exist yet (phase 5+).
+`../discord_mcp/.venv/bin/python`, because the listener imports `mcp`). `bot-eval-compare` is phase 8 (6.3).
 - `SUITE` selects on the scenario's `suite` field (core | extended, default core); `ONLY` ignores it;
   `REPEAT>1` is refused without `ONLY`. `DRY=1` builds argv, prompts and configs, calls nothing, writes nothing.
 - Per turn: the offline server's inputs (`BOT_EVAL_FILES`, `BOT_EVAL_MANIFEST`, config JSON, settings file) are in a
@@ -690,6 +711,27 @@ with `ONLY=`.
 
 KB and prompts are read from the working tree at run time (they are what is under test);
 only Fata / Gest'Hordes data is frozen.
+
+**As implemented (phase 8, compare).** `make bot-eval-compare A=<run|graded file> B=<run|graded file> [ONLY=E1,K1]
+[TARGET=E1,E2]` runs `tests/bot_eval/compare.py` (no model call, reads files only; `--strict` on the script exits 1 on a
+REJECT). A run file stands for its sibling `<run>.graded.json` (missing: the error names `make bot-eval-grade`). A =
+before, B = after.
+- Header: per run the label, date, model, git SHA (+dirty count), system-prompt SHA per tier, judge rubric hash, CLI
+  version, `wiki/processed/` hash, each marked `<- differs`; NOTE lines when the models, the rubrics, a scenario
+  definition, a fixture or the allowed-tool lists differ (a score comparison across different rubrics or scenario
+  versions means nothing).
+- Per scenario over its repeats (`REPEAT>1` gives several records with the same id): `HF` hard fails / repeats (a failed
+  hard check or a judge J2 hit), mean score (4.3, a hard fail counts 0; `-` when not judged), mean game-tool calls,
+  mean answer characters (all turns), mean CLI cost in USD; the total also gives output tokens. Blocks in order:
+  regressions (new or more hard fails first, then the biggest score drop), improvements, unchanged, only in A, only in B.
+- Rules of step 5, each line PASS / FAIL with the scenarios that broke it: (1) no scenario's hard-fail rate is higher in B
+  than in A; (2) every `TARGET` scenario has no hard fail in at least 2/3 of its repeats in B (not checked without
+  `TARGET`; a target missing from B fails); (3) no scenario's mean score drops by more than 0.2 (exactly 0.2 is accepted;
+  a side that is not judged is skipped and the verdict says so). With n < 3 repeats the verdict adds that it is a direction,
+  not a rate. Costs are the CLI figures (not trusted for Haiku 5.5, 6.2).
+- Unit tests: `make bot-eval-compare-checks` (`tests/bot_eval/compare_checks.py`, synthetic graded runs).
+- Smoke tests 2026-11-20 on the real baseline files: Sonnet baseline against Haiku baseline (model comparison: 3 new hard
+  fails, REJECT) and Sonnet baseline against `k1fix` (only K1 overlaps: hard fail cleared, 0.00 -> 0.91, ACCEPT).
 
 ### 6.4 Score format
 
@@ -891,6 +933,7 @@ scenario defect or grader defect.
 
 **Phase 8 — extended set + first A/B.** Add the 8 extended scenarios (G1/G2 fixed, N2 is a normal scenario). First real use: the planned review of
 primer/docs/tool outputs for small models — baseline, change, compare (6.3).
+**Tooling half done 2026-11-20** (extended scenarios, `bot-eval-compare`); the baseline / change / compare itself is still to run.
 
 ---
 
