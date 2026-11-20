@@ -28,9 +28,12 @@ from dataclasses import dataclass, field
 from ..utils.fmt import header, plural, ruin_label
 from . import camplog
 from .camping import (
-    CAMP_ITEM_BONUS, CROWD, IMPROVE_LEVEL, INSTALL_LEVEL, MAX_LEVEL_TO_ACT, NIGHTLY_DROP, TOMB_BONUS, _find_citizen,
-    camping_terms, fata_plan_upgrades, is_panda, lighthouse_built, odds_cap, plan_upgrade_text, resolve_camp_level,
-    resolve_night, ruin_term, skill_label, typed_plan, zone_reading,
+    _find_citizen, fata_plan_upgrades, plan_upgrade_text, resolve_camp_level, resolve_night, skill_label, typed_plan,
+    zone_reading,
+)
+from .game import (
+    CAMP_ITEM_BONUS, IMPROVE_LEVEL, INSTALL_LEVEL, INSTALLABLE, ITEM_UIDS, NIGHTLY_DROP, STEAK_UID, TOMB_BONUS,
+    camping_terms, improves_left, is_panda, level_after_nights, level_ok, lighthouse_built, odds_cap, position_terms,
 )
 from .risk import _zone_freshness, fmt_items, zone_threats
 from .cp import citizen_key
@@ -74,19 +77,6 @@ class Solution:
     @property
     def total(self) -> int:
         return sum(self.odds)
-
-
-def position_terms(n: int, ruin: dict | None, hidden_before: int) -> list[int]:
-    """Crowd + ruin-room points for the camper hiding at each position (0 = first of the group)."""
-    return [CROWD[min(len(CROWD) - 1, hidden_before + p)] + ruin_term(ruin, hidden_before + p)
-            for p in range(n)]
-
-
-def level_ok(level0: int, n5: int, n9: int) -> bool:
-    """Whether n5 steps of +5 and n9 of +9 can all start below 50 (biggest step last)."""
-    if not (n5 or n9):
-        return True
-    return level0 + IMPROVE_LEVEL * n5 + INSTALL_LEVEL * n9 - (INSTALL_LEVEL if n9 else IMPROVE_LEVEL) < MAX_LEVEL_TO_ACT
 
 
 class _Solver:
@@ -352,8 +342,6 @@ def order_matters(campers, sol: Solution, pos: list[int], level: int) -> bool:
 
 _SKILL_TOKENS = {"r1": "reclusive1", "r2": "reclusive2", "r3": "reclusive3", "r4": "reclusive4",
                  "pro": "procamp", "none": "none"}
-ITEM_UIDS = {"sheet": "Groundsheet", "smelly_meat": "Festering Flesh"}
-STEAK_UID = "meat"
 
 
 def parse_group(text: str) -> list[dict] | str:
@@ -500,11 +488,6 @@ def _camp_item_steps(campers: list, sol: Solution, camp_items: int, floor_items:
     return "Before hiding, camp items: " + "; ".join(steps) + "."
 
 
-def _absorbable(level_after: int) -> int:
-    """Improves that can still be done on a night ending at `level_after`: each must start below 50."""
-    return max(0, -(-(MAX_LEVEL_TO_ACT - level_after) // IMPROVE_LEVEL))
-
-
 def _ap_warning(np_: NightPlan, prev: NightPlan | None, n: int) -> str:
     """'' or the warning that the night needs more AP than the group's 6 each, with how many of
     the excess improves the night before could take over (each +5% carries over, -15% overnight)."""
@@ -519,7 +502,7 @@ def _ap_warning(np_: NightPlan, prev: NightPlan | None, n: int) -> str:
     if prev is not None and prev.sol is not None:
         spare = max(0, base - prev.ap_total)
         movable = np_.sol.improves + (np_.plan_ap if np_.future else 0)
-        k = min(excess, _absorbable(prev.sol.level), spare, movable)
+        k = min(excess, improves_left(prev.sol.level), spare, movable)
         if k:
             text += (f", or do {k} of these improves the night before (night {prev.target}; each +5% carries over, "
                      f"-{NIGHTLY_DROP}% a night)")
@@ -531,9 +514,6 @@ def _ap_warning(np_: NightPlan, prev: NightPlan | None, n: int) -> str:
 # ---------------------------------------------------------------------------
 
 NEARBY_ZONES = 3
-# Items the game lets a camper install on the campsite ('improve' action, ActionDataService).
-INSTALLABLE = {"Old Door", "Sheet Metal", "Trestle", "Mattress", "Solid Wooden Board", "Sheet of Plywood",
-               "Järpen Table"}
 # Round-trip reach from the camp: the day's AP, then each of water, food and a drug restores the
 # max once (supplies.py rules), so every tier adds MAX_AP AP = MAX_AP / 2 zones out and back.
 REACH_TIERS = tuple((MAX_AP * k // 2, w) for k, w in enumerate((
@@ -838,7 +818,7 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
         tgt = first + k
         start, up = camp_level, plan_up
         if k > 0:
-            chain = max(0, nights[-1].sol.level - NIGHTLY_DROP)
+            chain = level_after_nights(nights[-1].sol.level, 1)
             zp = plans_for_zone(data, coords, tgt)
             typed = typed_plan(zp, max(zp, key=lambda p: sum(any(q["citizen_id"] == c["id"] for q in p["players"])
                                                               for c in cits), default=None))
@@ -951,7 +931,7 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
                         best = (k, i, j, tot)
             if best:
                 _, i, j, tot = best
-                keep = lambda lv: max(0, lv - NIGHTLY_DROP)
+                keep = lambda lv: level_after_nights(lv, 1)
                 if keep(tot) > keep(sol.level):
                     ex = ", ".join(([f"{i}× improve"] if i else []) + ([f"{j}× install"] if j else []))
                     nxt = "the next night" if future else "tomorrow"

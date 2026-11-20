@@ -21,31 +21,11 @@ from ..utils.fmt import header, plural, ruin_label
 from . import camp_zones, camplog
 from .cp import citizen_key
 from .geo import fmt_xy, in_bounds, km, map_bounds, spread_steps, xy, zone_map
-from .camp_zones import NIGHTLY_DROP
-from .game import (GROWTH_AVG, GROWTH_MAX, danger_band, zombie_arrival, zombie_sources, zone_estimate,
-                   zone_is_today)
+from .game import (GROWTH_AVG, GROWTH_MAX, IMPROVE_LEVEL, INSTALL_LEVEL, MAX_LEVEL_TO_ACT, NIGHTLY_DROP, SKILLS,
+                   camping_odds, camping_terms, danger_band, is_panda, level_after_nights, level_ok, lighthouse_built,
+                   odds_cap, zombie_arrival, zombie_sources, zone_estimate, zone_is_today)
 from .risk import respawn_totals
 from .towndata import plans_for_citizen, plans_for_zone
-
-# Previous campings (index = camping nights survived, capped at the end of the whole table).
-_TAIL = [-50, -100, -200, -400, -1000, -2000, -5000]
-PREVIOUS = {
-    (False, False): [80, 60, 35, 15, 0] + _TAIL,
-    (False, True): [80, 70, 60, 40, 30, 20, 0] + _TAIL,
-    (True, False): [50, 30, 20, 10, 0] + _TAIL,        # Pandemonium town
-    (True, True): [50, 45, 40, 30, 20, 10, 0] + _TAIL,
-}
-# Nights the Reclusive pro table lasts: Reclusive 1 (super_recluse0) 6, higher levels 8
-# (HeroSkillDataService ProCamperUsageLimit; one level per skill group). Matches Fata's planner.
-PRO_CAMPER_LIMIT = {"reclusive1": 6, "reclusive2": 8, "reclusive3": 8, "reclusive4": 8}
-PANDA_TOWN_BONUS = -30        # rules.yml `panda: modifiers.camping.default_bonus`
-CROWD = [0, 0, -10, -30, -50, -70]
-DISTANCE = [-100, -75, -50, -25, -10, 0, 0, 0, 0, 0, 0, 0, 5, 7, 10, 15, 20]
-LIGHTHOUSE_UID = "small_lighthouse_#00"
-SKILLS = ("none", "procamp", "reclusive1", "reclusive2", "reclusive3", "reclusive4")
-
-TOMB_BONUS, CAMP_ITEM_BONUS = 8, 5   # grave (its digger only), each Groundsheet / Festering Flesh carried
-IMPROVE_LEVEL, INSTALL_LEVEL, MAX_LEVEL_TO_ACT = 5, 9, 50   # actions allowed while level < 50
 
 TERM_LABELS = {
     "previous": "previous nights", "tomb": "tomb", "town": "town type", "zone": "camp bonus",
@@ -64,62 +44,6 @@ def skill_label(skill: str) -> str:
     return ""
 
 
-def is_pro_camper(skill: str, nights: int) -> bool:
-    """procamp (legacy skill, no limit) or any Reclusive level (limit 6 nights, 8 from level 2)."""
-    if skill == "procamp":
-        return True
-    return nights < PRO_CAMPER_LIMIT.get(skill, 0)
-
-
-def odds_cap(job: str, skill: str) -> float:
-    """Survivalist 1.0; Reclusive top level (reclusive4) 0.99; everyone else 0.9."""
-    cap = 0.9
-    if skill == "reclusive4":
-        cap = max(cap, 0.99)
-    if job == "Survivalist":
-        cap = max(cap, 1.0)
-    return cap
-
-
-def ruin_term(ruin: dict | None, hidden_before: int) -> int:
-    """No ruin or ruin full: -25. Slot free: ruin bonus, buried ruin +15."""
-    if not ruin:
-        return -25
-    slots = ruin.get("camp_slots")
-    if slots is not None and slots >= 0 and hidden_before >= slots:
-        return -25
-    if int(ruin.get("digs_remaining") or 0) > 0:
-        return 15
-    return int(ruin.get("camp_boost") or 0)
-
-
-def camping_terms(*, nights: int = 0, skill: str = "none", panda: bool = False, tomb: bool = False,
-                  level: int = 0, ruin: dict | None = None, hidden_before: int = 0,
-                  lighthouse: bool = False, camp_items: int = 0, zombies: int = 0,
-                  vest: bool = False, night: bool = True, distance: int = 0,
-                  devastated: bool = False) -> dict[str, int]:
-    """The twelve terms of the game's odds (percentage points)."""
-    table = PREVIOUS[(panda, is_pro_camper(skill, nights))]
-    return {
-        "previous": table[min(max(nights, 0), len(table) - 1)],
-        "tomb": TOMB_BONUS if tomb else 0,
-        "town": PANDA_TOWN_BONUS if panda else 0,
-        "zone": level,
-        "zoneBuilding": ruin_term(ruin, hidden_before),
-        "lighthouse": 25 if lighthouse else 0,
-        "campitems": CAMP_ITEM_BONUS * camp_items,
-        "zombies": zombies * (-3 if vest else -7),
-        "campers": CROWD[min(len(CROWD) - 1, max(0, hidden_before))],
-        "night": 10 if night else 0,
-        "distance": DISTANCE[min(len(DISTANCE) - 1, max(0, distance))],
-        "devastated": -50 if devastated else 0,
-    }
-
-
-def camping_odds(terms: dict[str, int], cap: float) -> float:
-    return max(0.0, min(sum(terms.values()) / 100.0, cap))
-
-
 def plan_upgrades(level: int, base_sum: int, cap: float, ap: int, items: int) -> dict:
     """Best sequence of improve (+5, 1 AP) and install (+9, 1 AP + 1 item) for a zone.
 
@@ -133,10 +57,9 @@ def plan_upgrades(level: int, base_sum: int, cap: float, ap: int, items: int) ->
     best = None
     for i in range(0, max(ap, 0) + 1):
         for j in range(0, min(items, ap - i) + 1):
-            total = level + IMPROVE_LEVEL * i + INSTALL_LEVEL * j
-            last = INSTALL_LEVEL if j else IMPROVE_LEVEL
-            if (i or j) and total - last >= MAX_LEVEL_TO_ACT:
+            if not level_ok(level, i, j):
                 continue
+            total = level + IMPROVE_LEVEL * i + INSTALL_LEVEL * j
             odds = max(0.0, min((base_sum + total) / 100.0, cap))
             key = (-round(odds, 6), j, i + j)
             if best is None or key < best[0]:
@@ -152,10 +75,9 @@ def max_level_plan(level: int, ap: int, items: int) -> dict:
     best = None
     for i in range(0, max(ap, 0) + 1):
         for j in range(0, min(items, ap - i) + 1):
-            total = level + IMPROVE_LEVEL * i + INSTALL_LEVEL * j
-            last = INSTALL_LEVEL if j else IMPROVE_LEVEL
-            if (i or j) and total - last >= MAX_LEVEL_TO_ACT:
+            if not level_ok(level, i, j):
                 continue
+            total = level + IMPROVE_LEVEL * i + INSTALL_LEVEL * j
             key = (-total, i + j, j)
             if best is None or key < best[0]:
                 best = (key, {"improve": i, "install": j, "ap": i + j, "items": j, "level": total})
@@ -213,16 +135,6 @@ def _pct(x: float) -> str:
 def _find_citizen(data: dict, name: str) -> dict | None:
     key = citizen_key(name)
     return next((c for c in data.get("citizens", []) if citizen_key(c["name"]) == key), None)
-
-
-def lighthouse_built(data: dict) -> bool:
-    return any(b.get("built") and b.get("uid") == LIGHTHOUSE_UID for b in data.get("buildings", []))
-
-
-def is_panda(meta: dict) -> bool:
-    """Pandemonium: the game type name is 'panda'; Fata's `hard` flag (meta.hardcore) is the
-    same thing (the game's own XML API exports `hard` = type panda)."""
-    return meta.get("game_type") == "panda" or bool(meta.get("hardcore"))
 
 
 def _zombie_reading(z: dict | None, day) -> tuple[int, str]:
@@ -389,7 +301,7 @@ def resolve_camp_level(data: dict, *, coords: str, z: dict | None, night: dict, 
                            f"{typed['creator'] or 'a player'}'s Fata plan for day {target}, not a game reading")
         elif before:
             nights_left = target - before["target_day"]
-            camp_level = max(0, before["level_after"] - NIGHTLY_DROP * nights_left)
+            camp_level = level_after_nights(before["level_after"], nights_left)
             assumed.append(f"camp bonus +{camp_level}%: +{before['level_after']}% planned in "
                            f"{before['creator'] or 'a player'}'s Fata plan for day {before['target_day']} minus "
                            f"{NIGHTLY_DROP * nights_left}% ({plural(nights_left, 'night')}), if those upgrades are done; "
@@ -594,7 +506,7 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
                  + (" (cap)" if now >= cap else ""))
 
     plan_used = False
-    left = (lambda lvl: max(0, lvl - NIGHTLY_DROP))
+    left = (lambda lvl: level_after_nights(lvl, 1))
     nxt = "tomorrow" if not future else "the next night"
     spare = round(sum(terms.values())) - round(cap * 100)
     plan = None

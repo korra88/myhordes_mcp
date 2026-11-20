@@ -22,9 +22,9 @@ import json
 import os
 
 from . import archive
+from .game import level_after_nights
 
 ZONES_FILE = "camp-zones.json"
-NIGHTLY_DROP = 15
 
 
 def load_zones(town_id: int) -> dict:
@@ -67,7 +67,7 @@ def estimate_level(entry: dict | None, today: int) -> tuple[int, str, int] | Non
     if not entry:
         return None
     d = entry["day"]
-    level = max(0, entry["level"] - NIGHTLY_DROP * max(0, today - d))
+    level = level_after_nights(entry["level"], max(0, today - d))
     if entry["source"] == "planned":
         return level, f"estimate from the plan of day {d}, not verified", d
     return level, f"reported on day {d}", d

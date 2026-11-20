@@ -46,13 +46,13 @@ import time
 from datetime import datetime
 
 from . import archive
+from .game import HIDING_FROM_HOUR
 from .geo import TOWN, fmt_xy
 from .towndata import build_result
 from ..utils.clock import GAME_TZ
 from ..utils.config import TOWN_LOG_AUTO
 
 RULES = 2   # version of the rules above: bump it and every stored night is recomputed once (2: "planned")
-HIDING_FROM_HOUR = 19   # camping odds get the night bonus from 19:00 (TownConf::isNightTime)
 
 LOG_FILE = "camping-log.json"
 # Written only where the town log is on (TOWN_LOG_AUTO, the Pi): towns/ is a git repo shared

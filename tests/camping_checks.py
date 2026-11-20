@@ -4,9 +4,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-from myhordes_mcp.fata.camping import (   # noqa: E402
-    camping_odds, camping_terms, is_pro_camper, odds_cap, order_text, plan_upgrades, ruin_term,
-)
+from myhordes_mcp.fata.camping import order_text, plan_upgrades   # noqa: E402
+from myhordes_mcp.fata.game import camping_odds, camping_terms, is_pro_camper, odds_cap, ruin_term   # noqa: E402
 
 RUIN = {"camp_boost": 10, "camp_slots": 2, "digs_remaining": 0}
 
@@ -485,8 +484,9 @@ import random   # noqa: E402
 import os
 import platform
 import time   # noqa: E402
+from myhordes_mcp.fata.game import level_ok, position_terms   # noqa: E402
 from myhordes_mcp.fata.groupcamp import (   # noqa: E402
-    Camper, format_group_camping, level_ok, order_matters, parse_group, position_terms, solve,
+    Camper, format_group_camping, order_matters, parse_group, solve,
 )
 
 C = Camper   # Camper(name, base, cap, tomb, tamer, carried, hint)
@@ -641,9 +641,10 @@ assert "Survivalist" in w and "cap 100" in w and "AP used 0 of 0" in w, w
 import copy, re   # noqa: E402
 from types import SimpleNamespace   # noqa: E402
 from myhordes_mcp.fata.groupcamp import (   # noqa: E402
-    MAX_NIGHTS, Camper as _Camper, _absorbable, _ap_warning, _make_camper, nearby_defense_lines,
+    MAX_NIGHTS, Camper as _Camper, _ap_warning, _make_camper, nearby_defense_lines,
 )
 from myhordes_mcp.fata.camping import fata_plan_upgrades, typed_plan   # noqa: E402
+from myhordes_mcp.fata.game import improves_left   # noqa: E402
 
 # the 2026-11-20 case: Fata plan 7.6 pre-existing + 3 new units of 5% (+38% -> +53%), estimate 38
 RAW2 = copy.deepcopy(RAW)
@@ -710,7 +711,7 @@ assert c0.base - c1.base == (8 + (prev(nights=2, skill="reclusive2", panda=False
 # the AP warning names how many improves the night before could take over
 _sol = lambda lvl, ap_, imp: SimpleNamespace(level=lvl, ap=ap_, improves=imp)
 _n = lambda t, sol, fut=False: SimpleNamespace(target=t, sol=sol, plan_ap=0, future=fut, ap_total=sol.ap)
-assert _absorbable(40) == 2 and _absorbable(50) == 0 and _absorbable(44) == 2 and _absorbable(0) == 10
+assert improves_left(40) == 2 and improves_left(50) == 0 and improves_left(44) == 2 and improves_left(0) == 10
 wtxt = _ap_warning(_n(28, _sol(30, 9, 9)), _n(27, _sol(30, 2, 2)), 1)
 assert "Night 28 needs 9 AP, more than the 6 the group has (6 each)" in wtxt and "do 3 of these improves the night before (night 27;" in wtxt, wtxt
 assert _ap_warning(_n(28, _sol(30, 6, 6)), None, 1) == ""
