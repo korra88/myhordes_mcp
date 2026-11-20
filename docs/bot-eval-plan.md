@@ -754,6 +754,20 @@ prints the text around a parse error.
 | D2 | Haiku | "Would not survive" with no mention of a possible plan | bot |
 | B2 | Haiku | Answered in Italian to a French question (with clean context too) | bot (language drift) |
 
+**Follow-up runs, same day.** Opus 5.5 on the four scenarios both models failed (label
+`diag-opus`, trusted tier; Opus is also the judge, so these scores are a diagnosis, not a
+ranking), and K1 again after the kill-route fix (label `k1fix`):
+
+| Scenario | Sonnet | Haiku | Opus | Reading |
+|---|---|---|---|---|
+| E1 `start_ap=19` | HF (retried 6) | HF (never planned) | HF (retried 6) | every model tries `start_ap=N` first; the tool's refusal is what corrects it |
+| E2 no `pickups` | HF | HF | HF (4 of 5 slots, blueprint not counted) | steering gap, not model capability: candidate for the first A/B (phase 8) |
+| K1 after the fix | 0.91, no HF | 0.83, no HF | 0.82, no HF | tool fix confirmed |
+| M1 memory | HF | HF | 0.92, no HF | model limit at Sonnet/Haiku level |
+
+Cost: Opus 4 scenarios $1.0990 CLI (92.7 s), its judge $0.4391 (5 calls); K1 reruns $0.1168
+(Sonnet) and $0.0083 (Haiku), judge $0.1121 and $0.0867.
+
 Known by design: A1 needs the town and day named (G10 open); B2 may conflict with the primer
 rule (G14 open). D13 notes "changed …/cache/estimations.json" in several runs: the offline
 server's Gest'Hordes cache inside the fixture copy, not the real `towns/` (guard ok).
