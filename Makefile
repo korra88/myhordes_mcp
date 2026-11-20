@@ -9,6 +9,9 @@
 #   make clean-all    Remove everything (raw wiki + processed)
 #   make discord-listen  Answer Discord mentions (../discord_mcp listener)
 #   make bot-eval-freeze  Freeze one bot-eval fixture: ID=7365-d22 ARGS="--town 7365 --day 22" (tests/bot_eval/freeze.py)
+#   make bot-eval-expect[-check]  Materialise / check the scenarios' expected facts (tests/bot_eval/freeze.py --expect)
+#   make bot-eval-server ID=7365-d22  Offline MCP server on a fixture, by hand (tests/bot_eval/server.py)
+#   make bot-eval-mcp-config ID=7365-d22 [ARGS="--clock 14:30"]  Print the --mcp-config JSON for claude -p
 #   make golden       Check every tool's output against the recorded goldens (tests/golden.py)
 
 -include .env
@@ -33,7 +36,8 @@ WIKI_SENTINEL := $(WIKI_DIR)/Data_Apple.txt
 .PHONY: kb fetch process clean-kb clean-all help advisor persona town discord-listen discord-listen-once \
 	discord-service-install discord-service-disable discord-service-uninstall \
 	towns-commit towns-commit-install towns-commit-disable towns-commit-uninstall \
-	golden golden-update golden-freeze golden-anyseed bot-memory-migrate bot-eval-freeze
+	golden golden-update golden-freeze golden-anyseed bot-memory-migrate bot-eval-freeze \
+	bot-eval-expect bot-eval-expect-check bot-eval-server bot-eval-mcp-config
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -164,6 +168,18 @@ golden-freeze: ## Copy the fixture towns from towns/ and fetch the Gest'Hordes s
 
 bot-eval-freeze: ## Freeze a bot-eval fixture into towns/_eval/ (ID=<fixture-id> ARGS="--town T --day N [--with-day M] [--source DIR]")
 	@.venv/bin/python tests/bot_eval/freeze.py $(ID) $(ARGS)
+
+bot-eval-expect: ## Run the scenarios' facts_from offline and write towns/_eval/fixtures/<id>/expected.json (review the diff)
+	@.venv/bin/python tests/bot_eval/freeze.py --expect
+
+bot-eval-expect-check: ## Diff the scenarios' expected facts against the stored ones (exit 1 on a difference)
+	@.venv/bin/python tests/bot_eval/freeze.py --expect --check
+
+bot-eval-server: ## Offline MCP server over stdio on a fixture (ID=<fixture-id>; env BOT_EVAL_CLOCK, LISTENER_USER_ID, ...)
+	@BOT_EVAL_FIXTURE=$(ID) .venv/bin/python tests/bot_eval/server.py
+
+bot-eval-mcp-config: ## Print the --mcp-config JSON for claude -p (ID=<fixture-id> ARGS="--clock HH:MM --user ID --context dm")
+	@.venv/bin/python tests/bot_eval/mcp_config.py $(ID) $(ARGS)
 
 golden-anyseed: ## Golden check with a random string-hash seed (finds set order leaking into outputs)
 	@.venv/bin/python tests/golden.py --any-seed

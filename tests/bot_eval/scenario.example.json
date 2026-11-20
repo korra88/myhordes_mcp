@@ -1,0 +1,23 @@
+{
+  "id": "X1",
+  "_comment": "SYNTHETIC example: invented town and names. Real scenarios live in towns/_eval/scenarios/ (private).",
+  "fixture": "0000-d5",
+  "clock": "14:30",
+  "tier": "public",
+  "context": "thread",
+  "turns": [
+    {"lang": "en", "text": "How strong is our defense tonight, and is the town safe?"}
+  ],
+  "tools_any": ["get_defense_status", "get_town_overview"],
+  "tools_forbidden": ["remember", "forget"],
+  "args_required": [],
+  "args_forbidden": [{"tool": "get_bank_inventory", "args": {"detail": "full"}}],
+  "facts_from": [
+    {"tool": "get_defense_status", "args": {},
+     "extract": ["Total defense: (\\d+)", "Tonight's attack: (\\d+)–(\\d+)"]}
+  ],
+  "invariants": ["answer_in_user_language", "no_tool_names"],
+  "max_calls": 4,
+  "must": ["Gives the total defense and the expected attack range as the tool prints them"],
+  "hard_fail": ["States a defense number that is not in a tool output"]
+}

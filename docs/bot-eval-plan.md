@@ -1,7 +1,16 @@
 # Bot evaluation suite — plan
 
-Status (2026-11-17): phases 0–2 done and committed. Written so that an agent with no
-prior context can implement it phase by phase (section 8).
+Status (2026-11-20): phases 0–2 done and committed; phase 3 implemented, awaiting review. Written so that
+an agent with no prior context can implement it phase by phase (section 8).
+
+**Changes since the plan was written (2026-11-14), read first.** The server now has **28**
+tools: `get_camping_odds` and `plan_group_camping` were added (camping work, commits
+77d9fea…94d5058, Fata v1.3 camp plans in `town_camping`). The zombie model was unified
+(07c59f9) and game rules moved to `fata/game.py` (phase E of `docs/refactor-plan.md`):
+route, kill and camping numbers changed. Every "probed" number below is from 2026-11-14
+and is illustrative only; expectations are materialised from the fixtures (5.4), never
+copied from this file. `main.py` line numbers below are also from 2026-11-14 (tool names
+are stable). Gap G9 is closed, C1 is rewritten, C3/C4 and F18–F20 are new (2026-11-20).
 
 | Phase | State |
 |---|---|
@@ -9,7 +18,7 @@ prior context can implement it phase by phase (section 8).
 | G1/G2 fixes | committed b3bf081, deployed on the Pi |
 | 1 `tests/offline.py` | committed 9130e8f |
 | 2 `tests/bot_eval/freeze.py`, `make bot-eval-freeze`, 14 fixtures in `towns/_eval/fixtures/`, `towns/.gitignore` negations | done and reviewed, committed 2026-11-17 (both repos) |
-| 3 offline MCP server + expectations | next; `offline()` sets no default town: write `_current_town` in the fixture copy or always pass `town_id` |
+| 3 offline MCP server + expectations | implemented 2026-11-20, not committed: `tests/bot_eval/{server,mcp_config,scenario}.py`, `scenario.example.json`, `freeze.py --expect [--check]`, `make bot-eval-expect[-check]`, `bot-eval-server`, `bot-eval-mcp-config`; fixture `8299-d26` (local cache, v1.3 camp plans, 0 Fata requests; 15 fixtures); C3/C4 drafts in `towns/_eval/scenarios/`; `claude -p` lists 28 tools on it; `make golden` 223 same |
 
 Goal: a small, offline, reproducible set of real-town scenarios that scores the Discord
 advisor's answers, so a change to `prompts/game-primer.md`, `prompts/discord.md`,
@@ -41,7 +50,7 @@ hard-code (section 5.4). "Guess" marks anything not measured.
 
 | Piece | Where | Relevance |
 |---|---|---|
-| MCP server, 26 tools | `main.py` (tool declarations + docstrings = what the model sees) | System under test |
+| MCP server, 28 tools | `main.py` (tool declarations + docstrings = what the model sees) | System under test |
 | Bot instructions | `persona.md` (gitignored), `prompts/game-primer.md` (164 lines), `prompts/discord.md` (88 lines), `prompts/discord-feedback.md` | Loaded by the listener as `append_system_prompt_files` (`discord-listener.example.toml:80, 142`) |
 | Knowledge | `knowledge/tactics/*.md`, `knowledge/buildings/*.md` (71 882 chars), `wiki/processed/` (gitignored, generated) | Served by `search_knowledge` (`knowledgebase/curated.py`: top 3 sections, whole file only if ≤ 6000 chars) and `search_wiki` |
 | Golden tests | `tests/golden.py`, 193 goldens in `tests/golden/out/` (gitignored), fixtures = towns 8299 and 8212 | Offline machinery to reuse: `_install_fakes` (`:292-318`), config/clock patching (`:373-396`), per-case `clock`/`env`/`files` options (`:355-358`), real-`towns/` guard (`:451-454`) |
@@ -78,6 +87,8 @@ hard-code (section 5.4). "Guess" marks anything not measured.
 | `find_expedition_path` (403) | route between two zones | Code (Dijkstra, CP-aware) | `party=` over guessed `group_cp` |
 | `plan_expedition_supplies` (511) | what to carry, where to drink/eat | Code (rules verified in game source, `fata/supplies.py`) | `start_ap=6` always; "N AP" → `available` (`game-primer.md:36-45`); waypoints **and** pickups; relay the numbered Itinerary (`:163-164`) |
 | `plan_kill_route` (643) | kill run, zoo side, SpecialAgent route | Code (`fata/kills.py`) | To the map edge, `available` empty, split when it does not fit (`game-primer.md:147-153`) |
+| `get_camping_odds` | one camper's odds for one night, upgrade order | Code (game formula + Fata v1.3 camp plans, `fata/camping.py`) | Values the output says come from a Fata plan are not asked; future day = projection, say so; several nights → `plan_group_camping` |
+| `plan_group_camping` | group camping: who hides first, graves, camp items, several nights | Code (exact search, `fata/camping.py`) | One call; several nights = **one** call with `until_day`, never one per night; upgrades and items before the hiding order |
 | `map_bank_to_dump_sheet` (354) | dump spreadsheet sync | Code | Terminal skill only — out of eval scope |
 | `search_knowledge` (872) | rules, tactics, build priority | KB prose | Specific terms; search before a dig / carry / kill trip (`game-primer.md:143-145`) |
 | `search_wiki` (840), `list_wiki_categories` (859) | an item, building, status, profession | Wiki | "never guess" an ability (`game-primer.md:106`) |
@@ -88,8 +99,7 @@ Answered from the **primer alone** (no tool needed): AP levels, "N AP" decoding,
 counter, camping water, CP basics, heavy-item list, rucksack 4 slots, digging odds, route
 shape, professions, Opti signs (`prompts/game-primer.md:25-124`).
 
-Not answerable today (the bot must say so): camping survival odds (no tool; formula is in
-`CitizenHandler::getCampingOdds`), a citizen's current statuses / AP / inventory (Fata
+Not answerable today (the bot must say so): a citizen's current statuses / AP / inventory (Fata
 does not send them, `docs/mechanics-in-code.md:60-65`), real attack before it happens,
 anything about a player's intentions.
 
@@ -129,12 +139,15 @@ anything about a player's intentions.
 | F15 | Persona fades in tool-heavy answers | maintainer feedback | judge J6 (soft) |
 | F16 | Camping inferred from ambiguous log evidence | maintainer feedback | not in set (terminal/log analysis, not the Discord bot) |
 | F17 | Blueprint rule applied blindly ("ruin first") when the tool says the ruin blueprints are wasted | derived from `get_blueprint_order` output on 7365 day 9 (probed) | B2 |
+| F18 | Several camping nights planned with one `plan_group_camping` call per night instead of one call with `until_day` (each call restarts from today's bonus: upgrades planned for earlier nights are lost) | real bot answer 2026-11-20 (a resumed thread kept the old tool schema); docstring `main.py` plan_group_camping, primer `game-primer.md:178` | C3 |
+| F19 | Names its tools to the reader ("il tool segnala", parameter names), breaking the persona | real bot answer 2026-11-20; rule `prompts/discord.md:21-23` | all (check D8), C3 |
+| F20 | Camp items / upgrades listed after the hiding order (odds freeze when each camper hides, so the reader follows the order and loses the bonus) | real bot answer 2026-11-20; tool fix 94d5058 | C4 |
 
 ---
 
 ## 3. Scenario catalogue
 
-24 scenarios: **core 16**, extended 8. Languages: IT 8, EN 14, FR 2, plus one EN→IT switch inside E2.
+26 scenarios: **core 18**, extended 8 (C3, C4 added 2026-11-20). Languages: IT 9, EN 15, FR 2, plus one EN→IT switch inside E2.
 Fixture ids are `<town>-d<day>` (section 5). Citizens appear as `{A}`, `{B}`; the private
 scenario file holds the real names.
 
@@ -159,12 +172,26 @@ D12 (budget) apply to **every** scenario and are not repeated.
 - Hard fail: no `pickups` (no rucksack check); "14 km so 14 AP" (the walk is 16 moves); T2 answered without a new tool call; T2 in English.
 - Checks: D1 D4 D5 D7(per turn) · J1 J2.
 
-**C1 — Multi-day camping on a far ruin** · `8299-d22` · trusted, **DM** with synthetic memory ("Guardian · 7 rucksack slots")
-- Source: real ask 2026-11-13 (Strange Barn [14|13]) and its review.
+**C1 — Multi-day camping on a far ruin** · `8299-d22` · trusted, **DM** with synthetic memory ("in-game name {A} · Guardian · 7 rucksack slots")
+- Source: real ask 2026-11-13 (Strange Barn [14|13]) and its review. Rewritten 2026-11-20: the camping tools exist now (gap G9 closed). The fixture is Fata v1.2: no camp plans, so the tools state their assumptions.
 - Prompt (IT): "Voglio andare a campeggiare al fienile [14|13] per 3 giorni. Cosa porto e come ci arrivo?"
-- Must: one-way plan (`round_trip=False`); water for 3 days = **2 rations** (one every two days) carried as cargo; `slots` passed = 7 − cargo; a Water Cooler Bottle, if proposed, is **heavy**; zone reach from `get_zone_details` (probed: 27 moves, 19 km, no teleport / Heroic Return / Rescue); booster choice: alcohol before a second drug; says survival odds are not computed by any tool (no invented %).
-- Hard fail: two drugs the same day; WCB as a light item or 2 heavy items without the shield warning; a return by teleport / Heroic Return from 19 km; an invented survival percentage; `slots=7` with cargo not subtracted **and** a plan that overfills the rucksack.
-- Checks: D1 D4 D5 D9(memory used) D11 · J1 J2 J4.
+- Must: one-way plan (`round_trip=False`); water for 3 days = **2 rations** (one every two days) carried as cargo; `slots` passed = 7 − cargo; a Water Cooler Bottle, if proposed, is **heavy**; zone reach from `get_zone_details` (probed: 27 moves, 19 km, no teleport / Heroic Return / Rescue); booster choice: alcohol before a second drug; odds from **one** `plan_group_camping(x=14, y=13, group="{A}…", until_day=day+2)` (or `get_camping_odds` for tonight only, saying later nights are not computed), relayed with the tool's assumptions; asks for (or states as assumed) the Reclusive / pro-camper skill and nights already camped.
+- Hard fail: two drugs the same day; WCB as a light item or 2 heavy items without the shield warning; a return by teleport / Heroic Return from 19 km; a survival percentage not in a tool output; one camping call per night; `slots=7` with cargo not subtracted **and** a plan that overfills the rucksack.
+- Checks: D1 D4 D5 D9(memory used) D11 D12(max 6) · J1 J2 J4.
+
+**C3 — Group camping, six nights in one call** · `8299-d26` (Fata v1.3, 25 camp plans) · trusted, thread
+- Source: real bot answer 2026-11-20 (F18, F19). Fixture: Fata zone (19, 26) = the group with a Fata plan for every night 26…31 (`town_camping`, `target_day` 26–31). Relative coordinates as the tools print them (verified 2026-11-20 with `get_zone_details`: `[7|-13]`, 20 moves, 15 km, Warehouse; the plan holds 4 campers of whom 2 are dead, so the tool plans 2).
+- Prompt (IT): "Pianifica il campeggio del nostro gruppo a [7|-13] dalla notte 26 alla 31: ordine, migliorie, chi scava la tomba."
+- Must: **exactly one** `plan_group_camping` with `day` 0 or 26 and `until_day=31`, no `group` (the Fata plans give the campers); per night: upgrades first, then hiding order with each camper's odds, as the tool gives them; flags the nights the tool warns about (AP short, odds dropping); says plainly that night 31 is deadly (the two living campers drop to 0%: Reclusive 1 at the 6th camping night, Fata's own plan agrees) and suggests not camping it; says the later nights are a projection; never names a tool or a parameter.
+- Hard fail: two or more `plan_group_camping` calls covering single nights; `get_camping_odds` once per camper; odds or orders not in the tool output; asks the reader for values the output says come from the Fata plan; tool or parameter names in the answer (D8 regex: `plan_group_camping|get_camping_odds|until_day|\btool\b`).
+- Checks: D1 D3 D4 D5 D8 D12(max 3) · J1 J2 J6.
+
+**C4 — Tonight's group camp: what to do before hiding** · `8299-d26` · public (Haiku), thread
+- Source: real bot answer 2026-11-20 (F20; tool output fixed 94d5058). Fixture: Fata zone (22, 21) = 5 campers with a plan for night 26 (relative `[10|-8]`, verified 2026-11-20: 18 moves, 13 km).
+- Prompt (EN): "How do we camp tonight at [10|-8]? Who hides first?"
+- Must: one `plan_group_camping` (no `group`, no `until_day`); the answer puts upgrades, graves and camp-item hand-overs **before** the hiding order and says to hide after 19:00 in that order; odds per camper and expected survivors from the tool; Fata plan values not re-asked.
+- Hard fail: hiding order given before the upgrades / items with no "do these first"; `get_camping_odds` per camper; invented odds.
+- Checks: D1 D5 D12(max 2) · J1 J2 J6.
 
 **C2 — Trapped, terrorised campers ask for a way home** · `7365-d22` · public (Haiku), thread
 - Source: real state of town 7365 day 22: three citizens on a ruin at [-18|14].
@@ -261,7 +288,7 @@ D12 (budget) apply to **every** scenario and are not repeated.
 | **P1** promises and slash commands | `8299-d18` · trusted | (IT) "Domani mattina ricontrolla tu e avvisami. E come faccio ad aggiornare i log?" | cannot act on its own, says what to ask and when; logs are kept by the server on each fetch (`prompts/discord.md:14-17`) | promises to check; tells the reader to run `/inspect-town` |
 | **N2** night with 17 deaths | `7365-d23` (+ day 22) · trusted | (EN) "What happened last night, who died?" | 29 → 12 alive, 17 deaths in town in the attack, gate was open | "nobody died" (what the tool said before the G2 fix) |
 
-Coverage check against the brief: expedition + thirst/water E1 E2 E3 · camping C1 C2 ·
+Coverage check against the brief: expedition + thirst/water E1 E2 E3 · camping C1 C2 C3 C4 ·
 kill routes K1 K2 · build plan B1 (+B2 blueprints) · defense vs forecast D1 D2 T2 · bank I1
 · night report N1 N2 · KB-only R1 R2 · IT/EN/FR + switch · ambiguous A1 X1 · safety S1 S2 ·
 memory M1 · etiquette P1 T1.
@@ -344,7 +371,8 @@ towns/_eval/
     towns/<slug>/cache/estimations.json               # if present in the source
     towns/<slug>/citizens-cp.json                     # optional
     gesthordes.json                                   # optional, one town
-    expected.json                                     # materialised facts (5.4)
+    expected.json                                     # materialised facts, keyed by scenario id (5.4)
+    expected.outputs.json                             # full reference outputs, for debugging (5.4)
   scenarios/<ID>.json                  # prompt(s), context, checks, must / hard_fail
   runs/<date>-<label>-<model>.json     # traces, answers, grades
 ```
@@ -371,7 +399,22 @@ towns/_eval/
   files such as `_user_towns/<id>` and `_bot/memory/<id>.md`;
 - on exit, write the temp-dir manifest to the path in `BOT_EVAL_MANIFEST` (for D13).
 
-To avoid a second copy of the patching code, move it from `tests/golden.py` into
+**As implemented (phase 3).** The patching is `tests/offline.py` (phase 1), so `server.py` is
+`offline()` on one fixture plus `main.mcp.run()`; stdout is redirected to stderr until the
+protocol starts. The town list comes from each fixture folder's `cache/_meta.json`; the first
+town is the main one. `offline()` sets no default town, so the server writes `_current_town`
+= the fixture's town in the temporary copy. Inputs are environment variables (the JSON from
+`tests/bot_eval/mcp_config.py <fixture> [--clock --user --context --files --manifest]`):
+`BOT_EVAL_FIXTURE`, `BOT_EVAL_CLOCK` (empty = data time + 10 min; `HH:MM` = that Paris time
+on the data day; `+5h` / `+30m` = data time + offset), `LISTENER_USER_ID`, `LISTENER_CONTEXT`,
+`BOT_EVAL_FILES` (path of a JSON `{path under towns/: text}`, written before the first call;
+`server.scenario_files(scenario)` builds it from `memory` → `_bot/memory/<id>.md` and
+`user_town` → `_user_towns/<id>`, id = the synthetic `SYNTH_USER`), `BOT_EVAL_MANIFEST`.
+Scenario files: `tests/bot_eval/scenario.py` (loader + validation, no dependencies; `python
+tests/bot_eval/scenario.py` validates the private ones). Hand start: `make bot-eval-server
+ID=<fixture>`; JSON for `claude -p`: `make bot-eval-mcp-config ID=<fixture>`.
+
+Original text of the section follows. To avoid a second copy of the patching code, move it from `tests/golden.py` into
 `tests/offline.py` (`install_fakes(resolver)`, `patch_config(towns_dir)`,
 `freeze_clock(dt)`, `manifest(dir)`) and make `golden.py` import it. Acceptance: `make
 golden` still prints `193 same, 0 different`.
@@ -421,6 +464,12 @@ live snapshot the listener archived); `7365-d9`, `-d16`, `-d20`, `-d22`, `-d23` 
 `6741-d30`, `7493-d10` → **7 requests**. `8299-d22-inject` is a copy with one edited note.
 Total ≤ 8 Fata requests, once.
 
+Added 2026-11-20: `8299-d26` for C3/C4, copied from the local cache
+(`day-26.towndata.live.json.gz`, Fata v1.3 with `town_camping`, data time
+2026-11-18 08:58 UTC): 0 requests. Only the PC has it (`cache/` is not in the towns repo).
+Camp-related town files (`camping-log.json`, `camp-zones.json`) are written only by the Pi
+(`TOWN_LOG_AUTO`); the fixture carries none unless `freeze.py` cuts one at the data time.
+
 ### 5.4 Materialised expectations
 
 A scenario declares facts as reference calls, not literals:
@@ -435,6 +484,18 @@ A scenario declares facts as reference calls, not literals:
 `freeze.py --expect` runs each reference call through the offline server and writes the
 captured groups to `expected.json`. D5 reads that file. When a tool's output changes,
 `freeze.py --expect --check` prints the diff of expectations — review it like a golden.
+
+**As implemented (phase 3).** `make bot-eval-expect` / `bot-eval-expect-check` (`--only ID`
+limits it). It loads every scenario of `towns/_eval/scenarios/` with a `facts_from`, groups
+them by fixture and starts ONE subprocess per scenario (the offline patches are
+process-wide, and files or tool writes of one scenario must not leak into the next); each scenario runs with its own `clock`, `context`, `memory` and `user_town`
+(as `server.prepare`). It calls the tool functions in-process (as the goldens do), not over
+stdio. For each `extract` regex the first `re.search` match is stored: its groups, the whole
+match if it has none, `null` (and a printed WARNING) if it does not match. The file is
+**per fixture, keyed by scenario id**, because the facts belong to scenarios, not to the
+fixture: `fixtures/<id>/expected.json` = `{scenario id: [{tool, args, extract, groups}]}`
+(sorted keys, stable text); the full outputs go to `expected.outputs.json` (not diffed).
+`--check` writes nothing, prints a unified diff and exits 1 on a difference.
 Hand-typed expectations are allowed only for rule invariants (D11) and prose (`must`).
 
 ### 5.5 Privacy
@@ -560,9 +621,12 @@ Tools
 - **G8** `get_build_options` flags "Water … below 2.0 — water builds first" even when no
   water producer is buildable (8299 day 22, probed), and counts 44 clean rations where the
   overview says 41 (purifiable included in one, not the other).
-- **G9** No tool for camping odds (known, waiting on Fata) and no `day`-less way to plan a
-  one-way trip with spare AP on arrival (declined by the user) — C1 therefore tests prose
-  rules only.
+- **G9** CLOSED 2026-11-20: `get_camping_odds` and `plan_group_camping` exist (C1 rewritten,
+  C3/C4 added). Still no way to plan a one-way trip with spare AP on arrival (declined by
+  the user).
+
+Re-checked 2026-11-20: G5, G6, G7, G10, G14 still open; the tool-naming rule (F19) is in
+`prompts/discord.md:21-23`.
 
 Prompts / KB
 
@@ -615,7 +679,7 @@ the expected town and day for all 13.
 (fields: `id`, `fixture`, `clock`, `tier`, `context` thread|dm, `memory`, `user_town`,
 `turns[] {lang, text}`, `tools_any`, `tools_forbidden`, `args_required`, `args_forbidden`,
 `facts_from`, `invariants`, `max_calls`, `must[]`, `hard_fail[]`).
-Done when: `claude -p --strict-mcp-config --mcp-config <generated>` lists 26 tools and a
+Done when: `claude -p --strict-mcp-config --mcp-config <generated>` lists 28 tools and a
 manual `get_town_overview` call returns fixture data with the network unplugged.
 
 **Phase 4 — runner.** `tests/bot_eval/run.py` from `probe_claude.py` (6.1): tiers,

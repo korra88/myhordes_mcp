@@ -15,6 +15,16 @@ The scenario's day (--day) becomes the fixture's current day: _meta.json current
 and its file is named `.live.` so tool headers show an age.
 --inject-note replaces the first non-empty map note by TEXT (synthetic prompt-injection fixture).
 No Gest'Hordes request is made here.
+
+    .venv/bin/python tests/bot_eval/freeze.py --expect [--only ID ...]
+    .venv/bin/python tests/bot_eval/freeze.py --expect --check
+
+--expect (docs/bot-eval-plan.md 5.4): for every scenario in towns/_eval/scenarios/, run its
+`facts_from` reference calls offline (one subprocess per scenario: the offline patches are
+process-wide) and write, in towns/_eval/fixtures/<fixture>/, `expected.json` (the regex
+groups, keyed by scenario id) and `expected.outputs.json` (the full reference outputs, for
+debugging). --check writes nothing: it prints the diff against the stored expected.json and
+exits 1 on a difference. No network, no Fata request.
 """
 
 import argparse
@@ -22,7 +32,9 @@ import asyncio
 import gzip
 import json
 import os
+import difflib
 import shutil
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -128,17 +140,106 @@ def fetch_from_fata(town: int, day: int, dest_towns: Path) -> Path:
     sys.exit(f"Fata answered for town={town} day={day} but nothing was archived.")
 
 
+def run_references(fixture_id: str, scenarios: list[dict]) -> dict:
+    """In THIS process (the offline patches cannot be undone): run the `facts_from` calls of
+    the scenarios on one fixture. {scenario id: [{tool, args, groups, output}]}; groups holds
+    one list per regex (the groups of its first match, the whole match if it has none; None
+    when it does not match)."""
+    import re
+    sys.path[:0] = [str(ROOT / "tests"), str(ROOT / "tests" / "bot_eval")]
+    from offline import offline
+    import server
+    fixture = FIXTURES / fixture_id
+    towns = server.fixture_towns(fixture)
+    real_stdout, sys.stdout = sys.stdout, sys.stderr
+    result = {}
+    with offline(fixture, towns, towns[0][1], prefix="bot-eval-expect-") as run:
+        for s in scenarios:
+            server.prepare(run, towns[0][1], s["clock"], server.SYNTH_USER, s["context"], server.scenario_files(s))
+            calls = []
+            for f in s["facts_from"]:
+                fn = getattr(run.main, f["tool"])
+                fn = getattr(fn, "fn", fn)
+                args = {"town_id": towns[0][1], **f.get("args", {})} if "town_id" in fn.__code__.co_varnames else f.get("args", {})
+                out = fn(**args)
+                if asyncio.iscoroutine(out):
+                    out = asyncio.run(out)
+                groups = []
+                for rx in f.get("extract", []):
+                    m = re.search(rx, out)
+                    groups.append(None if not m else list(m.groups()) or [m.group(0)])
+                calls.append({"tool": f["tool"], "args": f.get("args", {}), "extract": f.get("extract", []), "groups": groups, "output": out})
+            result[s["id"]] = calls
+    sys.stdout = real_stdout
+    return result
+
+
+def expect(check: bool, only: list[str]) -> None:
+    sys.path.insert(0, str(ROOT / "tests" / "bot_eval"))
+    import scenario
+    scenarios = [s for s in scenario.load_all() if s["facts_from"] and (not only or s["id"] in only)]
+    by_fixture: dict[str, list[dict]] = {}
+    for s in scenarios:
+        by_fixture.setdefault(s["fixture"], []).append(s)
+    differences = 0
+    for fid, group in by_fixture.items():
+        full = {}
+        for s in group:   # one process per scenario: files and tool writes must not leak between scenarios
+            proc = subprocess.run([sys.executable, __file__, "--expect-worker", fid], input=json.dumps([s]),
+                                  capture_output=True, text=True)
+            if proc.returncode:
+                sys.exit(f"{fid} {s['id']}: reference run failed:\n{proc.stderr[-2000:]}")
+            full.update(json.loads(proc.stdout))
+        facts = {sid: [{k: c[k] for k in ("tool", "args", "extract", "groups")} for c in calls] for sid, calls in full.items()}
+        for sid, calls in full.items():
+            for c in calls:
+                for rx, g in zip(c["extract"], c["groups"]):
+                    if g is None:
+                        print(f"WARNING {sid}: {c['tool']} output does not match {rx!r}")
+        path = FIXTURES / fid / "expected.json"
+        new = json.dumps(facts, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
+        if check:
+            old = path.read_text(encoding="utf-8") if path.exists() else ""
+            if old != new:
+                differences += 1
+                sys.stdout.writelines(difflib.unified_diff(old.splitlines(True), new.splitlines(True),
+                                                           f"{fid}/expected.json (stored)", f"{fid}/expected.json (now)"))
+            else:
+                print(f"{fid}: {len(facts)} scenario(s) same")
+        else:
+            path.write_text(new, encoding="utf-8")
+            (FIXTURES / fid / "expected.outputs.json").write_text(
+                json.dumps({sid: [c["output"] for c in calls] for sid, calls in full.items()},
+                           ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+            print(f"{fid}: wrote expected.json for {', '.join(facts)}")
+    if not by_fixture:
+        print("No scenario with facts_from.")
+    if check:
+        print(f"{differences} fixture(s) different" if differences else "expectations unchanged")
+        sys.exit(1 if differences else 0)
+
+
 def main() -> None:
+    if len(sys.argv) == 3 and sys.argv[1] == "--expect-worker":
+        print(json.dumps(run_references(sys.argv[2], json.load(sys.stdin))))
+        return
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("fixture_id")
-    ap.add_argument("--town", type=int, required=True)
-    ap.add_argument("--day", type=int, required=True, help="the scenario's day (fixture current day)")
+    ap.add_argument("fixture_id", nargs="?")
+    ap.add_argument("--town", type=int)
+    ap.add_argument("--day", type=int, help="the scenario's day (fixture current day)")
+    ap.add_argument("--expect", action="store_true", help="materialise the scenarios' facts_from (see above)")
+    ap.add_argument("--check", action="store_true", help="with --expect: diff against expected.json, write nothing")
+    ap.add_argument("--only", action="append", default=[], metavar="ID", help="with --expect: only this scenario; repeatable")
     ap.add_argument("--with-day", type=int, action="append", default=[], metavar="M",
                     help="earlier day to include (night report, changes); repeatable")
     ap.add_argument("--source", type=Path, action="append", default=[], metavar="DIR",
                     help="extra folder laid out like towns/, tried after the live archive; repeatable")
     ap.add_argument("--inject-note", metavar="TEXT", help="replace the first map note by TEXT (synthetic)")
     args = ap.parse_args()
+    if args.expect:
+        return expect(args.check, args.only)
+    if args.check or not (args.fixture_id and args.town and args.day):
+        ap.error("freezing needs fixture_id, --town and --day (or use --expect)")
 
     fixture = FIXTURES / args.fixture_id
     if fixture.exists():
