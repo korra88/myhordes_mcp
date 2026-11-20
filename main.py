@@ -423,10 +423,12 @@ async def find_expedition_path(
     town_id: int = 0,
 ) -> str:
     """
-    Route only: no water, food, drugs or rucksack. For a trip a player will walk (an "N AP"
-    budget, supplies, items to bring back) call plan_expedition_supplies instead: it walks
-    the same safest route and plans the supplies. Use this tool for a bare route, the risk
-    on the way, or a group trapped outside. start_ap is AP at departure (6), never "N AP".
+    Route only: no water, food, drugs or rucksack. To plan a trip a player is about to start
+    (an "N AP" budget, supplies, items to bring back) call plan_expedition_supplies instead:
+    it walks the same safest route and plans the supplies. Use this tool for a bare route or
+    the risk on the way. Citizens already outside asking how to get back: read their status
+    in get_town_overview first (Trapped, terrorised), then the route. start_ap is AP at
+    departure (6), never "N AP".
     Runs CP-aware Dijkstra pathfinding between two map coordinates, through waypoints if given.
     Returns up to two paths:
     - Safest path: minimises zombie exposure, avoids traps entirely.
@@ -546,8 +548,10 @@ async def plan_expedition_supplies(
 ) -> str:
     """
     Plans when to drink, eat and use drugs along an expedition route, and what to carry.
-    This is THE tool for a trip a player will walk; it plans the route itself (no
-    find_expedition_path call needed first). Two things to settle before the first call:
+    This is THE tool to plan a trip a player is about to start (from town, or from a given
+    `start`); it plans the route itself (no find_expedition_path call needed first).
+    Citizens already outside asking how to get back: read their status first
+    (get_town_overview: Trapped, terrorised). Two things to settle before the first call:
     - A player's "N AP" (18, 19, 24...) is the day's budget: start_ap stays 6 and the budget
       goes in `available` ("water=1, food6=1" for 18, "water=1, food7=1" for 19).
     - Anything brought back (a blueprint, defensive objects, an item to fetch) goes in

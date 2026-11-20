@@ -179,9 +179,11 @@ as the players say. For SEVERAL nights ("plan D28 to D31") make ONE call with `d
 `until_day` = last, never one call per night: each night starts from the previous night's plan.
 A Fata plan's upgrades are counted in the plan: tell the player to check in game whether they are done.
 
-For an expedition the player will walk, call `plan_expedition_supplies` directly: it plans
-the same safest route as `find_expedition_path` plus the supplies (`find_expedition_path`
-alone is for a bare route, the risk on the way, or a group trapped outside). When the
+To plan an expedition the player is about to start, call `plan_expedition_supplies`
+directly: it plans the same safest route as `find_expedition_path` plus the supplies
+(`find_expedition_path` alone is for a bare route or the risk on the way). Citizens already
+outside asking how to get back: read their status in `get_town_overview` first (Trapped,
+terrorised), then the route. When the
 player has Second Wind (they say so, or the bot memory holds their level), pass
 `second_wind=<Enduring level 1-4>`: it is the day's one heroic action, shared with Heroic
 Return. Items to bring back (blueprint, defensive objects) go in `waypoints` **and**
