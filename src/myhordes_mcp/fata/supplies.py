@@ -4,7 +4,7 @@ Rules from the game source (myhordes-docker v5.0.6: ActionDataService, ActionEff
 ActionRequirementProvider, BeyondController, CitizenHandler, ProcessStatusEffect); the
 player-facing version is in knowledge/tactics/expedition-planning.md.
 
-- A move costs 1 point. Leaving a zone at 3+ km (geo.km) pays EP first, else AP only.
+- A move costs 1 point. Leaving a zone at 3+ km (game.ep_zone) pays EP first, else AP only.
 - Thirst counter: +1 per move (AP or EP). Above 10 the thirst level goes up and the counter
   restarts: thirsty at move 11, dehydrated at 22, dead at 33. Only water (and midnight) resets it
   (not food, not Hydratone, not entering town).
@@ -32,8 +32,8 @@ from functools import lru_cache
 from typing import NamedTuple
 
 from ..utils.fmt import plural
-from .geo import EP_MIN_KM, MAX_PATH_AP, TOWN, fmt_xy, km
-from .risk import CP_PER_CITIZEN, platform_level, teleport_range
+from .game import CP_PER_CITIZEN, ep_zone, platform_level, teleport_range
+from .geo import MAX_PATH_AP, TOWN, fmt_xy, km
 
 THIRST_STEP = 10  # the counter goes up a level when it passes this
 
@@ -307,7 +307,7 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
     def move(state):
         i, ap, ep, cnt, th, drank, ate, drugged, drunk, used = state
         x, y = route[i]
-        if ep > 0 and km(x, y) >= EP_MIN_KM:
+        if ep > 0 and ep_zone(x, y):
             ep -= 1
         elif ap > 0:
             ap -= 1

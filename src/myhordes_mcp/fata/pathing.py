@@ -4,19 +4,9 @@ import heapq
 from dataclasses import dataclass, field
 
 from ..utils.fmt import header, plural, ruin_label
-from .geo import (EP_MIN_KM, MAX_PATH_AP, NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km,
-                  map_bounds, moves, zone_map)
-from .risk import (
-    CP_PER_CITIZEN,
-    _staleness_tag,
-    age_days,
-    fmt_items,
-    platform_level,
-    teleport_range,
-    threat_text,
-    zombie_arrival,
-    zone_estimate,
-)
+from .game import CP_PER_CITIZEN, age_days, ep_zone, platform_level, teleport_range, zombie_arrival, zone_estimate
+from .geo import MAX_PATH_AP, NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km, map_bounds, moves, zone_map
+from .risk import _staleness_tag, fmt_items, threat_text
 from .supplies import THIRST_STEP, thirst_state
 
 
@@ -83,7 +73,7 @@ def _classify_cell(
 
     Returns a dict with:
       tag: "CLEAR" | "SAFE" | "TRAPPED" | "TRAP_RISK" | "STALE" | "UNKNOWN"
-      zombies: int | None — the pessimistic zombie estimate (risk.zone_estimate max)
+      zombies: int | None — the pessimistic zombie estimate (game.zone_estimate max)
       fresh: bool — whether data is from the current day
       age: int — days since last update (-1 if unknown)
     """
@@ -107,7 +97,7 @@ def _classify_cell(
     fresh = age == 0
 
     if zone["zombies"] == 0:
-        if est > 0:   # the spread (risk.zombie_arrival) can have reached it
+        if est > 0:   # the spread (game.zombie_arrival) can have reached it
             return {"tag": "TRAP_RISK" if est > group_cp else "SAFE", "zombies": est, "fresh": False, "age": age}
         return {"tag": "CLEAR", "zombies": 0, "fresh": fresh, "age": age}
 
@@ -181,7 +171,7 @@ class ZoneGrid:
     call (`zone_grid(data)`), never cache it across calls. The zone class depends on the
     group CP, so `cell_class(cp)` is computed once per CP and kept on the grid."""
     zone_map: dict
-    arrival: dict   # risk.zombie_arrival of the zones
+    arrival: dict   # game.zombie_arrival of the zones
     day: int | None
     bounds: Bounds | None
     _classes: dict = field(default_factory=dict, repr=False, compare=False)
@@ -723,7 +713,7 @@ def step_rows(route: list[tuple[int, int]], start_ap: int = 6, start_ep: int = 0
     ap, ep, counter = start_ap, start_ep, thirst_counter
     rows = []
     for (x0, y0), (x1, y1) in zip(route, route[1:]):
-        use_ep = ep > 0 and km(x0, y0) >= EP_MIN_KM
+        use_ep = ep > 0 and ep_zone(x0, y0)
         if use_ep:
             ep -= 1
         else:

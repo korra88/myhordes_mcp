@@ -3,9 +3,9 @@
 from ..utils.fmt import header, heading, plural, ruin_label, updated
 from ..utils.clock import data_updated
 from .bank import summary_lines
+from .game import DANGER_LEVELS, zone_is_today
 from .geo import fmt_xy, km, moves, xy
 from .risk import (
-    DANGER_LEVELS,
     _staleness_tag,
     _zone_freshness,
     _zone_status,
@@ -13,7 +13,6 @@ from .risk import (
     is_stale,
     never_visited,
     respawn_check,
-    zone_is_today,
     zone_threats,
     zone_reach,
 )

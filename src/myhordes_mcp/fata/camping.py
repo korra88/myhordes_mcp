@@ -22,8 +22,9 @@ from . import camp_zones, camplog
 from .cp import citizen_key
 from .geo import fmt_xy, in_bounds, km, map_bounds, spread_steps, xy, zone_map
 from .camp_zones import NIGHTLY_DROP
-from .risk import (GROWTH_AVG, GROWTH_MAX, danger_band, respawn_totals, zombie_arrival, zombie_sources,
-                   zone_estimate, zone_is_today)
+from .game import (GROWTH_AVG, GROWTH_MAX, danger_band, zombie_arrival, zombie_sources, zone_estimate,
+                   zone_is_today)
+from .risk import respawn_totals
 from .towndata import plans_for_citizen, plans_for_zone
 
 # Previous campings (index = camping nights survived, capped at the end of the whole table).
@@ -273,7 +274,7 @@ def zone_reading(data: dict, cell: tuple, night: dict) -> tuple:
 def _project_zombies(data: dict, cell: tuple, z: dict | None, zombies: int, note: str,
                      day: int, target: int) -> tuple[int, str]:
     """Zombies on the zone the night of `target`, from today's reading. Game rules in
-    risk.py: the number is zone_estimate at the later day (a zone with zombies grows, an empty
+    game.py: the number is zone_estimate at the later day (a zone with zombies grows, an empty
     zone gets some only once the spread front, zombie_arrival, reaches it)."""
     if not z or not zone_is_today(z, day) or z.get("danger_today") or z.get("zombies", -1) < 0:
         return zombies, note + "; zombies grow at night, the real count that night is probably higher"

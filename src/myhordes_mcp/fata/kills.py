@@ -11,7 +11,7 @@ knowledge/tactics/weapons.md and opti-town-meta.md (Zombie Zoo).
   always counts EVERY zombie of every zone on the route.
 - A weapon kills min(zombies in the zone, its kills) (ProcessZoneEffect): a 2-kill weapon on
   a zone of 1 wastes the second kill. A zone with n zombies = n // 2 pairs + n % 2 single.
-- Zombie estimates: risk.zone_estimate (growth and spread rules live in risk.py).
+- Zombie estimates: game.zone_estimate (growth and spread rules live in game.py).
 - Weapons (WEAPONS below): using one costs 0 AP, reloading too (also outside). Burning Laser
   Pointer: 2 kills per charge, a Battery loads 4 (50%), 3 (25%) or 2 (25%) charges
   (load_lpointer). Machete: 2 kills, breaks 25% per use (throw_b_cutcut, g_break_25).
@@ -32,8 +32,8 @@ from dataclasses import dataclass
 
 from .pathing import loop_return
 from .geo import MAX_PATH_AP, NEIGHBOURS8, Cell, fmt_xy, in_bounds, map_bounds, zone_map
-from .risk import (CP_PER_CITIZEN, Estimate, never_visited, respawn_check, respawn_totals, zombie_arrival,
-                   zone_estimate)
+from .game import CP_PER_CITIZEN, Estimate, zombie_arrival, zone_estimate
+from .risk import never_visited, respawn_check, respawn_totals
 from .towndata import expand_route
 from . import supplies
 from ..utils.fmt import header, plural
@@ -49,7 +49,7 @@ from ..utils.clock import data_updated
 
 def _estimates(data: dict, zmap: dict[Cell, dict], *, final: bool = False):
     """(estimate of a cell, zone or never visited) for this snapshot: the spread model
-    (risk.zombie_arrival) is solved once."""
+    (game.zombie_arrival) is solved once."""
     day = data["meta"].get("day")
     arrival = zombie_arrival(zmap, day if isinstance(day, int) else None, map_bounds(data))
 
@@ -74,7 +74,7 @@ def analyse_route(data: dict, path: list[Cell]) -> dict:
     """The zones of `path` (town excluded, each counted once on its first step) that hold
     zombies, the ones never visited with no infected neighbour, and totals (zombies, pairs,
     singles) by min/avg/max. A never-visited zone next to infected ones is a row, estimated
-    from them (risk.zone_estimate)."""
+    from them (game.zone_estimate)."""
     final = data["meta"].get("live") is False
     zmap = zone_map(data)
     estimate = _estimates(data, zmap, final=final)

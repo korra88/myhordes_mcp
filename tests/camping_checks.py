@@ -319,7 +319,7 @@ try:
 finally:
     _cm.zone_map, _cm.zone_is_today = _orig_zone_map, _orig_today
 # an old reading far away does not flood the map: zones seen empty since hold the front back
-from myhordes_mcp.fata.risk import earliest_zombie_day
+from myhordes_mcp.fata.game import earliest_zombie_day
 from myhordes_mcp.fata.geo import Bounds
 _b = Bounds(0, 8, 1, 3)   # the grid is the whole map: no zone never visited around it
 _g = {(x, y): {"zombies": 0, "updated_day": 26, "seen_today": True} for x in range(0, 9) for y in range(1, 4)}
@@ -331,8 +331,9 @@ _g[(6, 1)] = _g[(6, 2)] = _g[(6, 3)] = {"zombies": 0, "updated_day": 26, "seen_t
 assert earliest_zombie_day(_g, (2, 2), 26, _b) == (31, (8, 2), 2)   # [7|2] empty only on d10: one night gained
 # zones never visited relay the spread unchecked: without the bounds the front goes round the grid
 assert earliest_zombie_day(_g, (2, 2), 26)[0] == 28
-# the one zombie estimate (risk.zone_estimate) on the same grid: [8|2] counted 5 on day 2, now day 26
-from myhordes_mcp.fata.risk import zombie_arrival, zone_estimate, threat_text
+# the one zombie estimate (game.zone_estimate) on the same grid: [8|2] counted 5 on day 2, now day 26
+from myhordes_mcp.fata.game import zombie_arrival, zone_estimate
+from myhordes_mcp.fata.risk import threat_text
 _a = zombie_arrival(_g, 26, _b)
 _e = zone_estimate(_g[(7, 2)], (7, 2), 26, _g, _a)        # [7|2] counted empty d10, next to [8|2] (counted d2): from day 11, 16 nights
 assert (_e.min, _e.avg, _e.max, _e.kind) == (0, 16, 32, "spread") and threat_text(_e, "map") == ", clear→≤32 zom (spread risk, 1d away)", _e
@@ -735,7 +736,7 @@ assert not any("[5|6]" in l for l in nb)   # the camp zone itself is the pool, n
 
 # never visited: exposed (a neighbour unexplored / off the map / with zombies) = top danger band at least;
 # enclosed by visited clear zones = only the spread
-from myhordes_mcp.fata.risk import zone_estimate as _ze
+from myhordes_mcp.fata.game import zone_estimate as _ze
 _enc = {(x, y): {"zombies": 0, "updated_day": 26, "seen_today": True} for x in range(3, 8) for y in range(3, 8) if (x, y) != (5, 5)}
 _e = _ze(None, (5, 5), 26, _enc, {})
 assert _e.kind == "unknown" and _e.max == 0 and "surrounded by clear zones" in _e.source, _e

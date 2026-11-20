@@ -23,7 +23,8 @@ import re
 import time
 
 from . import archive
-from .risk import CP_PER_CITIZEN, MAX_CP_PER_CITIZEN, zone_cp
+from .game import CP_PER_CITIZEN, MAX_CP_PER_CITIZEN
+from .risk import zone_cp
 
 CP_FILE = "citizens-cp.json"
 MAX_READINGS = 30   # per citizen

@@ -6,7 +6,7 @@ import json
 import time
 
 from .bank import totals
-from .risk import platform_level
+from .game import platform_level
 
 
 def snapshot(data: dict) -> dict:

@@ -14,7 +14,8 @@ from ..utils.config import PLAYER_NAME
 from . import archive
 from .client import fetch_town_data
 from .geo import moves, xy
-from .risk import night_alerts, platform_return_saving, trapped_lines
+from .game import platform_return_saving
+from .risk import night_alerts, trapped_lines
 
 # Items inspect-town tracks for deposits and withdrawals.
 CRITICAL_ITEMS = [
