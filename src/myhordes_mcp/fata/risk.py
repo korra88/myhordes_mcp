@@ -4,7 +4,7 @@ from datetime import datetime
 
 from ..utils.clock import age_text, data_datetime, fmt_epoch, now
 from ..utils.fmt import plural, updated
-from .geo import EP_MIN_KM, NEIGHBOURS8, km, moves, xy
+from .geo import EP_MIN_KM, NEIGHBOURS8, km, moves, spread_steps, xy
 
 # Evening alerts. By day an open gate, citizens far out and defense below the
 # estimate are all normal; they become alarms as the attack (23:59, game time)
@@ -189,6 +189,73 @@ def _zombie_max_estimate(zombies: int, last_day: int | None, current_day: int | 
 
 
 
+def zombie_sources(zone_map: dict[tuple[int, int], dict], current_day: int | None, *,
+                   danger: bool = False) -> list[tuple[tuple[int, int], int | None, int]]:
+    """Zones known to hold zombies: (cell, day of the reading, pessimistic count now).
+
+    A zone counted with zombies (> 0) on an earlier day is grown to its worst case since
+    (zombie_growth). danger=True also takes zones known only by a danger level > 0 (lower
+    bound of the band, read today when seen today). One list for every spread estimate
+    (the spread map of the map and route tools, the camping projection)."""
+    out = []
+    for cell, z in zone_map.items():
+        if cell == (0, 0):
+            continue
+        zm = z.get("zombies", -1)
+        last_day = z.get("updated_day") or z.get("scouted_day")
+        if zm > 0:
+            est = _zombie_max_estimate(zm, last_day, current_day)
+            out.append((cell, last_day, est if est is not None else zm))
+        elif danger and z.get("danger", 0) > 0 and (zm < 0 or z.get("danger_today")):
+            seen = current_day if zone_is_today(z, current_day) else last_day
+            out.append((cell, seen, danger_band(z["danger"], DANGER_TOP)[0]))
+    return out
+
+
+def earliest_zombie_day(zone_map: dict[tuple[int, int], dict], cell: tuple[int, int], current_day: int | None,
+                        bounds=None) -> tuple[int, tuple[int, int], int] | None:
+    """(day, source cell, source reading day): the first day zombies can stand on `cell` at
+    hiding time, or None when no dated source is known.
+
+    Game rules (MapMaker::spreadCycleMH, NightlyHandler): one spread a night, after the
+    camping check, only to the 8 zones around (NEIGHBOURS8). So a zone holding zombies on day
+    E(n) can pass them to a neighbour for day E(n) + 1, and a zone seen EMPTY on day t gets
+    zombies on day t + 1 at the earliest: E(c) = max(t_c + 1, min over neighbours E(n) + 1),
+    sources (zombie_sources, danger included) at their reading day. Solved as a shortest path
+    (the max/+1 step keeps it monotone). Zones never visited relay the spread (no reading); the
+    town never holds zombies. `bounds` (geo.Bounds) limits the grid, else the known zones + 1."""
+    import heapq
+    empty: dict[tuple[int, int], int] = {}
+    for c, z in zone_map.items():
+        zm, danger = z.get("zombies", -1), z.get("danger", 0)
+        seen = current_day if zone_is_today(z, current_day) else (z.get("updated_day") or z.get("scouted_day"))
+        if seen is not None and (zm == 0 or (zm < 0 and not danger and zone_is_today(z, current_day))):
+            empty[c] = seen
+    if bounds is None:
+        xs = [c[0] for c in zone_map] + [cell[0]]
+        ys = [c[1] for c in zone_map] + [cell[1]]
+        inside = lambda c: min(xs) - 1 <= c[0] <= max(xs) + 1 and min(ys) - 1 <= c[1] <= max(ys) + 1  # noqa: E731
+    else:
+        inside = lambda c: bounds.xmin <= c[0] <= bounds.xmax and bounds.ymin <= c[1] <= bounds.ymax  # noqa: E731
+    heap = [(seen, src, src, seen) for src, seen, _n in zombie_sources(zone_map, current_day, danger=True)
+            if seen is not None]
+    heapq.heapify(heap)
+    done: set[tuple[int, int]] = set()
+    while heap:
+        e, c, src, seen = heapq.heappop(heap)
+        if c in done:
+            continue
+        if c == cell:
+            return e, src, seen
+        done.add(c)
+        for dx, dy in NEIGHBOURS8:
+            n = (c[0] + dx, c[1] + dy)
+            if n == (0, 0) or n in done or not inside(n):
+                continue
+            heapq.heappush(heap, (max(e + 1, empty.get(n, e) + 1), n, src, seen))
+    return None
+
+
 def _build_spread_map(
     zone_map: dict[tuple[int, int], dict],
     current_day: int | None,
@@ -210,14 +277,7 @@ def _build_spread_map(
     from collections import deque
 
     # Seed: all zones with confirmed zombies, using their pessimistic current count
-    seeds: list[tuple[int, int, int]] = []  # (x, y, effective_zm)
-    for (x, y), z in zone_map.items():
-        zm = z.get("zombies", -1)
-        if zm > 0:
-            last_day = z.get("updated_day") or z.get("scouted_day")
-            est = _zombie_max_estimate(zm, last_day, current_day)
-            effective_zm = est if est is not None else zm
-            seeds.append((x, y, effective_zm))
+    seeds = [(x, y, zm) for (x, y), _day, zm in zombie_sources(zone_map, current_day)]
 
     # BFS: spread only through cells that exist in zone_map (explored territory)
     result: dict[tuple[int, int], tuple[int, int]] = {}

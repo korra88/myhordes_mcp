@@ -283,8 +283,7 @@ tom = format_camping_odds(res, x=8, y=13, citizen="Eve", day_arg=27, town_id=Non
 assert "Night of day 27 (tomorrow): a projection from today's data." in tom, tom
 assert "Fata plan tomorrow night on [8|13]" in tom and "camp bonus +5%: the level after the upgrades of Ann's Fata plan (the plan starts from +0%)" in tom
 assert "Planned in Ann's Fata plan for day 27: upgrades for +5% (+0% -> +5%), counted as done (1 improve = 1 AP)" in tom
-assert ("still none tomorrow" in tom or "can spread in at night" in tom or "+1 a night" in tom
-        or "probably higher" in tom), tom
+assert ("none today" in tom or "+1 a night" in tom or "probably higher" in tom), tom
 # zombie projection (MapMaker::spreadCycleMH): growth +1 a night, spread only from neighbours
 from myhordes_mcp.fata.camping import _project_zombies
 _zm = {(5, 5): {"zombies": 0, "updated_day": 26}}
@@ -297,15 +296,41 @@ _cm.zone_map = lambda d: d["_zm"]
 _cm.zone_is_today = lambda z, day: z.get("updated_day") == day
 try:
     n, note = _project_zombies({"_zm": _zm}, (5, 5), _zm[(5, 5)], 0, "", 26, 27)
-    assert n == 0 and "still none tomorrow" in note, note
+    assert n == 0 and "no zombies known on the map" in note and "never visited" not in note, note
+    # a source 3 rings away counted today: one ring a night, the camp check runs before the spread
+    _zm[(8, 8)] = {"zombies": 3, "updated_day": 26}
+    n, note = _project_zombies({"_zm": _zm}, (5, 5), _zm[(5, 5)], 0, "", 26, 28)
+    assert n == 0 and "nearest zombies known 3 zones away ([8|8], d26)" in note and "none before the night of day 29" in note, note
+    assert "16 zones closer never visited" in note, note   # 5x5 around, 9 known
+    n, note = _project_zombies({"_zm": _zm}, (5, 5), _zm[(5, 5)], 0, "", 26, 29)
+    assert "can be here from the night of day 29, up to 2 a night" in note, note
+    # an older count nearer wins: 2 rings, counted d25 -> day 27
+    _zm[(7, 7)] = {"zombies": 1, "updated_day": 25}
+    n, note = _project_zombies({"_zm": _zm}, (5, 5), _zm[(5, 5)], 0, "", 26, 27)
+    # [7|7] counted d25, 2 rings away, but [6|6] was seen empty today: day 27 there, day 28 here
+    assert "([7|7], d25)" in note and "none before the night of day 28" in note, note
+    # a neighbour with zombies today: tomorrow already
     _zm[(6, 6)] = {"zombies": 3, "updated_day": 26}
     n, note = _project_zombies({"_zm": _zm}, (5, 5), _zm[(5, 5)], 0, "", 26, 27)
-    assert n == 0 and "1 neighbouring zone has zombies" in note and "can spread in" in note, note
+    assert n == 0 and "nearest zombies known 1 zone away ([6|6]" in note and "from the night of day 27" in note, note
     _zm[(5, 5)] = {"zombies": 2, "updated_day": 26}
     n, note = _project_zombies({"_zm": _zm}, (5, 5), _zm[(5, 5)], 2, "", 26, 28)
     assert n == 4 and "counted 4 that night" in note, note
 finally:
     _cm.zone_map, _cm.zone_is_today = _orig_zone_map, _orig_today
+# an old reading far away does not flood the map: zones seen empty since hold the front back
+from myhordes_mcp.fata.risk import earliest_zombie_day
+from myhordes_mcp.fata.geo import Bounds
+_b = Bounds(0, 8, 1, 3)   # the grid is the whole map: no zone never visited around it
+_g = {(x, y): {"zombies": 0, "updated_day": 26, "seen_today": True} for x in range(0, 9) for y in range(1, 4)}
+_g[(8, 2)] = {"zombies": 5, "updated_day": 2, "seen_today": False}   # counted on day 2, 6 rings away
+_g[(7, 2)] = {"zombies": 0, "updated_day": 26, "seen_today": True}
+assert earliest_zombie_day(_g, (2, 2), 26, _b) == (32, (8, 2), 2)   # all seen empty today: ring 1 on day 27, ring 6 (the camp) on day 32
+_g[(7, 2)] = {"zombies": 0, "updated_day": 10, "seen_today": False}
+_g[(6, 1)] = _g[(6, 2)] = _g[(6, 3)] = {"zombies": 0, "updated_day": 26, "seen_today": True}
+assert earliest_zombie_day(_g, (2, 2), 26, _b) == (31, (8, 2), 2)   # [7|2] empty only on d10: one night gained
+# zones never visited relay the spread unchecked: without the bounds the front goes round the grid
+assert earliest_zombie_day(_g, (2, 2), 26)[0] == 28
 assert "Night of day 26 (tonight)." in format_camping_odds(res, x=8, y=13, town_id=None)
 assert format_camping_odds(res, x=8, y=13, day_arg=26, town_id=None) == format_camping_odds(res, x=8, y=13, town_id=None)
 err = format_camping_odds(res, x=8, y=13, day_arg=20, town_id=None)

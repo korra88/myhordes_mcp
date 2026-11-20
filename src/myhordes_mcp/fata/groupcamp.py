@@ -28,19 +28,19 @@ from dataclasses import dataclass, field
 from ..utils.fmt import header, plural, ruin_label
 from . import camplog
 from .camping import (
-    CROWD, IMPROVE_LEVEL, INSTALL_LEVEL, MAX_LEVEL_TO_ACT, NIGHTLY_DROP, _find_citizen, camping_terms,
-    fata_plan_upgrades, is_panda, lighthouse_built, odds_cap, plan_upgrade_text, resolve_camp_level,
+    CAMP_ITEM_BONUS, CROWD, IMPROVE_LEVEL, INSTALL_LEVEL, MAX_LEVEL_TO_ACT, NIGHTLY_DROP, TOMB_BONUS, _find_citizen,
+    camping_terms, fata_plan_upgrades, is_panda, lighthouse_built, odds_cap, plan_upgrade_text, resolve_camp_level,
     resolve_night, ruin_term, skill_label, typed_plan, zone_reading,
 )
 from .risk import _zone_freshness, _zone_threat, fmt_items
 from .cp import citizen_key
-from .geo import fmt_xy, km, xy
+from .geo import fmt_xy, km, moves, xy
+from .supplies import ITEMS, MAX_AP
 from .towndata import plans_for_citizen, plans_for_zone
 
 MAX_CAMPERS = 6
 MAX_NIGHTS = 6
-BASE_AP = 6      # AP each citizen has in a day before drinking / eating / drugs
-GRAVE_BONUS, ITEM_BONUS = 8, 5
+BASE_AP = MAX_AP   # AP each citizen has in a day before drinking / eating / drugs
 ORD = ["1st", "2nd", "3rd", "4th", "5th", "6th"]
 
 
@@ -110,16 +110,16 @@ class _Solver:
                 kinds = [("dug" if c.tomb else "", 0, 0, 0, 0)]
                 if not c.tomb:
                     if c.tamer:   # the dog's grave is free: it always beats paying 1 AP
-                        kinds.append(("dog", 0, 0, GRAVE_BONUS, 1))
-                        kinds.append(("boost", 0, 1, GRAVE_BONUS, 1))
+                        kinds.append(("dog", 0, 0, TOMB_BONUS, 1))
+                        kinds.append(("boost", 0, 1, TOMB_BONUS, 1))
                     else:
-                        kinds.append(("paid", 1, 0, GRAVE_BONUS, 0))
+                        kinds.append(("paid", 1, 0, TOMB_BONUS, 0))
                 opts = []
                 for kind, paid, boost, bonus, dog in kinds:
                     need = max(0, c.cap - base - bonus)
-                    top = min(self.slots, self.pool, -(-need // ITEM_BONUS))
+                    top = min(self.slots, self.pool, -(-need // CAMP_ITEM_BONUS))
                     for m in range(top + 1):
-                        o = max(0, min(base + bonus + ITEM_BONUS * m, c.cap))
+                        o = max(0, min(base + bonus + CAMP_ITEM_BONUS * m, c.cap))
                         opts.append((kind, paid, boost, m, o, dog, abs(m - c.carried), abs(p - c.hint)))
                 row.append(opts)
             out.append(row)
@@ -339,7 +339,7 @@ def order_matters(campers, sol: Solution, pos: list[int], level: int) -> bool:
         out = {}
         for p, k in enumerate(perm):
             c = campers[k]
-            bonus = (GRAVE_BONUS if sol.grave[k] in ("paid", "dog", "boost") else 0) + ITEM_BONUS * sol.items[k]
+            bonus = (TOMB_BONUS if sol.grave[k] in ("paid", "dog", "boost") else 0) + CAMP_ITEM_BONUS * sol.items[k]
             out[k] = max(0, min(c.base + pos[p] + level + bonus, c.cap))
         return out
     ref = odds_by_camper(sol.order)
@@ -497,7 +497,7 @@ def _camp_item_steps(campers: list, sol: Solution, camp_items: int, floor_items:
     for g in gives:
         if g[1]:
             steps.append(f"{g[0]} leaves {plural(g[1], 'camp item')} unused")
-    return "Camp items: " + "; ".join(steps) + "."
+    return "Before hiding, camp items: " + "; ".join(steps) + "."
 
 
 def _absorbable(level_after: int) -> int:
@@ -530,12 +530,17 @@ def _ap_warning(np_: NightPlan, prev: NightPlan | None, n: int) -> str:
 # Nearby defensive items
 # ---------------------------------------------------------------------------
 
-NEARBY_MAX_D, NEARBY_ZONES = 12, 3
+NEARBY_ZONES = 3
 # Items the game lets a camper install on the campsite ('improve' action, ActionDataService).
 INSTALLABLE = {"Old Door", "Sheet Metal", "Trestle", "Mattress", "Solid Wooden Board", "Sheet of Plywood",
                "Järpen Table"}
-REACH_TIERS = ((3, "the day's 6 AP"), (6, "water or food too (AP back to max once each)"),
-               (9, "water and food"), (12, "water, food and a drug (Steroid / alcohol AP to 6, Twinoid 8, Coffee +4)"))
+# Round-trip reach from the camp: the day's AP, then each of water, food and a drug restores the
+# max once (supplies.py rules), so every tier adds MAX_AP AP = MAX_AP / 2 zones out and back.
+REACH_TIERS = tuple((MAX_AP * k // 2, w) for k, w in enumerate((
+    f"the day's {MAX_AP} AP", "water or food too (AP back to max once each)", "water and food",
+    f"water, food and a drug (Steroid / alcohol AP to {MAX_AP}, Twinoid {MAX_AP + ITEMS['twinoid'].level}, "
+    f"Coffee +{ITEMS['coffee'].level})"), 1))
+NEARBY_MAX_D = REACH_TIERS[-1][0]
 
 
 def nearby_installable(data: dict, cell: tuple) -> list[tuple]:
@@ -547,7 +552,7 @@ def nearby_installable(data: dict, cell: tuple) -> list[tuple]:
         zc = xy(z)
         if zc is None or zc == cell or zc == (0, 0):
             continue
-        d = abs(zc[0] - cell[0]) + abs(zc[1] - cell[1])
+        d = moves(zc, cell)
         found = [i for i in z.get("items", []) if i.get("name") in INSTALLABLE and not i.get("broken")]
         if d <= NEARBY_MAX_D and found:
             hits.append((d, z["coords"], z, found))
@@ -903,6 +908,9 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
         lines.append("")
         lines.append(f"Plan: {plan}; {gtxt}; {lvl}; {ap_txt}."
                      + (" Everyone at their cap." if allcap else " Not everyone can reach the cap with these resources."))
+        steps = _camp_item_steps(np_.campers, sol, camp_items, floor_items)
+        if steps:
+            lines.append(steps)
         matters = n > 1 and order_matters(np_.campers, sol, np_.pos, sol.level)
         lines.append("Hiding order (after the upgrades, after 19:00):" if matters else
                      "Hiding order: any order (nobody's odds change), after the upgrades and after 19:00:")
@@ -927,9 +935,6 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
             lines.append(f"{prefix}{c.name} ({', '.join(desc)})  {sol.odds[k]}% ({cap_txt})")
         lines.append(f"Expected survivors {sol.total / 100:.2f} / {n}." + ("" if objective == "expected" else
                                                                           f" Lowest {min(sol.odds)}%."))
-        steps = _camp_item_steps(np_.campers, sol, camp_items, floor_items)
-        if steps:
-            lines.append(steps)
         # --- carry-over: AP beyond the plan ---------------------------------------------
         if ap_arg is not None and ap_arg > sol.ap:
             spare = ap_arg - sol.ap
@@ -1000,11 +1005,11 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
                 odds.append((f"{_ord(p)} " if matters else "") + f"{c.name} {sol.odds[kk]}%"
                             + (" (cap)" if sol.odds[kk] >= c.cap else f" (cap {c.cap})") + (f" [{tag}]" if tag else ""))
             lines.append(f"{head} {starts} {act}")
-            lines.append(f"  {'Hide in this order' if matters else 'Any order'}: {', '.join(odds)}. "
-                         f"Survivors {sol.total / 100:.2f}/{n}. Zombies {np_.zombies}.")
             steps = _camp_item_steps(np_.campers, sol, camp_items, floor_items)
             if steps:
                 lines.append("  " + steps)
+            lines.append(f"  {'Hide in this order' if matters else 'Any order'}: {', '.join(odds)}. "
+                         f"Survivors {sol.total / 100:.2f}/{n}. Zombies {np_.zombies}.")
             warn = _ap_warning(np_, nights[k - 1] if k else None, n)
             if warn:
                 lines.append("  WARNING " + warn)

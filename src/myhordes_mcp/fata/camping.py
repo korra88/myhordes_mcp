@@ -20,9 +20,10 @@ zombie reading): `format_camping_odds` states every such assumption.
 from ..utils.fmt import header, plural, ruin_label
 from . import camp_zones, camplog
 from .cp import citizen_key
-from .geo import fmt_xy, km, xy, zone_map
+from .geo import fmt_xy, in_bounds, km, map_bounds, spread_steps, xy, zone_map
 from .camp_zones import NIGHTLY_DROP
-from .risk import DANGER_BAND, zone_is_today
+from .risk import (DANGER_BAND, GROWTH_AVG, GROWTH_MAX, earliest_zombie_day, respawn_totals, zombie_growth,
+                   zombie_sources, zone_is_today)
 from .towndata import plans_for_citizen, plans_for_zone
 
 # Previous campings (index = camping nights survived, capped at the end of the whole table).
@@ -42,6 +43,7 @@ DISTANCE = [-100, -75, -50, -25, -10, 0, 0, 0, 0, 0, 0, 0, 5, 7, 10, 15, 20]
 LIGHTHOUSE_UID = "small_lighthouse_#00"
 SKILLS = ("none", "procamp", "reclusive1", "reclusive2", "reclusive3", "reclusive4")
 
+TOMB_BONUS, CAMP_ITEM_BONUS = 8, 5   # grave (its digger only), each Groundsheet / Festering Flesh carried
 IMPROVE_LEVEL, INSTALL_LEVEL, MAX_LEVEL_TO_ACT = 5, 9, 50   # actions allowed while level < 50
 
 TERM_LABELS = {
@@ -99,12 +101,12 @@ def camping_terms(*, nights: int = 0, skill: str = "none", panda: bool = False, 
     table = PREVIOUS[(panda, is_pro_camper(skill, nights))]
     return {
         "previous": table[min(max(nights, 0), len(table) - 1)],
-        "tomb": 8 if tomb else 0,
+        "tomb": TOMB_BONUS if tomb else 0,
         "town": PANDA_TOWN_BONUS if panda else 0,
         "zone": level,
         "zoneBuilding": ruin_term(ruin, hidden_before),
         "lighthouse": 25 if lighthouse else 0,
-        "campitems": 5 * camp_items,
+        "campitems": CAMP_ITEM_BONUS * camp_items,
         "zombies": zombies * (-3 if vest else -7),
         "campers": CROWD[min(len(CROWD) - 1, max(0, hidden_before))],
         "night": 10 if night else 0,
@@ -270,32 +272,42 @@ def zone_reading(data: dict, cell: tuple, night: dict) -> tuple:
 
 def _project_zombies(data: dict, cell: tuple, z: dict | None, zombies: int, note: str,
                      day: int, target: int) -> tuple[int, str]:
-    """Zombies on the zone the night of `target`, from today's reading. Game rule (MapMaker::
-    spreadCycleMH, once per night): a zone with zombies usually gains 1 (90%); a zone with none
-    gains some only from a neighbouring zone (8 around) that has more, at random (0-4)."""
+    """Zombies on the zone the night of `target`, from today's reading. Game rules in
+    risk.py (zombie_growth: a zone with zombies grows; earliest_zombie_day: an empty zone
+    gets some only once the spread front, one ring a night, reaches it)."""
     nights = target - day
     if not z or not zone_is_today(z, day) or z.get("danger_today") or z.get("zombies", -1) < 0:
         return zombies, note + "; zombies grow at night, the real count that night is probably higher"
     if zombies > 0:
-        return zombies + nights, (f"{zombies} today (d{day}), +1 a night is the usual growth (90%): "
-                                  f"counted {zombies + nights} that night")
+        n = round(zombie_growth(zombies, nights)[1])
+        return n, (f"{zombies} today (d{day}), +{GROWTH_AVG:g} a night is the usual growth (90%): "
+                   f"counted {n} that night")
     zones = zone_map(data)
-    with_z = unknown = 0
-    for dx in (-1, 0, 1):
-        for dy in (-1, 0, 1):
-            if (dx or dy) and (cell[0] + dx, cell[1] + dy) != (0, 0):
-                nz = zones.get((cell[0] + dx, cell[1] + dy))
-                if not nz or not zone_is_today(nz, day) or nz.get("danger_today") or nz.get("zombies", -1) < 0:
-                    unknown += 1
-                elif nz["zombies"] > 0:
-                    with_z += 1
-    if with_z == unknown == 0 and nights == 1:
-        return 0, "none today nor on the 8 neighbouring zones: still none tomorrow (zombies spread at night only from neighbours)"
-    parts = [f"{with_z} neighbouring zone{'s have' if with_z != 1 else ' has'} zombies"] if with_z else []
-    if unknown:
-        parts.append(f"{unknown} neighbouring zone{'s' if unknown != 1 else ''} without a count today")
-    return 0, ("none today; " + (", ".join(parts) if parts else f"neighbours empty, {nights} nights away")
-               + ": zombies can spread in at night (0-4 a night), check before hiding")
+    bounds = map_bounds(data) if data.get("meta") else None
+    first = earliest_zombie_day(zones, cell, day, bounds)
+    if first is None:
+        text, reach = "none today and no zombies known on the map", 2
+    else:
+        when = first[0]
+        near = min(((spread_steps(c, cell), c, seen) for c, seen, _n in zombie_sources(zones, day, danger=True)
+                    if c != cell), default=None)
+        reach = near[0] if near else 2
+        text = ("none today; " + (f"nearest zombies known {plural(reach, 'zone')} away ({fmt_xy(near[1])}, "
+                                  f"d{near[2]}); " if near else "")
+                + "they spread one zone a night at most and zones seen empty hold them back: "
+                + (f"none before the night of day {when}" if target < when else
+                   f"they can be here from the night of day {when}, up to {GROWTH_MAX} a night: check before hiding"))
+    # Zones nearer than that source and never visited could hold zombies of their own.
+    unseen = sum(1 for dx in range(1 - reach, reach) for dy in range(1 - reach, reach)
+                 if (c := (cell[0] + dx, cell[1] + dy)) not in zones and c != (0, 0)
+                 and (bounds is None or in_bounds(bounds, c)))
+    if unseen:
+        text += (f"; {plural(unseen, 'zone')} {'closer' if first else 'around'} never visited on Fata "
+                 "(may hold zombies)")
+    t = respawn_totals(data) if data.get("meta") else None
+    if t and t["known"] < t["threshold"]:
+        text += "; a global respawn is possible (zombies regrow anywhere)"
+    return 0, text
 
 
 def typed_plan(zone_plans: list[dict], mine: dict | None) -> dict | None:

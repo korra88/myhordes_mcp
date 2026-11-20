@@ -51,6 +51,12 @@ def moves(a: Cell, b: Cell = (0, 0)) -> int:
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
+def spread_steps(a: Cell, b: Cell = (0, 0)) -> int:
+    """Chebyshev distance: the nights zombies need at least to spread from a to b (one
+    NEIGHBOURS8 ring a night, MapMaker::spreadCycleMH, diagonals from day 2)."""
+    return max(abs(a[0] - b[0]), abs(a[1] - b[1]))
+
+
 def km(x: int, y: int) -> int:
     """The game's zone distance: Euclidean, rounded half up (Zone::getDistance).
     Decides EP use (>= 3 km) and the Observation Platform teleport range."""

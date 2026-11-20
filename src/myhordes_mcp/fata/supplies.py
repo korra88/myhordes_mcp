@@ -56,6 +56,7 @@ ITEMS = {
     "coffee": Item("coffee", "Bloody Hot Coffee", "coffee", 4),
     "secondwind": Item("secondwind", "Second Wind (hero action)", "hero", 0),
 }
+MAX_AP, WOUNDED_MAX_AP = 6, 5   # AP after the night, and the max that water / food / drugs restore
 SECOND_WIND = {0: (3, 1), 1: (3, 3), 2: (4, 4), 3: (4, 6)}  # skill level 0-3 (Enduring 1-4) → (AP, EP)
 ORDER = tuple(ITEMS)
 
@@ -114,7 +115,7 @@ def parse_supplies(available: str, second_wind: int) -> tuple[dict[str, int], in
 
 @dataclass(frozen=True)
 class Start:
-    ap: int = 6
+    ap: int = MAX_AP
     ep: int | None = None        # None = full (scout 2 + shoes 1 + bike 2)
     counter: int = 0
     thirst: int = 0              # 0 ok, 1 thirsty, 2 dehydrated
@@ -131,7 +132,7 @@ class Start:
 
     @property
     def max_ap(self) -> int:
-        return 5 if self.wounded else 6
+        return WOUNDED_MAX_AP if self.wounded else MAX_AP
 
     @property
     def ext(self) -> int:
