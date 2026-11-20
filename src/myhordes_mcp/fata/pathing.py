@@ -4,10 +4,11 @@ import heapq
 from dataclasses import dataclass, field
 
 from ..utils.fmt import header, plural, ruin_label
-from .game import CP_PER_CITIZEN, age_days, ep_zone, platform_level, teleport_range, zombie_arrival, zone_estimate
+from .game import (CP_PER_CITIZEN, age_days, pays_ep, platform_level, teleport_range, thirst_counter_at, zombie_arrival,
+                   zone_estimate)
 from .geo import MAX_PATH_AP, NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km, map_bounds, moves, zone_map
 from .risk import _staleness_tag, fmt_items, threat_text
-from .supplies import THIRST_STEP, thirst_state
+from .supplies import thirst_state
 
 
 # ---------------------------------------------------------------------------
@@ -713,7 +714,7 @@ def step_rows(route: list[tuple[int, int]], start_ap: int = 6, start_ep: int = 0
     ap, ep, counter = start_ap, start_ep, thirst_counter
     rows = []
     for (x0, y0), (x1, y1) in zip(route, route[1:]):
-        use_ep = ep > 0 and ep_zone(x0, y0)
+        use_ep = pays_ep(ep, x0, y0)
         if use_ep:
             ep -= 1
         else:
@@ -751,7 +752,7 @@ def format_step_table(route: list[tuple[int, int]], start_ap: int = 6, start_ep:
         summary.append(f"AP runs out before step {first_empty}: {short} more AP needed "
                        "(consume food/water/drugs at exactly 0 AP to waste nothing)")
     for level, label in ((1, "Thirsty"), (2, "Dehydrated — dies at midnight"), (3, "death")):
-        limit = level * (THIRST_STEP + 1)
+        limit = thirst_counter_at(level)
         hit = next((i for i, r in enumerate(rows, 1) if r["counter"] >= limit), None)
         if hit:
             summary.append(f"counter reaches {limit} at step {hit} → {label} unless water resets it before")

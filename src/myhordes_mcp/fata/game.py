@@ -461,3 +461,161 @@ def position_terms(n: int, ruin: dict | None, hidden_before: int) -> list[int]:
     """Crowd + ruin-room points for the camper hiding at each position (0 = first of the group)."""
     return [CROWD[min(len(CROWD) - 1, hidden_before + p)] + ruin_term(ruin, hidden_before + p)
             for p in range(n)]
+
+
+# ===========================================================================
+# Action points, EP and thirst (ActionDataService, ActionEffectProvider, ActionRequirementProvider,
+# BeyondController, CitizenHandler, ProcessStatusEffect, HeroSkillDataService; myhordes-docker v5.0.6;
+# player-facing version: knowledge/tactics/expedition-planning.md)
+#
+# - A move costs 1 point. Leaving a zone at 3+ km (game.ep_zone) pays EP first, else AP only.
+# - Thirst counter: +1 per move (AP or EP). Above 10 the thirst level goes up and the counter
+#   restarts: thirsty at move 11, dehydrated at 22, dead at 33. Only water (and midnight) resets it
+#   (not food, not Hydratone, not entering town).
+# - Water: not thirsty → only if not drunk today and AP < max; AP to max. Thirsty → clears
+#   thirst; AP to max only if not drunk today. Dehydrated → becomes thirsty, no AP, so a
+#   second ration is needed. A second drink while not thirsty is refused by the game.
+# - Food: once a day, only with AP < max. 6 AP food → max AP, 7 AP food → max + 1.
+# - Anabolic Steroids → max AP, Twinoid → max + 2. Both are drugs: a second drug the same
+#   day makes the citizen an addict, so the planner uses at most one.
+# - Alcohol → max AP; not when already drunk or hungover (hungover the next day).
+# - Bloody Hot Coffee: +4 AP up to max, +1 EP up to max EP, no daily limit.
+# - Second Wind (hero skill, HeroSkillDataService 'super_enduring_N' + effect 'just_ap_sw'):
+#   adds AP up to max (never above) and EP even above max; skill levels 0-3 (what players call
+#   Enduring 1-4, Master = 4) give +3/+1, +3/+3, +4/+4, +4/+6. It is the day's one heroic action (status tg_hero, cleared at night),
+#   shared with Heroic Return and the other hero actions. Not an item: no slot.
+# - AP items raise AP to a level, they never add: AP left when using one is wasted.
+# - They also refill EP up to the shoes (1) + bike (2) part, never the scout's 2;
+#   Twinoid one more. Max AP is 6, 5 when wounded.
+# - Observation Platform level 3/4: teleport home from 1/2 km (gate open), no move.
+# - Labyrinth: entering town from [0|0] costs 1 AP.
+# ===========================================================================
+
+MAX_AP, WOUNDED_MAX_AP = 6, 5   # AP after the night, and the max that water / food / drugs restore
+SCOUT_EP, SHOES_EP, BIKE_EP = 2, 1, 2   # EP of the scout's own pool, the shoes part, the bike part
+THIRST_STEP = 10      # the counter goes up a level when it passes this: thirsty at move 11, dehydrated at 22
+THIRST_DEAD = 3       # the thirst level that kills
+LABYRINTH_ENTRY_AP = 1   # entering town from [0|0] through the Labyrinth
+SECOND_WIND = {0: (3, 1), 1: (3, 3), 2: (4, 4), 3: (4, 6)}  # skill level 0-3 (Enduring 1-4) → (AP, EP)
+
+
+@dataclass(frozen=True)
+class Item:
+    key: str
+    label: str
+    kind: str   # water | food | drug | alcohol | coffee | hero
+    level: int  # AP level relative to max (food/drug/alcohol), or AP added (coffee)
+
+
+ITEMS = {
+    "water": Item("water", "Water Ration", "water", 0),
+    "food7": Item("food7", "7 AP food", "food", 1),
+    "food6": Item("food6", "6 AP food", "food", 0),
+    "alcohol": Item("alcohol", "alcohol", "alcohol", 0),
+    "steroid": Item("steroid", "Anabolic Steroids", "drug", 0),
+    "twinoid": Item("twinoid", "Twinoid 500mg", "drug", 2),
+    "coffee": Item("coffee", "Bloody Hot Coffee", "coffee", 4),
+    "secondwind": Item("secondwind", "Second Wind (hero action)", "hero", 0),
+}
+
+
+def ap_max(wounded: bool) -> int:
+    """The AP that water, food and drugs restore to."""
+    return WOUNDED_MAX_AP if wounded else MAX_AP
+
+
+def ep_extension(shoes: bool, bike: bool) -> int:
+    """EP the shoes and bike parts give; the items that refill EP only refill up to this (never the scout's)."""
+    return (BIKE_EP if bike else 0) + (SHOES_EP if shoes else 0)
+
+
+def ep_max(scout: bool, shoes: bool, bike: bool) -> int:
+    return (SCOUT_EP if scout else 0) + ep_extension(shoes, bike)
+
+
+def refill_ep(ep: int, ext: int, plus: int = 0) -> int:
+    """EP after an AP item: refilled up to the shoes + bike part (`ext`), Twinoid one more (`plus`)."""
+    return max(ep, ext + plus) if ext > 0 else ep
+
+
+def pays_ep(ep: int, x: int, y: int) -> bool:
+    """A move leaving [x|y] is paid with EP: EP left and the zone 3+ km from town."""
+    return ep > 0 and ep_zone(x, y)
+
+
+def count_move(cnt: int, th: int) -> tuple[int, int, bool]:
+    """(counter, thirst level, became dehydrated) after one more move (AP or EP) without water."""
+    cnt += 1
+    if cnt > THIRST_STEP:
+        th, cnt = th + 1, 0
+        return cnt, th, th == 2
+    return cnt, th, False
+
+
+def thirst_level(counter: int) -> int:
+    """Thirst level after `counter` moves without water (the counter never resets in a step table):
+    a level every THIRST_STEP + 1 moves; THIRST_DEAD is death."""
+    return counter // (THIRST_STEP + 1)
+
+
+def thirst_counter_at(level: int) -> int:
+    """The counter at which `thirst_level` reaches `level`."""
+    return level * (THIRST_STEP + 1)
+
+
+def drink_water(th: int, drank: bool, ap: int, ep: int, max_ap: int, ext: int):
+    """A Water Ration: (ap, ep, thirst, drank, AP wasted), or None when the game refuses it. The
+    thirst counter restarts at 0. Not thirsty: only if not drunk today and AP < max, AP to max.
+    Thirsty: clears the thirst, AP to max only if not drunk today. Dehydrated: becomes thirsty,
+    no AP (a second ration is needed)."""
+    waste = 0
+    if th == 0:
+        if drank or ap >= max_ap:
+            return None
+        waste = min(ap, max_ap)
+        ap, ep, drank = max(ap, max_ap), refill_ep(ep, ext), True
+    elif th == 1:
+        if not drank:
+            waste = min(ap, max_ap)
+            ap, ep, drank = max(ap, max_ap), refill_ep(ep, ext), True
+        th = 0
+    else:
+        th = 1
+    return ap, ep, th, drank, waste
+
+
+def eat_food(ate: bool, ap: int, ep: int, max_ap: int, ext: int, level: int):
+    """Food (6 AP: level 0, 7 AP: level 1): (ap, ep), or None. Once a day, only at 0 AP."""
+    if ate or ap >= max_ap or ap > 0:
+        return None
+    return max(ap, max_ap + level), refill_ep(ep, ext)
+
+
+def take_drug(drugged: bool, key: str, ap: int, ep: int, max_ap: int, ext: int, level: int):
+    """A drug (Anabolic Steroids level 0, Twinoid 2): (ap, ep), or None. One a day (a second makes
+    the citizen an addict), only at 0 AP; a Twinoid refills one EP more."""
+    if drugged or ap > 0:
+        return None
+    return max(ap, max_ap + level), refill_ep(ep, ext, 1 if key == "twinoid" else 0)
+
+
+def drink_alcohol(drunk: bool, ap: int, ep: int, max_ap: int, ext: int):
+    """Alcohol: (ap, ep), or None when drunk or hungover. AP to max, only at 0 AP."""
+    if drunk or ap > 0:
+        return None
+    return max(ap, max_ap), refill_ep(ep, ext)
+
+
+def drink_coffee(ap: int, ep: int, max_ap: int, max_ep: int, level: int):
+    """Bloody Hot Coffee: (ap, ep, AP wasted), or None at max AP. +`level` AP up to max, +1 EP up to
+    max EP, no daily limit."""
+    if ap >= max_ap:
+        return None
+    new = min(max(max_ap, ap), ap + level)
+    return new, max(ep, min(ep + 1, max_ep)), level - (new - ap)
+
+
+def use_second_wind(ap: int, ep: int, max_ap: int, max_ep: int, sw_ap: int, sw_ep: int) -> tuple[int, int, int]:
+    """Second Wind (hero action): (ap, ep, AP wasted). AP up to max (never above), EP even above max."""
+    new = max(ap, min(ap + sw_ap, max_ap))
+    return new, min(ep + sw_ep, max_ep + sw_ep), sw_ap - (new - ap)

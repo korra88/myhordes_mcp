@@ -1,30 +1,9 @@
 """Expedition supplies: when to drink, eat and take drugs along a route, and what to carry.
 
-Rules from the game source (myhordes-docker v5.0.6: ActionDataService, ActionEffectProvider,
-ActionRequirementProvider, BeyondController, CitizenHandler, ProcessStatusEffect); the
-player-facing version is in knowledge/tactics/expedition-planning.md.
-
-- A move costs 1 point. Leaving a zone at 3+ km (game.ep_zone) pays EP first, else AP only.
-- Thirst counter: +1 per move (AP or EP). Above 10 the thirst level goes up and the counter
-  restarts: thirsty at move 11, dehydrated at 22, dead at 33. Only water (and midnight) resets it
-  (not food, not Hydratone, not entering town).
-- Water: not thirsty → only if not drunk today and AP < max; AP to max. Thirsty → clears
-  thirst; AP to max only if not drunk today. Dehydrated → becomes thirsty, no AP, so a
-  second ration is needed. A second drink while not thirsty is refused by the game.
-- Food: once a day, only with AP < max. 6 AP food → max AP, 7 AP food → max + 1.
-- Anabolic Steroids → max AP, Twinoid → max + 2. Both are drugs: a second drug the same
-  day makes the citizen an addict, so the planner uses at most one.
-- Alcohol → max AP; not when already drunk or hungover (hungover the next day).
-- Bloody Hot Coffee: +4 AP up to max, +1 EP up to max EP, no daily limit.
-- Second Wind (hero skill, HeroSkillDataService 'super_enduring_N' + effect 'just_ap_sw'):
-  adds AP up to max (never above) and EP even above max; skill levels 0-3 (what players call
-  Enduring 1-4, Master = 4) give +3/+1, +3/+3, +4/+4, +4/+6. It is the day's one heroic action (status tg_hero, cleared at night),
-  shared with Heroic Return and the other hero actions. Not an item: no slot.
-- AP items raise AP to a level, they never add: AP left when using one is wasted.
-- They also refill EP up to the shoes (1) + bike (2) part, never the scout's 2;
-  Twinoid one more. Max AP is 6, 5 when wounded.
-- Observation Platform level 3/4: teleport home from 1/2 km (gate open), no move.
-- Labyrinth: entering town from [0|0] costs 1 AP.
+The rules are in fata/game.py ("Action points, EP and thirst"; ActionDataService, ActionEffectProvider,
+BeyondController, CitizenHandler, ProcessStatusEffect). This module is the planner: a search over
+the moves of a route and the items used, minimising a lexicographic cost. The player-facing version
+is in knowledge/tactics/expedition-planning.md.
 """
 
 from dataclasses import dataclass
@@ -32,32 +11,30 @@ from functools import lru_cache
 from typing import NamedTuple
 
 from ..utils.fmt import plural
-from .game import CP_PER_CITIZEN, ep_zone, platform_level, teleport_range
+from .game import (
+    CP_PER_CITIZEN,
+    ITEMS,
+    LABYRINTH_ENTRY_AP,
+    MAX_AP,
+    SECOND_WIND,
+    THIRST_DEAD,
+    ap_max,
+    count_move,
+    drink_alcohol,
+    drink_coffee,
+    drink_water,
+    eat_food,
+    ep_extension,
+    ep_max,
+    pays_ep,
+    platform_level,
+    take_drug,
+    teleport_range,
+    thirst_level,
+    use_second_wind,
+)
 from .geo import MAX_PATH_AP, TOWN, fmt_xy, km
 
-THIRST_STEP = 10  # the counter goes up a level when it passes this
-
-
-@dataclass(frozen=True)
-class Item:
-    key: str
-    label: str
-    kind: str   # water | food | drug | alcohol | coffee
-    level: int  # AP level relative to max (food/drug/alcohol), or AP added (coffee)
-
-
-ITEMS = {
-    "water": Item("water", "Water Ration", "water", 0),
-    "food7": Item("food7", "7 AP food", "food", 1),
-    "food6": Item("food6", "6 AP food", "food", 0),
-    "alcohol": Item("alcohol", "alcohol", "alcohol", 0),
-    "steroid": Item("steroid", "Anabolic Steroids", "drug", 0),
-    "twinoid": Item("twinoid", "Twinoid 500mg", "drug", 2),
-    "coffee": Item("coffee", "Bloody Hot Coffee", "coffee", 4),
-    "secondwind": Item("secondwind", "Second Wind (hero action)", "hero", 0),
-}
-MAX_AP, WOUNDED_MAX_AP = 6, 5   # AP after the night, and the max that water / food / drugs restore
-SECOND_WIND = {0: (3, 1), 1: (3, 3), 2: (4, 4), 3: (4, 6)}  # skill level 0-3 (Enduring 1-4) → (AP, EP)
 ORDER = tuple(ITEMS)
 
 # When the player doesn't say what they have: water and one 7 AP food are assumed; drugs and
@@ -132,15 +109,15 @@ class Start:
 
     @property
     def max_ap(self) -> int:
-        return WOUNDED_MAX_AP if self.wounded else MAX_AP
+        return ap_max(self.wounded)
 
     @property
     def ext(self) -> int:
-        return (2 if self.bike else 0) + (1 if self.shoes else 0)
+        return ep_extension(self.shoes, self.bike)
 
     @property
     def max_ep(self) -> int:
-        return (2 if self.scout else 0) + self.ext
+        return ep_max(self.scout, self.shoes, self.bike)
 
 
 # Cost, compared lexicographically (lower is better):
@@ -250,9 +227,6 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
     avail = tuple(available.get(k, 0) for k in ORDER)
     ep0 = max_ep if start.ep is None else start.ep
 
-    def refill(ep, plus=0):
-        return max(ep, ext + plus) if ext > 0 else ep
-
     def use(state, k):
         """State after using item k, or None if the game (or the policy) refuses it."""
         i, ap, ep, cnt, th, drank, ate, drugged, drunk, used = state
@@ -263,40 +237,33 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
             return None
         waste = 0
         if it.kind == "hero":
-            new = max(ap, min(ap + start.sw_ap, max_ap))
-            waste = start.sw_ap - (new - ap)
-            ap, ep = new, min(ep + start.sw_ep, max_ep + start.sw_ep)
+            ap, ep, waste = use_second_wind(ap, ep, max_ap, max_ep, start.sw_ap, start.sw_ep)
         elif it.kind == "water":
-            if th == 0:
-                if drank or ap >= max_ap:
-                    return None
-                waste = min(ap, max_ap)
-                ap, ep, drank, cnt = max(ap, max_ap), refill(ep), True, 0
-            elif th == 1:
-                if not drank:
-                    waste = min(ap, max_ap)
-                    ap, ep, drank = max(ap, max_ap), refill(ep), True
-                th, cnt = 0, 0
-            else:
-                th, cnt = 1, 0
+            r = drink_water(th, drank, ap, ep, max_ap, ext)
+            if r is None:
+                return None
+            ap, ep, th, drank, waste = r
+            cnt = 0
         elif it.kind == "food":
-            if ate or ap >= max_ap or ap > 0:
+            r = eat_food(ate, ap, ep, max_ap, ext, it.level)
+            if r is None:
                 return None
-            ap, ep, ate = max(ap, max_ap + it.level), refill(ep), True
+            (ap, ep), ate = r, True
         elif it.kind == "drug":
-            if drugged or ap > 0:
+            r = take_drug(drugged, k, ap, ep, max_ap, ext, it.level)
+            if r is None:
                 return None
-            ap, ep, drugged = max(ap, max_ap + it.level), refill(ep, 1 if k == "twinoid" else 0), True
+            (ap, ep), drugged = r, True
         elif it.kind == "alcohol":
-            if drunk or ap > 0:
+            r = drink_alcohol(drunk, ap, ep, max_ap, ext)
+            if r is None:
                 return None
-            ap, ep, drunk = max(ap, max_ap), refill(ep), True
+            (ap, ep), drunk = r, True
         else:  # coffee
-            if ap >= max_ap:
+            r = drink_coffee(ap, ep, max_ap, max_ep, it.level)
+            if r is None:
                 return None
-            new = min(max(max_ap, ap), ap + it.level)
-            waste = it.level - (new - ap)
-            ap, ep = new, max(ep, min(ep + 1, max_ep))
+            ap, ep, waste = r
         used = tuple(n + (1 if o == k else 0) for o, n in zip(ORDER, used))
         # Second Wind costs less than an item (no slot) but is kept when not needed: it is
         # the day's heroic action (Heroic Return, ...).
@@ -307,17 +274,13 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
     def move(state):
         i, ap, ep, cnt, th, drank, ate, drugged, drunk, used = state
         x, y = route[i]
-        if ep > 0 and ep_zone(x, y):
+        if pays_ep(ep, x, y):
             ep -= 1
         elif ap > 0:
             ap -= 1
         else:
             return None
-        cnt += 1
-        dehyd = 0
-        if cnt > THIRST_STEP:
-            th, cnt = th + 1, 0
-            dehyd = th == 2
+        cnt, th, dehyd = count_move(cnt, th)
         return State(i + 1, ap, ep, cnt, th, drank, ate, drugged, drunk, used), dehyd
 
     @lru_cache(maxsize=None)
@@ -334,7 +297,7 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
             m = move(state)
             if m is not None:
                 nxt, dehyd = m
-                if nxt.th >= 3:
+                if nxt.th >= THIRST_DEAD:
                     options.append(((1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), "move"))
                 else:
                     options.append((_add(best(nxt)[0], (0, 0, 0, dehyd, 0, 0, 0, 0, 0, 0, 0)), "move"))
@@ -360,7 +323,7 @@ def plan(route: list[tuple[int, int]], start: Start, available: dict[str, int],
             break
         if choice == "move":
             nxt, _ = move(state)
-            if nxt.th >= 3:
+            if nxt.th >= THIRST_DEAD:
                 steps.append({"kind": "dead", "zone": route[i + 1]})
                 break
             paid = "EP" if nxt.ep < state.ep else "AP"
@@ -411,8 +374,8 @@ THIRST = {0: "OK", 1: "Thirsty", 2: "Dehydrated"}
 
 def thirst_state(counter: int) -> str:
     """State after `counter` moves without water (the counter never resets in a step table):
-    a level every THIRST_STEP + 1 moves, dead at the third."""
-    level = counter // (THIRST_STEP + 1)
+    a level every THIRST_STEP + 1 moves (game.thirst_level), dead at the third."""
+    level = thirst_level(counter)
     return THIRST[level] if level in THIRST else "DEAD"
 
 
@@ -435,7 +398,7 @@ def end_requirements(data: dict, route: list[tuple[int, int]], end: tuple[int, i
                     f"Observation Platform level {level}: teleport home from "
                     f"{fmt_xy(z)} ({plural(len(route) - 1 - cut, 'move')} saved; needs the gate open).")
     if any(b["name"].lower() == "labyrinth" for b in data.get("buildings", []) if b.get("built")):
-        return route, 1, f"Labyrinth built: entering town from {fmt_xy(TOWN)} costs 1 AP."
+        return route, LABYRINTH_ENTRY_AP, f"Labyrinth built: entering town from {fmt_xy(TOWN)} costs 1 AP."
     return route, 0, ""
 
 

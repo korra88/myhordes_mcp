@@ -32,13 +32,13 @@ from .camping import (
     zone_reading,
 )
 from .game import (
-    CAMP_ITEM_BONUS, IMPROVE_LEVEL, INSTALL_LEVEL, INSTALLABLE, ITEM_UIDS, NIGHTLY_DROP, STEAK_UID, TOMB_BONUS,
+    CAMP_ITEM_BONUS, IMPROVE_LEVEL, INSTALL_LEVEL, INSTALLABLE, ITEM_UIDS, ITEMS, MAX_AP, NIGHTLY_DROP, STEAK_UID,
+    TOMB_BONUS,
     camping_terms, improves_left, is_panda, level_after_nights, level_ok, lighthouse_built, odds_cap, position_terms,
 )
 from .risk import _zone_freshness, fmt_items, zone_threats
 from .cp import citizen_key
 from .geo import fmt_xy, km, moves, xy
-from .supplies import ITEMS, MAX_AP
 from .towndata import plans_for_citizen, plans_for_zone
 
 MAX_CAMPERS = 6
@@ -515,7 +515,7 @@ def _ap_warning(np_: NightPlan, prev: NightPlan | None, n: int) -> str:
 
 NEARBY_ZONES = 3
 # Round-trip reach from the camp: the day's AP, then each of water, food and a drug restores the
-# max once (supplies.py rules), so every tier adds MAX_AP AP = MAX_AP / 2 zones out and back.
+# max once (game.py rules), so every tier adds MAX_AP AP = MAX_AP / 2 zones out and back.
 REACH_TIERS = tuple((MAX_AP * k // 2, w) for k, w in enumerate((
     f"the day's {MAX_AP} AP", "water or food too (AP back to max once each)", "water and food",
     f"water, food and a drug (Steroid / alcohol AP to {MAX_AP}, Twinoid {MAX_AP + ITEMS['twinoid'].level}, "
