@@ -1,6 +1,6 @@
 # Bot evaluation suite — plan
 
-Status (2026-11-20): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 tooling half done 2026-11-20 (8 extended scenarios + `bot-eval-compare`; the A/B itself is pending). Written so that
+Status (2026-11-21): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 done 2026-11-21 (8 extended scenarios, `bot-eval-compare`, first A/B deployed, see 6.6). Written so that
 an agent with no prior context can implement it phase by phase (section 8).
 
 **Changes since the plan was written (2026-11-14), read first.** The server now has **28**
@@ -23,7 +23,7 @@ are stable). Gap G9 is closed, C1 is rewritten, C3/C4 and F18–F20 are new (202
 | 5 deterministic grader | implemented 2026-11-20, not committed: `tests/bot_eval/grade.py` (D1-D13), `grade_checks.py` (148 unit assertions + the old bench runs through an adapter), `make bot-eval-grade RUN=…`, `make bot-eval-grade-checks`; scenario fields `hard_checks`, `names_max`, `names_expected`, `writes_allowed`, `tools_any` groups, argument predicates; grades go to `<run>.graded.json`; `make golden` 223 same |
 | 6 judge | implemented 2026-11-20, not committed: `tests/bot_eval/judge_prompt.md` (fixed rubric, v1), `judge.py` (`claude -p`, opus, no tools / MCP, one call per turn, J1-J6 + 4.3 score merged into `<run>.graded.json`), `calibrate.py`; `make bot-eval-judge RUN=…`, `make bot-eval-calibrate`; smoke runs I1 and C4 judged; 10-item calibration set judged (10 calls, $0.6411); calibration: blind hand grades agreed 5/10, all 11 differing grades (6 of them `?`) re-checked against `items.json` and the judge was right on each, sheet reconciled → 10/10 (judge prompt unchanged, rubric v1). J6 (not in the criterion): judge equal or 1 lower than the hand grade, never higher (lower on K02 K04 K06 K08 K10) |
 | 7 core scenarios + baseline | done 2026-11-20: 18 core scenarios (+ extended M1b) in `towns/_eval/scenarios/`, expectations materialised, `docs/bot-eval.md`; baseline runs `towns/_eval/runs/2026-11-20-baseline-claude-{sonnet,haiku}-5-5.json` (+ `baseline-noskill` for A1/B1), graded and judged; measured cost in 6.2; hard fails classified in 6.5. Three harness fixes found by the baseline (6.5) |
-| 8 extended set + compare + first A/B | tooling half done 2026-11-20, not committed: the 8 extended scenarios E3 R2 S2 T1 T2 X1 P1 N2 in `towns/_eval/scenarios/` (`suite: "extended"`, 27 files with M1b; numbers from the current tool outputs, differences from the plan listed in 3 "Extended, as implemented"); `tests/bot_eval/compare.py` + `compare_checks.py`, `make bot-eval-compare`, `make bot-eval-compare-checks` (6.3). **Pending: the A/B itself** (baseline on the prompts, change, `REPEAT=3` on the targets, compare) |
+| 8 extended set + compare + first A/B | done 2026-11-21: 8 extended scenarios E3 R2 S2 T1 T2 X1 P1 N2 (`suite: "extended"`), `tests/bot_eval/compare.py` + `compare_checks.py`, `make bot-eval-compare[-checks]` (6.3); first A/B (expedition steering B/B2/B3) measured in 6.6, merged and deployed 2026-11-21 |
 
 Goal: a small, offline, reproducible set of real-town scenarios that scores the Discord
 advisor's answers, so a change to `prompts/game-primer.md`, `prompts/discord.md`,
@@ -813,6 +813,63 @@ Cost: Opus 4 scenarios $1.0990 CLI (92.7 s), its judge $0.4391 (5 calls); K1 rer
 Known by design: A1 needs the town and day named (G10 open); B2 may conflict with the primer
 rule (G14 open). D13 notes "changed …/cache/estimations.json" in several runs: the offline
 server's Gest'Hordes cache inside the fixture copy, not the real `towns/` (guard ok).
+
+### 6.6 First A/B: expedition steering (2026-11-20/21, phase 8)
+
+Targets E1 (`start_ap=N`, supplies never planned) and E2 (no `pickups`), the two steering
+gaps of 6.5. Branch `ab-expedition-steering`, merged to main and deployed 2026-11-21:
+
+- **B** `d43c2e1` — `plan_expedition_supplies` docstring opens as THE trip tool (start_ap 6,
+  the "N AP" budget in `available`, items brought back in `pickups`); `find_expedition_path`
+  docstring opens as route only; primer: call supplies directly.
+- **B2** `d7964b3` — B made Haiku skip `get_town_overview` in C2 (three trapped citizens asking
+  to walk home: A 0/3 → B 3/3 hard fails). Supplies = a trip "about to start"; citizens already
+  outside → `get_town_overview` first (docstrings + primer).
+- **B3** `fe10db7` — tool output instead of wording (Haiku followed B2's wording half the time):
+  `find_expedition_path` lists the citizens on a non-town start zone (TRAPPED with the zone's
+  CP reading, terrorised = 0; Group CP above that reading flagged — G4 partly) and, when the
+  walked AP exceed start_ap (+ start_ep), says supplies are needed and names
+  `plan_expedition_supplies` (not for a trapped start). Goldens 226.
+
+Hard fails over 3 repeats (A = main before B; run labels `ab-A*`, `ab-B*`):
+
+| Scenario | Model | A | B | B2 | B3 |
+|---|---|---|---|---|---|
+| E1 | Sonnet | 3/3 | 0/3 | 0/3 | 1/3 |
+| E1 | Haiku | 0/3 | 0/3 | 2/3 | 1/3 |
+| E2 | Sonnet | 3/3 | 0/3 | 0/3 | — |
+| E2 | Haiku | 3/3 | 1/3 | 1/3 | — |
+| C2 | Sonnet | 3/3 | — | 1/3 | 0/3 |
+| C2 | Haiku | 0/3 | 3/3 | 2/3 | 1/3 |
+| K2 | Sonnet | 0/3 | 1/3 | 1/3 | — |
+| K2 | Haiku | 0/3 | — | 0/3 | — |
+
+With B3 every E1 repeat (6/6) calls `plan_expedition_supplies` and every C2 answer (6/6)
+says the three are trapped (one Haiku repeat without calling `get_town_overview`, from the
+path output alone). The hard fails left are answer composition, not tool choice: Sonnet E1
+"two drugs" and a route different from the tool's; Haiku E1 an extra water "so you do not
+arrive Thirsty"; Haiku C2 "the party's 6 CP". K2 (both B and B2) = invented per-zone counts,
+no expedition tool called: not caused by the change.
+
+Core once (regression gate): Sonnet baseline 6/18 → B2 3/18 → B3 3/18; Haiku baseline 8/18
+→ B2 3/18 (A1, B1, K1 gains come from the 6.5 harness and kill-route fixes, not from B).
+New single-run fails checked with 3 repeats on Sonnet, main vs B3: **C1** 3/3 vs 3/3 (on main
+too: Sonnet calls `get_camping_odds` next to `plan_group_camping` → D11; plus invented
+"0.9³ = 73%" and slot slips) → not caused by B; **C4** 0/3 vs 1/3 (hiding order before the
+upgrades; C4 calls only `plan_group_camping`, which B3 does not touch; pooled with the core
+runs B-side 2/5 vs A 0/4) → weak, to watch. D1 (B2 core: "watchmen at zero", 15 in the tool)
+did not repeat on B3.
+
+Open after the A/B: is `get_camping_odds` beside `plan_group_camping` a hard fail for a solo
+multi-night camp (C1, D11 rule), or only the invented numbers? C4 hiding order on Sonnet.
+
+Deployed with it (2026-11-21): the public tier runs Sonnet 5.5 too (Pi toml
+`[public.claude] model`), on the maintainer's call — measured use 2026-11-18..20 was 14 turns
+(public 8 turns / 1 user / $0.10 on Haiku; trusted 6 turns / $2.78 on Sonnet, ≈ $0.46 a turn).
+
+Cost of the A/B, both days, summed from the 21 `ab-*` run files: $25.10 CLI-reported =
+bot runs $10.12 + opus judge $14.97 (Haiku's CLI cost is not trusted, `prices.json` missing).
+The judge costs more than the bot: on cheap targeted reruns, judge only the scenarios compared.
 
 ## 7. Gaps found while preparing this (not fixed; candidates)
 
