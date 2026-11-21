@@ -142,6 +142,10 @@ CASES = [
     ("path_unknown_dest", "find_expedition_path", {"x1": 0, "y1": 0, "x2": 14, "y2": 13}),
     ("path_bad_waypoint", "find_expedition_path", {"x1": 0, "y1": 0, "x2": 1, "y2": -5, "waypoints": "abc"}),
     ("path_party_unknown", "find_expedition_path", {"x1": 0, "y1": 0, "x2": -3, "y2": 9, "party": "Korra, Nobody"}),
+    # Bot eval C2 (2026-11-21): a route from a zone where a citizen is trapped states it, and a
+    # Group CP above the zone's reading is flagged; no supplies line for a trapped start.
+    ("path_trapped_start", "find_expedition_path", {"x1": -9, "y1": 13, "x2": 0, "y2": 0}),
+    ("path_trapped_start_cp6", "find_expedition_path", {"x1": -9, "y1": 13, "x2": 0, "y2": 0, "group_cp": 6}),
     ("supplies_detour", "plan_expedition_supplies", {"waypoints": "-5,7"}),
     ("supplies_detour_free", "plan_expedition_supplies", {"waypoints": "-5,6"}),
     ("supplies_dehydrated", "plan_expedition_supplies", {"waypoints": "-3,9", "thirst": "dehydrated", "available": "water=1"}),

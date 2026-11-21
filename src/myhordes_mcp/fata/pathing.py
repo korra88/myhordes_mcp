@@ -7,8 +7,38 @@ from ..utils.fmt import header, plural, ruin_label
 from .game import (CP_PER_CITIZEN, age_days, pays_ep, platform_level, scout_detection, teleport_range,
                    thirst_counter_at, zombie_arrival, zone_estimate)
 from .geo import MAX_PATH_AP, NEIGHBOURS4, Bounds, fmt_xy, in_bounds, km, map_bounds, moves, zone_map
-from .risk import _staleness_tag, fmt_items, threat_text
+from .risk import _staleness_tag, fmt_items, threat_text, trapped_citizens, zone_cp
 from .supplies import thirst_state
+
+
+def start_zone_lines(data: dict, start: tuple[int, int], group_cp: int) -> list[str]:
+    """Citizens standing on a route's start zone (not the town) and whether they are trapped
+    there, so a 'can we walk home' answer starts from their status, not from the route alone.
+    The route's trap flags use group_cp; the zone's own CP reading can be lower (terrorised = 0)."""
+    if start == (0, 0):
+        return []
+    coords = fmt_xy(start)
+    people = [c for c in data.get("citizens", []) if not c.get("inside_town") and c.get("coords") == coords]
+    if not people:
+        return []
+    names = ", ".join(c["name"] for c in people)
+    zone = next((z for z in data.get("zones", []) if z.get("coords") == coords), None)
+    exact = zone_cp(zone, people) if zone else None
+    hit = next((h for h in trapped_citizens(data) if h["coords"] == coords), None)
+    if hit and hit["cp_exact"]:
+        terror = " (terrorised)" if hit["cp_min"] == 0 else ""
+        lines = [f"⚠ Start zone {coords}: {names} TRAPPED — {plural(hit['zombies'], 'zombie')} vs "
+                 f"{hit['cp_min']} CP{terror}. Trapped citizens cannot move or search; fleeing wounds."]
+    elif hit:
+        lines = [f"⚠ Start zone {coords}: {names} possibly TRAPPED — {plural(hit['zombies'], 'zombie')} vs "
+                 f"≥{hit['cp_min']} CP (2 per citizen, no zone CP reading)."]
+    else:
+        cp = f"zone CP {exact}" if exact is not None else "zone CP not read"
+        lines = [f"Start zone {coords}: {names} ({cp})."]
+    if exact is not None and exact < group_cp:
+        lines.append(f"⚠ The route's trap flags use Group CP {group_cp}, but their zone reading is {exact} CP: "
+                     f"any zone with more than {plural(exact, 'zombie')} traps them.")
+    return lines
 
 
 # ---------------------------------------------------------------------------
@@ -530,6 +560,8 @@ def find_safe_path(
     lines.append(" | ".join(params))
     for b in cp_breakdown or []:
         lines.append(f"  {b}")
+    start_lines = start_zone_lines(data, (x1, y1), group_cp)
+    lines.extend(start_lines)
     lines.append("")
 
     # Summary
@@ -558,6 +590,16 @@ def find_safe_path(
         lines.append(f"Shortest: {sh_ap} AP, {sh_flashes} flash items used; {_zombies_on(sh_path)}")
     elif safest is not None:
         lines.append("Shortest path is identical to safest.")
+
+    first = safest if safest is not None else shortest
+    back = (loop_return(data, list(first["route"]), group_cp, dig=dig)
+            if round_trip and first is not None else None)
+    walked = first["ap"] + (len(back["route"]) - 1 if back is not None else 0)
+    trapped_start = any("TRAPPED" in ln for ln in start_lines)
+    if walked > start_ap + start_ep and not trapped_start:
+        lines.append(f"Supplies: {walked} AP walked vs {start_ap} AP"
+                     + (f" + {start_ep} EP" if start_ep else "") + " at departure — water, food or drugs "
+                     "are needed on the way. plan_expedition_supplies plans them on this same route.")
     lines.append("")
 
     def _format_step(
@@ -652,9 +694,6 @@ def find_safe_path(
             lines.append(_format_step(i, px, py, flash_cells=flash_cells, total_flashes=flashes, flash_counter=counter))
         lines.append("")
 
-    first = safest if safest is not None else shortest
-    back = (loop_return(data, list(first["route"]), group_cp, dig=dig)
-            if round_trip and first is not None else None)
     if step_table and first is not None:
         route = list(first["route"])
         if back is not None:
