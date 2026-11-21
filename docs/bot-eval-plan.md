@@ -1,6 +1,6 @@
 # Bot evaluation suite — plan
 
-Status (2026-11-21): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 done 2026-11-21 (8 extended scenarios, `bot-eval-compare`, first A/B deployed, see 6.6; cheap batch deployed, see 6.7; one camping tool deployed, see 6.8; C4 steps, see 6.9). Written so that
+Status (2026-11-21): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 done 2026-11-21 (8 extended scenarios, `bot-eval-compare`, first A/B deployed, see 6.6; cheap batch deployed, see 6.7; one camping tool deployed, see 6.8; C4 steps, see 6.9; scout map top counts, see 6.10). Written so that
 an agent with no prior context can implement it phase by phase (section 8).
 
 **Changes since the plan was written (2026-11-14), read first.** The server now has **28**
@@ -954,6 +954,26 @@ Fata plan's upgrades, the upgrades / graves / AP, the camp items, then the hidin
 Sonnet, 3 repeats, A = `ab-D4` (same code as main `d5ece90`), B = `ab-E`: C4 hard fails 2/3 → 0/3,
 score 0.33 → 1.00; C3 0/3 → 0/3, 0.98 → 1.00. `bot-eval-compare`: ACCEPT. Cost: bot $0.35 + opus
 judge $0.38 = $0.73.
+
+### 6.10 Scout map: the likely zoo and the highest exact counts, K2 (2026-11-21)
+
+K2 ("Where's our zoo, and are we at risk of a global respawn tonight?") answers quoted per-zone
+counts the map does not give ("[-5|9], [-5|8] and [-4|9] have 10 each": [-5|9] has 3), read off
+today's `counted:` list, ordered by coordinates. Branch `ab-k2-top-zones`, commit `162dff0`:
+`get_scout_map` opens with "Where the zombies are": the likely zoo (`kills.zoo_clusters`: zones,
+estimated zombies, extent, map edge, never-visited zones next to it) and the 10 highest exact
+counts with the day of each count; today's counted list is sorted by count; the docstring says
+to quote numbers only from those lines (the danger lists have none) and points to
+`plan_kill_route(zoo=True)` for the sides.
+
+Sonnet, A = main `3fcb324` (runs `ab-A-f`, `ab-A-f-core`), B = `ab-F`, `ab-F-core`:
+
+- K2 x3: hard fails 1/3 → 0/3, score 0.50 → 0.86, calls 2.3 → 1.0. `bot-eval-compare`: ACCEPT.
+- Core once: hard fails 1/18 → 2/18, mean 0.83 → 0.78; the one new fail is C1 (two
+  `plan_camping` calls, D11), which the change does not touch. C1 x3 on the branch (`ab-F-c1`)
+  vs `ab-D4`: 0/3 → 0/3, ACCEPT: single-run noise.
+
+Cost: bot $3.76 + opus judge $3.41 = $7.17 (5 run files).
 
 ## 7. Gaps found while preparing this (not fixed; candidates)
 
