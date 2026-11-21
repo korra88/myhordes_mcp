@@ -829,11 +829,12 @@ async def plan_camping(
     THE camping tool (hiding overnight outside): odds, camp upgrades, hiding order, graves,
     camp items, for ONE camper or a GROUP, for ONE night or SEVERAL. Use it for "can I camp
     here?", "what are my odds?", "how many upgrades?", "who hides first?", "who digs a grave?",
-    "plan our camping until day 31". ONE call answers the whole question: never call it once per
-    camper or once per night, and never estimate odds, orders or upgrades yourself (it applies
+    "plan our camping until day 31". ONE call answers the whole camping part of a question: never
+    call it once per camper or once per night, and never estimate odds, orders or upgrades yourself (it applies
     the game's exact formula and searches every order and assignment). Put everything in that
     first call: the campers' names (from the message or the player's memory) and, for a stay of
-    several nights, until_day; do not call it for tonight first and again for the stay.
+    several nights, until_day; do not call it for tonight first and again for the stay. The trip
+    to the camp (route, water, food, rucksack) is a separate part: plan_expedition_supplies.
 
     Fata camp plans (the players' saved plans) are read automatically: with `campers` empty, the
     campers and the zone are those of the Fata plan(s) for that night, so "our camping tonight"
