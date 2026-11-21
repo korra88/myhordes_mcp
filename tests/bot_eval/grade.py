@@ -341,16 +341,47 @@ def check_d6(answer: str, corpus: str, fx: Fixture | None) -> dict:
 
 # ── tool-call helpers ───────────────────────────────────────────────────────
 
+# Game tools removed from the server: a run made before them is graded as if it had called the new tool
+# (name and arguments mapped), so old and new runs compare under the same scenarios.
+def _camping_args(a: dict) -> dict:
+    """get_camping_odds / plan_group_camping arguments -> plan_camping (2026-11-21)."""
+    a = dict(a)
+    if "group" in a:
+        a["campers"] = a.pop("group")
+    name = a.pop("citizen", "") or ""
+    tokens = {"reclusive1": "R1", "reclusive2": "R2", "reclusive3": "R3", "reclusive4": "R4", "procamp": "pro"}
+    extra = [tokens.get(str(a.pop("skill", "")), "")] if "skill" in a else []
+    if "nights" in a and int(a.get("nights", -1)) >= 0:
+        extra.append(f"n{a.pop('nights')}")
+    a.pop("nights", None)
+    if a.pop("tomb", False):
+        extra.append("tomb")
+    if a.pop("vest", None):
+        extra.append("vest")
+    extra = [e for e in extra if e]
+    if name or extra:
+        a["campers"] = ":".join([name] + extra)
+    return a
+
+
+RETIRED_TOOLS = {"get_camping_odds": ("plan_camping", _camping_args),
+                 "plan_group_camping": ("plan_camping", _camping_args)}
+
+
 def is_game_tool(name: str) -> bool:
-    return name in server_tools()[0]
+    return name in server_tools()[0] or name in RETIRED_TOOLS
 
 
 def split_calls(turns: list[dict]) -> tuple[list[dict], list[dict]]:
-    """(game calls, harness calls) over every turn, in order; each call gets its turn index."""
+    """(game calls, harness calls) over every turn, in order; each call gets its turn index. A retired
+    tool's call is renamed to its successor (`was` keeps the old name)."""
     game, harness = [], []
     for i, t in enumerate(turns):
         for c in t.get("trace") or []:
             c = {**c, "turn": i}
+            if c["tool"] in RETIRED_TOOLS:
+                new, conv = RETIRED_TOOLS[c["tool"]]
+                c = {**c, "was": c["tool"], "tool": new, "args": conv(c.get("args") or {})}
             (game if is_game_tool(c["tool"]) else harness).append(c)
     return game, harness
 
@@ -622,18 +653,16 @@ def inv_start_ap_6(ctx):
 
 
 def inv_camping_one_call_until_day(ctx):
-    """main.py plan_group_camping docstring, game-primer.md:178: several nights = ONE call with until_day,
-    never one per night (each call restarts from today's bonus). Source: F18, C3."""
-    calls = [c for c in ctx["game"] if c["tool"] == "plan_group_camping"]
+    """main.py plan_camping docstring, game-primer.md camping: ONE call answers the question; several
+    nights = one call with until_day, never one per night (each call restarts from today's bonus) nor one
+    per camper. Fails on two or more camping calls for one zone. Source: F18, C1, C3, C4."""
+    calls = [c for c in ctx["game"] if c["tool"] == "plan_camping"]
     if not calls:
-        return NA, "no plan_group_camping call"
+        return NA, "no camping call"
     zones = {}
     for c in calls:
         zones.setdefault((c["args"].get("x"), c["args"].get("y")), []).append(c)
     bad = [f"{len(v)} calls for zone {k}: {[fmt_call(c)[:70] for c in v]}" for k, v in zones.items() if len(v) > 1]
-    odds = [c for c in ctx["game"] if c["tool"] == "get_camping_odds"]
-    if odds:
-        bad.append(f"{len(odds)} get_camping_odds call(s) next to the group plan")
     return (FAIL, "; ".join(bad)) if bad else (PASS, f"{len(calls)} call(s), one per zone")
 
 
@@ -651,7 +680,7 @@ def inv_upgrades_before_hiding_order(ctx):
     ans = ctx["answer"]
     heads = [m.start() for m in NIGHT_HEAD.finditer(ans)]
     blocks = [ans[a:b] for a, b in zip(heads, heads[1:] + [len(ans)])] if len(heads) >= 2 else [ans]
-    tool_text = " ".join(unwrap(c.get("out", "")) for c in ctx["game"] if c["tool"] == "plan_group_camping")
+    tool_text = " ".join(unwrap(c.get("out", "")) for c in ctx["game"] if c["tool"] == "plan_camping")
     bad, seen = [], 0
     for b in blocks:
         h = HIDING.search(b)

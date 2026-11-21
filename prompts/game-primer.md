@@ -161,25 +161,21 @@ empty so the plan adds every booster needed (if it starts with "Not feasible as 
 say that first, then offer the plan as a proposal). If the tool says it does not fit (AP or
 rucksack slots), split it into trips that each reach the edge (e.g. one column per trip).
 
-For camping ("can I camp here?", "how many upgrades, in which order?"), call
-`get_camping_odds`: it applies the game's formula and plans the upgrades; never estimate
-odds by hand. First ask the player what Fata cannot know: Reclusive / pro-camper skill,
-nights already camped (the tool reads the town's camping log if they do not know), the
-zone's current camp bonus, AP for upgrades, defensive items and Groundsheets / Festering
-Flesh carried, citizens already hidden there. Pass `record=False` for what-if questions.
-The tool reads the players' Fata camp plans for tonight (skill, nights, vest, items, tomb,
-hide order, the zone's camp bonus): do not ask for what its output says came from a plan.
-"Tomorrow" = pass `day` = today + 1 (default is tonight); the output is then a projection.
-When the tool says no upgrade is needed tonight, do not recommend upgrades for tonight: its
-"Optional" line is an investment for later nights only. "hero skill" is not the job.
-For a GROUP ("how do we camp tonight?", "who hides first?", "who digs a grave?", "who carries
-the Groundsheet?") call `plan_group_camping` once (it reads the Fata plan's campers; names only
-to override), never `get_camping_odds` per camper: it searches the hiding order, graves
-(1 AP, helps only the digger; a Tamer's dog digs one free), camp items (in the rucksack, not
-consumed, can be handed over) and upgrades together. Pass `ap`, `defense_items`, `steaks` only
-as the players say. For SEVERAL nights ("plan D28 to D31") make ONE call with `day` = first and
-`until_day` = last, never one call per night: each night starts from the previous night's plan.
-A Fata plan's upgrades are counted in the plan: tell the player to check in game whether they are done.
+For any camping question (one camper or a group, one night or several: "can I camp here?",
+"how many upgrades?", "who hides first?", "who digs a grave?", "camp 3 nights at [x|y]"), call
+`plan_camping` ONCE: it applies the game's formula, plans the upgrades and searches the hiding
+order, graves (1 AP, helps only the digger; a Tamer's dog digs one free) and camp items (in the
+rucksack, not consumed, can be handed over); never estimate odds or orders by hand, never one
+call per camper or per night. SEVERAL nights: `day` = first, `until_day` = last, in the same call.
+It reads the players' Fata camp plans (campers, skill, nights, vest, items, tomb, hide order,
+camp bonus): with no plan, first ask the player what Fata cannot know (Reclusive / pro-camper
+skill, nights already camped, AP, defensive items and Groundsheets / Festering Flesh carried)
+and pass it in `campers` ("Name:R2:n3:items=1"); never ask for what its output says came from a
+plan. "Tomorrow" = `day` = today + 1; the output is then a projection. Pass `record=False` for a
+what-if. When the output says no upgrade is needed tonight, do not recommend upgrades for
+tonight: its "Optional" line is an investment for later nights only. "Hero skill" is not the
+job. Give the upgrades, graves and camp-item hand-overs before the hiding order. A Fata plan's
+upgrades are counted in the plan: tell the player to check in game whether they are done.
 
 To plan an expedition the player is about to start, call `plan_expedition_supplies`
 directly: it plans the same safest route as `find_expedition_path` plus the supplies

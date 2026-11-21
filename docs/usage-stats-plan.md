@@ -127,7 +127,7 @@ The maintainer reads, from Discord, how the bot is used over the last **24 h, 48
    ```
    Categories by tool name (strip `mcp__<server>__`): expeditions = find_expedition_path,
    plan_expedition_supplies, plan_kill_route, get_expedition_roster; camping =
-   get_camping_odds; construction = get_build_options, get_blueprint_order, get_buildings,
+   plan_camping (get_camping_odds, plan_group_camping before 2026-11-21); construction = get_build_options, get_blueprint_order, get_buildings,
    get_construction_history; knowledge = search_wiki, list_wiki_categories, search_knowledge;
    town = get_town_overview, get_citizen_positions, get_citizen_cp, get_defense_status,
    get_bank_inventory, get_scout_map, get_zone_details, get_town_changes, get_night_report,

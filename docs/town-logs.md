@@ -18,7 +18,7 @@ towns/
       snapshots/              #   intra-day snapshots for get_town_changes
     citizens-cp.json          # CP log per citizen (last / max), written by the server
     camping-log.json          # who spent which night outside (sure / probable / planned / died), fata/camplog.py
-    camp-zones.json           # last camp bonus (%) known per zone, written by get_camping_odds
+    camp-zones.json           # last camp bonus (%) known per zone, written by plan_camping (one camper, tonight)
     daily-log.md              # kept by the server (townlog.py), started from templates/town/;
     day-NN.md                 #   the skills (inspect-town, close-day) add judgment on top
     notes.md
@@ -62,13 +62,13 @@ town (earlier updates without confirmation are day trips, not counted),
 plus *planned*: citizens listed in a Fata camp plan for that night (archives from towndata v1.3 on),
 alive next day, not back in town at 19:00 or later (night 25 of town 8299: 19 in plans, 2 died,
 the older rule logged 5 survivors); plus citizens that vanished outside (death type 5). Probable
-and planned nights are never reported as confirmed; `get_camping_odds` counts sure + probable +
+and planned nights are never reported as confirmed; `plan_camping` counts sure + probable +
 planned (pessimistic) and says so. Each stored night carries a rules version (`rules`): after a
 rule change the next update recomputes it once. Updated on
 live fetches, only where `TOWN_LOG_AUTO` is on (the Pi: one writer for the shared towns/ repo), a night is recomputed only when its two archive files changed. Backfill missing
 past days (one Fata request each, user-run): `make camp-log-backfill TOWN=8299 [FROM=1]`.
 `camp-zones.json`: per zone the camp bonus a player reported or the tool's own plan
-reached (`reported` / `planned`), decayed 15% a night when used; written by `get_camping_odds`
+reached (`reported` / `planned`), decayed 15% a night when used; written by `plan_camping` (one camper, tonight)
 (`record=False` skips it).
 
 **Town log.** Every live fetch of the current day also updates `daily-log.md` and

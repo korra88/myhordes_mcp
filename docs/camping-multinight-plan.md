@@ -1,5 +1,9 @@
 # Camping: Fata plan upgrades, multi-night chain, nearby defensive items: plan
 
+> **Since 2026-11-21 `get_camping_odds` and `plan_group_camping` are one tool, `plan_camping`**
+> (`fata/campplan.py` picks the engine: one camper and one night → `camping.py`, else `groupcamp.py`;
+> docs/bot-eval-plan.md 6.8). The tool names below are the old ones.
+
 Status: **approved 2026-11-20, implemented 2026-11-20 (not committed); C changed by the user the same day, see below.** Changes to `plan_group_camping` (and, for A, to
 `get_camping_odds` through the shared `camping.resolve_camp_level`). Builds on
 `docs/group-camping-plan.md` (the solver, rules, objectives) and `docs/camping-plan.md`.

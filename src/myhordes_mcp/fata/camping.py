@@ -19,11 +19,13 @@ from ..utils.fmt import header, plural, ruin_label
 from . import camp_zones, camplog
 from .cp import citizen_key
 from .geo import fmt_xy, in_bounds, km, map_bounds, spread_steps, xy, zone_map
-from .game import (GROWTH_AVG, GROWTH_MAX, IMPROVE_LEVEL, INSTALL_LEVEL, MAX_LEVEL_TO_ACT, NIGHTLY_DROP, SKILLS,
+from .game import (GROWTH_AVG, GROWTH_MAX, IMPROVE_LEVEL, INSTALL_LEVEL, MAX_AP, MAX_LEVEL_TO_ACT, NIGHTLY_DROP, SKILLS,
                    camping_odds, camping_terms, danger_band, is_panda, level_after_nights, level_ok, lighthouse_built,
                    odds_cap, zombie_arrival, zombie_sources, zone_estimate, zone_is_today)
 from .risk import respawn_totals
 from .towndata import plans_for_citizen, plans_for_zone
+
+UNLIMITED_AP = 20   # more than any plan can use: upgrades stop once the camp bonus reaches 50%
 
 TERM_LABELS = {
     "previous": "previous nights", "tomb": "tomb", "town": "town type", "zone": "camp bonus",
@@ -187,6 +189,8 @@ def _project_zombies(data: dict, cell: tuple, z: dict | None, zombies: int, note
     game.py: the number is zone_estimate at the later day (a zone with zombies grows, an empty
     zone gets some only once the spread front, zombie_arrival, reaches it)."""
     if not z or not zone_is_today(z, day) or z.get("danger_today") or z.get("zombies", -1) < 0:
+        if z and not zone_is_today(z, day) and not z.get("danger_today") and z.get("zombies", -1) >= 0:
+            return zombies, note + "; the same count is used for later nights"   # the note already says they grow
         return zombies, note + "; zombies grow at night, the real count that night is probably higher"
     zones = zone_map(data)
     bounds = map_bounds(data) if data.get("meta") else None
@@ -330,7 +334,7 @@ def resolve_camp_level(data: dict, *, coords: str, z: dict | None, night: dict, 
 
 
 def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: str = "",
-                        skill: str = "none", camp_level: int = -1, ap: int = 0,
+                        skill: str = "none", camp_level: int = -1, ap: int | None = 0,
                         defense_items: int = 0, camp_items: int = 0, hidden_before: int = 0,
                         nights: int = -1, tomb: bool = False, vest: bool | None = None,
                         record: bool = True, town_id: int | None = None, day_arg: int = 0) -> str:
@@ -347,8 +351,11 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
         return f"Error: skill must be one of {', '.join(SKILLS)}."
     for label, v in (("ap", ap), ("defense_items", defense_items), ("camp_items", camp_items),
                      ("hidden_before", hidden_before)):
-        if v < 0:
+        if v is not None and v < 0:
             return f"Error: {label} cannot be negative."
+    unlimited = ap is None   # the plan takes the AP it needs (an upgrade needs the bonus below 50%)
+    if unlimited:
+        ap = UNLIMITED_AP
 
     cit = None
     if citizen.strip():
@@ -446,7 +453,7 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
         if sure + prob + plnd:
             nights = sure + prob + plnd
             assumed.append(f"camping nights from the log: {sure} sure + {prob} probable + {plnd} planned = {nights} "
-                           "counted (pessimistic; the player can correct with nights=)")
+                           "counted (pessimistic; the player can correct it: 'Name:nN' in campers)")
         elif cit is not None and town_id is not None:
             assumed.append("camping nights survived by this citizen: assumed 0, the camping log shows none, "
                            "ask the player")
@@ -498,7 +505,7 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
     else:
         which = (f"Night of day {target} ({'tomorrow' if target == day + 1 else f'in {target - day} days'}): "
                  "a projection from today's data.")
-    lines = [header("Camping odds", meta), which,
+    lines = [header("Camping plan", meta), which,
              f"Zone {where}, {km_} km. Citizen: {who}. Cap {_pct(cap)}.", ""]
     lines.append(f"Odds {'now' if not future else 'that night'} (camp bonus +{camp_level}%): {_pct(now)}"
                  + (" (cap)" if now >= cap else ""))
@@ -520,26 +527,31 @@ def format_camping_odds(data: dict, *, x: int | None, y: int | None, citizen: st
     elif ap > 0:
         plan = plan_upgrades(camp_level, base_sum, cap, ap, defense_items)
         if plan["ap"] == 0:
-            lines.append(f"{night_name}: no upgrade possible (upgrades only while the camp bonus is below 50%).")
+            lines.append(f"{night_name}: no upgrade possible (upgrades only while the camp bonus is below 50%)."
+                         if camp_level >= MAX_LEVEL_TO_ACT else
+                         f"{night_name}: no upgrade raises the odds (still {_pct(now)} with every upgrade possible).")
         else:
             plan_used = True
             extra = ""
-            if plan["ap"] < ap:
+            if plan["ap"] < ap and not unlimited:
                 extra = (f" ({plan['ap']} of {ap} AP are enough: odds capped or the camp bonus reaches 50%)"
                          if plan["odds"] >= cap or plan["level"] >= MAX_LEVEL_TO_ACT
                          else f" ({plan['ap']} of {ap} AP: more items needed to use the rest)")
-            lines.append(f"{night_name}: {order_text(plan)}: {plan['ap']} AP, "
+            lines.append(f"{night_name}: {order_text(plan)}: {plan['ap']} AP{' needed' if unlimited else ''}, "
                          f"{plural(plan['items'], 'defensive item')}, camp bonus "
                          f"+{camp_level}% -> +{plan['level']}%{extra}")
             lines.append(f"Odds after the plan: {_pct(plan['odds'])}")
+            if unlimited and plan["ap"] > MAX_AP:
+                lines.append(f"WARNING {plan['ap']} AP, more than the {MAX_AP} of a day: drink/eat for AP, or do "
+                             f"some improves the nights before (each +5% carries over, -{NIGHTLY_DROP}% a night).")
             terms = camping_terms(level=plan["level"], **kw)
             if can_record:
                 camp_zones.record_zone(town_id, zone_key, day, plan["level"], "planned")
         floor_level = plan["level"]
     else:
-        lines.append("No plan (ap=0): ask the player how many AP they can spend on upgrades.")
+        lines.append("No upgrade (ap=0): odds without upgrades.")
         floor_level = camp_level
-    if ap > 0:
+    if ap > 0 and not unlimited:
         top = max_level_plan(camp_level, ap, defense_items)
         if left(top["level"]) > left(floor_level):
             lines.append(f"Optional, for later nights only (no effect on the odds {'tonight' if not future else 'that night'}): "

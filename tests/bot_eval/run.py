@@ -5,7 +5,7 @@ own code (argv, settings, system prompt, stdin prompt, result parsing) with the 
 Run with the listener's interpreter (it needs the `mcp` package):
     ../discord_mcp/.venv/bin/python tests/bot_eval/run.py [--suite core|extended|all] [--only I1,C4]
         [--model claude-haiku-5-5] [--tier public|trusted] [--label NAME] [--repeat N]
-        [--allow-extra mcp__myhordes__plan_group_camping] [--max-budget 3] [--dry-run]
+        [--allow-extra mcp__myhordes__plan_camping] [--max-budget 3] [--dry-run]
 or `make bot-eval ...` (Makefile). A person runs it; never from cron or CI. Plan: docs/bot-eval-plan.md.
 
 Differences from a deployed turn, on purpose (decision 7 and section 5.2):

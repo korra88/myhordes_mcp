@@ -1,5 +1,9 @@
 # Group camping planner: plan
 
+> **Since 2026-11-21 `get_camping_odds` and `plan_group_camping` are one tool, `plan_camping`**
+> (`fata/campplan.py` picks the engine: one camper and one night → `camping.py`, else `groupcamp.py`;
+> docs/bot-eval-plan.md 6.8). The tool names below are the old ones.
+
 Status: **approved 2026-11-18, not implemented.** One new MCP tool, `plan_group_camping`, that
 answers "how should our group camp on this zone tonight / on day N?": who hides in which order,
 who digs a grave, who carries which camp item, how many upgrades, with every camper's odds.

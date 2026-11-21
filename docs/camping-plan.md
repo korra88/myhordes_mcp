@@ -1,5 +1,9 @@
 # Camping support — implementation plan
 
+> **Since 2026-11-21 `get_camping_odds` and `plan_group_camping` are one tool, `plan_camping`**
+> (`fata/campplan.py` picks the engine: one camper and one night → `camping.py`, else `groupcamp.py`;
+> docs/bot-eval-plan.md 6.8). The tool names below are the old ones.
+
 Status: **all phases A-G implemented and reviewed 2026-11-17, not committed.** Changes vs the
 text below, decided in review: camping log "probable" needs an update dated day N at 19:00
 or later (else not counted: day trips); zone level shown to players as "camp bonus +N%";

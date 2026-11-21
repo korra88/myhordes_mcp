@@ -621,7 +621,7 @@ assert parse_group("A:zzz").startswith("Error: cannot read 'zzz' after A")
 
 # the tool on the synthetic town above
 out = format_group_camping(res, x=7, y=13, town_id=None)
-assert out.startswith("## Group camping") and "Ann (" in out and "Dan (" in out and "Expected survivors" in out, out
+assert out.startswith("## Camping plan") and "Ann (" in out and "Dan (" in out and "Expected survivors" in out, out
 assert "Night of day 26 (tonight)." in out and "Zone [7|13]" in out
 assert format_group_camping(res, x=7, y=13, group="Ann, Bob, Cyd, Dan", town_id=None).split("Hiding order")[1] == out.split("Hiding order")[1]
 assert "Error: the group's plans are on several zones ([7|12], [7|13], [8|13])" in format_group_camping(res, x=None, y=None, town_id=None)
@@ -745,3 +745,35 @@ _e = _ze(None, (3, 5), 26, {c: v for c, v in _enc.items() if c != (3, 5)}, {})  
 assert _e.kind == "exposed" and _e.max == 9 and "3 sides unexplored or map edge" in _e.source, _e
 assert threat_text(_e, "route") == "unexplored, high risk (≤9 zom)"
 print("camping checks: ok")
+
+# --- plan_camping routing (fata/campplan.py) and the stale zombie note -------------------------
+from myhordes_mcp.fata.campplan import format_plan_camping   # noqa: E402
+# one named camper, one night -> the one-camper engine (breakdown, Fata plan block)
+o = format_plan_camping(res, x=7, y=13, campers="Ann", town_id=None)
+assert "Breakdown" in o and "Fata plan tonight on [7|13]" in o and "Hiding order" not in o, o
+# with arguments mapped: skill / nights / items from the override, ap -1 = as needed, 0 = none
+o = format_plan_camping(res, x=7, y=13, campers="Ann:R4:n2:items=1", camp_level=0, ap=0, town_id=None)
+assert o == format_camping_odds(res, x=7, y=13, citizen="Ann", skill="reclusive4", nights=2, camp_items=1,
+                                camp_level=0, ap=0, town_id=None), o
+assert "AP needed" in format_plan_camping(res, x=9, y=13, campers="Eve:n1", camp_level=0, town_id=None)
+assert "no upgrade raises the odds (still 0%" in format_plan_camping(res, x=9, y=13, campers="Eve:n6", camp_level=0,
+                                                                     town_id=None)
+# a zone whose Fata plan has one camper, no campers given -> that camper, one-camper engine
+o = format_plan_camping(res, x=7, y=12, town_id=None)
+assert "Citizen: Fay" in o and "Breakdown" in o, o
+# no plan on the zone, no campers -> odds for anyone
+assert "Citizen: no citizen given" in format_plan_camping(res, x=9, y=13, town_id=None)
+# two campers, a tamer override, or several nights -> the group engine
+assert "Hiding order" in format_plan_camping(res, x=7, y=13, campers="Ann, Bob", town_id=None)
+assert "Hiding order" in format_plan_camping(res, x=7, y=13, campers="Ann:tamer", town_id=None)
+assert "Nights 26-27, Ann at" in format_plan_camping(res, x=7, y=13, campers="Ann", until_day=27, town_id=None)
+assert "Hiding order" in format_plan_camping(res, x=7, y=13, town_id=None)   # the 4-camper plan
+assert format_plan_camping(res, x=7, y=13, campers=":R4, Ann", town_id=None).startswith("Error: a camper without a name")
+assert format_plan_camping(res, x=7, y=13, campers="Ann:ninja", town_id=None).startswith("Error: cannot read 'ninja' after Ann")
+# a count from an earlier day: one zombie note over several nights, not the same text twice
+RAW4 = copy.deepcopy(RAW)
+RAW4["town_maps"].append({"x": 21, "y": 0, "zombies": 2, "nvt": 1, "zone_update": {"day": 24}})   # [9|13], d24
+st4 = format_plan_camping(build_result(1, RAW4), x=9, y=13, campers="Eve:n0", until_day=28, camp_level=0, town_id=None)
+zl = [l for l in st4.splitlines() if l.startswith("- Zombies:")]
+assert len(zl) == 1 and "the same count is used for later nights" in zl[0] and zl[0].count("probably higher") == 1, zl
+print("plan_camping checks: ok")

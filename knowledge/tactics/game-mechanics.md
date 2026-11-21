@@ -134,7 +134,7 @@ Many buildings require blueprint before construction. Four rarities: Common (C),
 
 ### Camping odds and camp upgrades
 Checked in the game code (`CitizenHandler::getCampingValues`, details and line numbers in
-`docs/camping-plan.md` §1.2). Use `get_camping_odds`, which applies all of this.
+`docs/camping-plan.md` §1.2). Use `plan_camping`, which applies all of this.
 - **Night outside:** at midnight a citizen outside is either hidden and rolls the odds
   (survived: +1 to their camping counter) or dies (Vanished). The odds are **frozen when
   the citizen hides**: upgrades, zombies, other campers and the clock count as they are then.
@@ -158,12 +158,12 @@ Checked in the game code (`CitizenHandler::getCampingValues`, details and line n
   The bonus drops 15% each night (58 → 43; then 1 improve + 1 install = 57%) and belongs to
   the zone: every camper there shares it.
 - **Group camping:** the zone's camp bonus is shared, the crowd malus and the ruin's room depend
-  on the hiding order (use `plan_group_camping`, not one `get_camping_odds` per camper). A grave
+  on the hiding order (one `plan_camping` call for the whole group, not one per camper). A grave
   costs 1 AP and helps only its digger (+8%). Groundsheet / Festering Flesh count only while
   in the camper's rucksack (+5% each, not consumed) and can be handed to whoever needs them.
   A Tamer's dog digs the Tamer's grave for free (once); fed a Tasty-looking Steak it also
   improves the camp +5%.
-- Fata's camp planner (the players' saved plans, read by `get_camping_odds`) stores upgrades as
+- Fata's camp planner (the players' saved plans, read by `plan_camping`) stores upgrades as
   units: improve campsite 1, install an item (Old Door, Mattress…) 1.8; × 5 = the percent camp bonus (8.6 units = 43%).
 
 ### Reading priority — critical

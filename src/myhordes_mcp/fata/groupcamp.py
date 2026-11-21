@@ -373,7 +373,7 @@ def parse_group(text: str) -> list[dict] | str:
             elif tl in ("vest", "tamer", "surv"):
                 ov[tl] = True
             else:
-                return (f"Error: cannot read '{t}' after {name}: use R1-R4, pro, none, nN (nights survived), "
+                return (f"Error: cannot read '{t}' after {name or 'the camper'}: use R1-R4, pro, none, nN (nights survived), "
                         "tomb (grave already dug) / notomb, items=K, vest, tamer, surv.")
         out.append(ov)
     return out
@@ -582,7 +582,8 @@ def _spare_nights(nights: list[NightPlan], n: int, trip: int) -> list[int]:
 def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str = "", day_arg: int = 0,
                          ap: int = -1, defense_items: int = 0, camp_items: int = 0, steaks: int = -1,
                          slots: int = 5, camp_level: int = -1, hidden_before: int = 0,
-                         objective: str = "expected", until_day: int = 0, town_id: int | None = None) -> str:
+                         objective: str = "expected", until_day: int = 0, town_id: int | None = None,
+                         nearby: bool = False) -> str:
     if data.get("error"):
         return f"Error: {data['error']}"
     meta = data["meta"]
@@ -662,7 +663,7 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
                         break
             zones = {p["coords"] for p in ps}
         if not zones:
-            return ("Error: give the zone (x, y)" + ("" if named else " or a group name list: no Fata camp plan "
+            return ("Error: give the zone (x, y)" + ("" if named else " or the campers' names: no Fata camp plan "
                     f"for {ref}") + ".")
         if len(zones) > 1:
             return f"Error: the group's plans are on several zones ({', '.join(sorted(zones))}): give the zone (x, y)."
@@ -687,7 +688,7 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
             if pool_plans:
                 base_plan = max(pool_plans, key=lambda p: len(p["players"]))
         if not pool_plans:
-            return f"Error: no Fata camp plan {ref} on {coords}: give the group (names)."
+            return f"Error: no Fata camp plan {ref} on {coords}: give the campers (names)."
         seen = []
         for p in sorted(pool_plans, key=lambda p: -len(p["players"])):
             for q in p["players"]:
@@ -704,9 +705,9 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
             assumed.append(f"{dead} camper(s) of the plan(s) are dead: left out")
         if len(overrides) > MAX_CAMPERS:
             return (f"Error: the Fata plan has {len(overrides)} campers: the planner handles at most "
-                    f"{MAX_CAMPERS}. Give a list of at most {MAX_CAMPERS} names in `group`.")
+                    f"{MAX_CAMPERS}. Give a list of at most {MAX_CAMPERS} names in `campers`.")
     if not overrides:
-        return "Error: no camper: give `group` or a zone with a Fata camp plan."
+        return "Error: no camper: give `campers` or a zone with a Fata camp plan."
     names = [c["id"] for c in cits]
     if len(set(names)) != len(names):
         return "Error: a camper is listed twice."
@@ -848,17 +849,21 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
 
     multi = len(nights) > 1 or last > first
     near = nearby_installable(data, cell)
-    nearby = []
-    if near:
+    near_lines = []
+    if near and nearby:
         trip = 2 * near[0][0] + 1
-        nearby = nearby_defense_lines(data, cell, _spare_nights(nights, n, trip), n, multi=multi)
+        near_lines = nearby_defense_lines(data, cell, _spare_nights(nights, n, trip), n, multi=multi)
+    elif near:
+        d, nc, _z, found = near[0]
+        near_lines = [f"Defensive items lie near the camp ({plural(len(near), 'zone')}; nearest {nc}, {d} away: "
+                      f"{fmt_items(found)}): not counted. nearby=True lists them and the nights with AP to fetch them."]
     where = coords + (f", {ruin_label(ruin)}" if ruin else "")
     slots_txt = ""
     if ruin and ruin.get("camp_slots") is not None and ruin["camp_slots"] >= 0:
         slots_txt = f" ({plural(ruin['camp_slots'], 'place')})"
 
     # --- output ----------------------------------------------------------------------
-    lines = [header("Group camping", meta)]
+    lines = [header("Camping plan", meta)]
     if not multi:
         np_ = nights[0]
         sol = np_.sol
@@ -874,7 +879,7 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
             lines.append(plan_upgrade_text(plan_up, future) + ".")
         if sol is None:
             lines.append("No feasible plan: the AP given do not allow the zone level or the graves needed.")
-            return "\n".join(lines + nearby)
+            return "\n".join(lines + near_lines)
         plan, gtxt = _plan_pieces(sol)
         lvl = f"camp bonus +{camp_level}% -> +{sol.level}%" if sol.level != camp_level else f"camp bonus stays +{camp_level}%"
         if ap_arg is not None:
@@ -938,9 +943,9 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
                     lines.append(f"Optional, for later nights only (no effect on these odds): {ex} ({i + j} AP) -> "
                                  f"+{tot}% that night, +{keep(tot)}% left {nxt} (only the bonus above +{NIGHTLY_DROP}% "
                                  f"survives the night; now +{keep(sol.level)}% would be left).")
-        if nearby:
+        if near_lines:
             lines.append("")
-            lines += nearby
+            lines += near_lines
         zlines = [f"- Zombies: {np_.zombie_note}."]
     else:
         names_txt = " and ".join([", ".join(i["name"] for i in infos[:-1]), infos[-1]["name"]]) if n > 1 else infos[0]["name"]
@@ -1004,9 +1009,10 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
         used_st = sum(np_.sol.boosts for np_ in nights if np_.sol)
         lines.append(f"Items: defensive {used_def} used ({defense_start} available at the start)"
                      + (f"; steaks {used_st} used ({steaks_start} available)" if steaks_start or used_st else "") + ".")
-        if nearby:
-            lines += nearby
-        zlines = [f"- Zombies: {nt}." for nt in zombie_notes]
+        lines += near_lines
+        # a later night's note extends tonight's (same stale count): keep the longer one only
+        zlines = [f"- Zombies: {nt}." for nt in zombie_notes
+                  if not any(o != nt and o.startswith(nt) for o in zombie_notes)]
         assumed.append("Survival: every camper is assumed to survive each night (one more camping night each "
                        "night after the first). Graves last one night: dug again when needed.")
     # --- assumptions ---------------------------------------------------------------------

@@ -68,7 +68,7 @@ check(G.unwrap('{"result": "abc"}') == "abc" and G.unwrap("plain") == "plain")
 check(G.fact_in("1.80", "survivors 1.8 of 2") and G.fact_in("0.00", "0% left") is True)
 check(not G.fact_in("45", "145 and 4.5") and G.fact_in("45", "it is 45."))
 check(G.fact_in("Zorbo", "then zorbo hides") and not G.fact_in("Zor", "Zorbo"))
-check("get_bank_inventory" in G.server_tools()[0] and len(G.server_tools()[0]) == 28, len(G.server_tools()[0]))
+check("get_bank_inventory" in G.server_tools()[0] and len(G.server_tools()[0]) == 27, len(G.server_tools()[0]))
 check("until_day" in G.server_tools()[1])
 
 # ── D1 ──────────────────────────────────────────────────────────────────────
@@ -82,8 +82,8 @@ check(st(grade(s, rec(trace=[call("get_bank_inventory"), call("search_knowledge"
 check(st(grade(sc(), rec()), "D1") == G.NA)
 
 # ── D2 ──────────────────────────────────────────────────────────────────────
-s = sc(tools_forbidden=["get_camping_odds"])
-check(st(grade(s, rec(trace=[call("get_camping_odds", x=1)])), "D2") == G.FAIL)
+s = sc(tools_forbidden=["plan_camping"])
+check(st(grade(s, rec(trace=[call("plan_camping", x=1)])), "D2") == G.FAIL)
 check(st(grade(s, rec(trace=[call("ToolSearch", query="x"), call("get_bank_inventory")])), "D2") == G.PASS)
 g = grade(s, rec(trace=[call("Skill", skill="inspect-town")]))
 check(st(g, "D2") == G.FAIL and g["harness_calls"][0]["tool"] == "Skill")
@@ -112,9 +112,9 @@ check(st(grade(sc(), rec(trace=[call("plan_kill_route", "## Kill route", start_a
 check(st(grade(sc(), rec(trace=[call("get_town_overview", town_id=999)], text="how is it")), "D3") == G.FAIL)   # invented
 check(st(grade(sc(), rec(trace=[call("get_town_overview", town_id=999)], text="town 999 please")), "D3") == G.PASS)
 check(st(grade(sc(), rec(trace=[call("get_town_overview", town_id=1)])), "D3") == G.PASS)
-s = sc(args_forbidden=[{"tool": "plan_group_camping", "args": {"group": {"present": True}}}])
-check(st(grade(s, rec(trace=[call("plan_group_camping", group="a,b")])), "D3") == G.FAIL)
-check(st(grade(s, rec(trace=[call("plan_group_camping", x=1, y=2)])), "D3") == G.PASS)
+s = sc(args_forbidden=[{"tool": "plan_camping", "args": {"campers": {"present": True}}}])
+check(st(grade(s, rec(trace=[call("plan_camping", campers="a,b")])), "D3") == G.FAIL)
+check(st(grade(s, rec(trace=[call("plan_camping", x=1, y=2)])), "D3") == G.PASS)
 
 # ── D4 ──────────────────────────────────────────────────────────────────────
 s = sc(args_required=[{"tool": "plan_expedition_supplies", "args": {
@@ -199,7 +199,7 @@ check(d8("The bank holds 41 rations.")["subs"]["narration"] is True)
 check(d8("Run /inspect-town to update.")["subs"]["slash"] is False)
 check(d8("Try /help or /set-my-town 123.")["subs"]["slash"] is True)
 check(d8("and/or 24/7 and https://x.org/path")["subs"]["slash"] is True)
-for names in ("plan_group_camping says", "set until_day=31", "pass town_id", "with detail='summary'", "the tool says",
+for names in ("plan_camping says", "set until_day=31", "pass town_id", "with detail='summary'", "the tool says",
               "il tool segnala", "l'outil indique", "via get_bank_inventory"):
     check(d8(names)["subs"]["tool_names"] is False, names)
 check(d8("I remember and forget the plan")["subs"]["tool_names"] is True)
@@ -243,11 +243,15 @@ check(d11("start_ap_6", trace=[call("plan_expedition_supplies", start_ap=6)])["s
       and d11("start_ap_6")["status"] == G.NA)
 check(d11("start_ap_6", trace=[call("plan_expedition_supplies", REF, start_ap=19), call("plan_expedition_supplies", start_ap=6)])["status"] == G.PASS)
 check(d11("start_ap_6", trace=[call("plan_expedition_supplies", "## Supplies plan", start_ap=8)])["status"] == G.FAIL)
-one = call("plan_group_camping", "x", x=7, y=-13, until_day=31)
+one = call("plan_camping", "x", x=7, y=-13, until_day=31)
 check(d11("camping_one_call_until_day", trace=[one])["status"] == G.PASS)
-check(d11("camping_one_call_until_day", trace=[one, call("plan_group_camping", x=7, y=-13, day=27)])["status"] == G.FAIL)
+check(d11("camping_one_call_until_day", trace=[one, call("plan_camping", x=7, y=-13, day=27)])["status"] == G.FAIL)
+check(d11("camping_one_call_until_day", trace=[one, call("plan_camping", x=10, y=-8)])["status"] == G.PASS)
+# old runs (before plan_camping): the two old tools count as camping calls too
+check(G._camping_args({"x": 1, "citizen": "K", "skill": "reclusive4", "nights": 2, "vest": True}) == {"x": 1, "campers": "K:R4:n2:vest"})
+check(G.split_calls([{"trace": [call("plan_group_camping", group="A, B")]}])[0][0]["args"] == {"campers": "A, B"})
 check(d11("camping_one_call_until_day", trace=[one, call("get_camping_odds", x=7, y=-13)])["status"] == G.FAIL)
-tl = call("plan_group_camping", "Fata plan: upgrades for +14%")
+tl = call("plan_camping", "Fata plan: upgrades for +14%")
 check(d11("upgrades_before_hiding_order", "**Upgrades first**: 3 AP.\n**Hiding order**: 1. A 90%", [tl])["status"] == G.PASS)
 check(d11("upgrades_before_hiding_order", "**Hiding order**: 1. A 90%\nthen improve the camp", [tl])["status"] == G.FAIL)
 check(d11("upgrades_before_hiding_order", "Prima le migliorie.\nOrdine di nascondiglio: nascondersi per primo A", [tl])["status"] == G.PASS)

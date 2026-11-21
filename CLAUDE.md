@@ -23,7 +23,7 @@ Read-only MCP server in Python for **MyHordes** (browser survival game, Eternalt
 
 ## Current state
 
-- Live (Fata): `get_town_overview`, `get_citizen_positions`, `get_citizen_cp`, `get_defense_status`, `get_bank_inventory`, `get_buildings`, `get_scout_map`, `get_zone_details`, `find_expedition_path`, `plan_expedition_supplies`, `plan_kill_route`, `get_camping_odds`, `plan_group_camping`, `get_build_options`, `get_blueprint_order`, `get_construction_history`, `get_town_changes`, `get_night_report`, `get_expedition_roster`, `map_bank_to_dump_sheet`
+- Live (Fata): `get_town_overview`, `get_citizen_positions`, `get_citizen_cp`, `get_defense_status`, `get_bank_inventory`, `get_buildings`, `get_scout_map`, `get_zone_details`, `find_expedition_path`, `plan_expedition_supplies`, `plan_kill_route`, `plan_camping`, `get_build_options`, `get_blueprint_order`, `get_construction_history`, `get_town_changes`, `get_night_report`, `get_expedition_roster`, `map_bank_to_dump_sheet`
 - Live (Gest'Hordes): `get_attack_distribution`, `get_attack_forecast`
 - Live (Discord listener only, write local files in `towns/_bot/`): `log_feedback`, `remember`, `forget` (`bot/store.py`; env `LISTENER_USER_ID`, `LISTENER_CONTEXT`; memory only when `dm`). Migration: `make bot-memory-migrate`
 - Live (offline knowledge): `search_wiki`, `list_wiki_categories`, `search_knowledge`

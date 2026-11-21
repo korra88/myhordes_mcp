@@ -105,7 +105,7 @@ async def get_citizen_positions(day: int = 0, town_id: int = 0) -> str:
     Each citizen shows their last known CP (Control Points) when one was read.
     A position on a depleted zone (no dig left) is marked "(dried)", with a count line.
     "⛺ plan [x|y]" = the citizen is in a Fata camp plan for tonight on that zone
-    (details: get_camping_odds).
+    (details: plan_camping).
     Use this when the user asks who is outside, who is camping, who is on a
     depleted zone, or about deaths.
     For a CP table of the whole town use get_citizen_cp instead.
@@ -807,204 +807,91 @@ async def get_zone_details(
 
 
 @mcp.tool()
-async def get_camping_odds(
+async def plan_camping(
     x: int | None = None,
     y: int | None = None,
-    citizen: str = "",
-    skill: str = "none",
-    camp_level: int = -1,
-    ap: int = 0,
-    defense_items: int = 0,
-    camp_items: int = 0,
-    hidden_before: int = 0,
-    nights: int = -1,
-    tomb: bool = False,
-    vest: bool | None = None,
-    record: bool = True,
-    town_id: int = 0,
+    campers: str = "",
     day: int = 0,
-) -> str:
-    """
-    Survival odds of camping (hiding overnight) on a zone, and the best order of camp
-    upgrades to raise them. Use it for "can I camp here?", "what are my camping odds?",
-    "how many upgrades do I build, in which order?". It applies the game's exact formula
-    (verified in the game code) with the zone's ruin, zombies, distance, the Lighthouse and
-    the town type from Fata: do NOT call other tools to work it out, and do not estimate
-    odds yourself.
-
-    Fata camp plans (the players' saved plans, v1.3) are read automatically: when the citizen
-    is in a plan for TODAY on the zone, the tool takes their skill, camping nights, vest, camp
-    items, tomb and hide order from it, shows the plan's campers with Fata's own odds and
-    the upgrades planned, and takes the zone's camp bonus from Fata's estimate. Do NOT ask the
-    player for values the output says came from the plan; pass an argument only to override one
-    (the player corrects it) or for a what-if.
-
-    Without a plan Fata cannot know these: ASK the player before calling, and pass what they
-    say. Without them the tool assumes and states the assumption: Reclusive / pro-camper skill, camping
-    nights already survived (each one lowers the odds a lot), the zone's current camp bonus (%),
-    AP to spend on upgrades, defensive items carried (Old Door, Sheet Metal, Trestle,
-    Mattress, Solid Wooden Board, Sheet of Plywood, Järpen Table), camp items in the backpack
-    (Groundsheet, Festering Flesh), citizens already hidden on the zone.
-    Upgrades: improve campsite = +5% camp bonus for 1 AP; install a defensive item = +9% for 1 AP
-    and the item; both only while the camp bonus is below 50%. The camp bonus drops 15% each
-    night and belongs to the zone (all campers share it). The odds freeze when the citizen
-    hides: upgrade first, hide last, after 19:00.
-
-    Which night: default is TONIGHT (the town's current day). When the player says "tomorrow",
-    pass day = current day + 1 (the day number is in any town tool's header); a day number
-    always means the night of that day. The output for a future day is a projection (today's
-    zombie count, the camp bonus typed in that day's plan or today's bonus minus 15% a night,
-    nights camped so far): say so and quote its assumptions.
-
-    ONE camper only, ONE night. For several nights use plan_group_camping with until_day. For a GROUP ("who hides first?", "who digs a grave?", "who carries the
-    Groundsheet?", "how do we camp tonight on [x|y]?") call plan_group_camping once: do NOT call
-    this tool per camper for a group question.
-
-    Output: the night it is for, odds now, the plan for that night (explicit order, AP, items)
-    and the odds after it, or "no upgrade needed" when the odds are at the cap (then do NOT
-    recommend upgrades for that night), an optional line that is only an investment for later
-    nights, the non-zero terms, the Fata plan block (if any), the assumptions, one line of
-    advice. Report them as given. "hero skill" is the player's Reclusive / Pro camper skill,
-    not their job. A "MISMATCH" line means our formula and Fata's differ: say so.
-
-    Args:
-        x: Zone X, relative to town. Omit with `citizen` to use that citizen's position.
-        y: Zone Y, relative to town.
-        citizen: Citizen name (case-insensitive): gives the job (Survivalist cap 100%,
-                 Scout vest) and the default position.
-        skill: "none" (default), "procamp" (pro camper), or "reclusive1".."reclusive4"
-               (Reclusive level; level 4 caps at 99%). Default: from the citizen's Fata plan,
-               else ask the player.
-        camp_level: The zone's current camp bonus in % (e.g. 43; the percentage the game shows
-                    for the campsite, 0-60). -1 = unknown: Fata's estimate from the players'
-                    plans, else the bonus typed in tonight's plan, else the last recorded bonus minus 15% per night since, else
-                    assumed 0; the output says which. A value given here always wins.
-        ap: AP the player can spend on upgrades. 0 = odds only, no plan.
-        defense_items: Defensive items carried for installs (each +9 for 1 AP).
-        camp_items: Groundsheets / Festering Flesh in the backpack (+5 each).
-        hidden_before: Citizens already hidden on the zone before the player (crowd malus).
-                       Default 0: from the citizen's Fata plan (campers before them), else 0.
-        nights: Camping nights the citizen already survived. -1 = from the citizen's Fata plan,
-                else the town's camping log (sure + probable + planned nights, pessimistic; the player
-                can correct it), else assumed 0.
-        tomb: True if the citizen is hidden in a dug grave (+8).
-        vest: Scout vest worn (zombies -3 instead of -7 each). Omit: True for a Scout.
-        record: True (default) stores the camp bonus the player gave and the plan's resulting
-                bonus for this zone, so later questions can start from it. Set False for
-                what-if questions the player does not mean to do.
-        town_id: Fata Morgana town ID. Omit for the player's default town.
-        day: Night to compute: 0 (default) = tonight; a day number = the night of that day
-             (tomorrow = current day + 1). A past day is an error.
-    """
-    got = await _town(town_id)
-    if isinstance(got, str):
-        return got
-    tid, data = got
-    return fata.format_camping_odds(
-        data, x=x, y=y, citizen=citizen, skill=skill, camp_level=camp_level, ap=ap,
-        defense_items=defense_items, camp_items=camp_items, hidden_before=hidden_before,
-        nights=nights, tomb=tomb, vest=vest, record=record, town_id=tid, day_arg=day,
-    )
-
-
-@mcp.tool()
-async def plan_group_camping(
-    x: int | None = None,
-    y: int | None = None,
-    group: str = "",
-    day: int = 0,
+    until_day: int = 0,
     ap: int = -1,
     defense_items: int = 0,
     camp_items: int = 0,
-    steaks: int = -1,
-    slots: int = 5,
     camp_level: int = -1,
     hidden_before: int = 0,
+    steaks: int = -1,
+    slots: int = 5,
     objective: str = "expected",
-    until_day: int = 0,
+    nearby: bool = False,
+    record: bool = True,
     town_id: int = 0,
 ) -> str:
     """
-    Best way for a GROUP to camp (hide overnight) on one zone: who hides in which order, who
-    digs a grave, who carries the Groundsheets / Festering Flesh, how many camp upgrades, with
-    every camper's odds. Use it for any group question: "how do we camp tonight?", "who hides
-    first?", "who should dig a grave?", "who takes the camp items?". For ONE camper's odds use
-    get_camping_odds; do NOT call get_camping_odds once per camper for a group, and do not work
-    out an order or odds yourself: the tool searches every order and assignment (exact) with
-    the game's formula.
+    THE camping tool (hiding overnight outside): odds, camp upgrades, hiding order, graves,
+    camp items, for ONE camper or a GROUP, for ONE night or SEVERAL. Use it for "can I camp
+    here?", "what are my odds?", "how many upgrades?", "who hides first?", "who digs a grave?",
+    "plan our camping until day 31". ONE call answers the whole question: never call it once per
+    camper or once per night, and never estimate odds, orders or upgrades yourself (it applies
+    the game's exact formula and searches every order and assignment).
 
-    Fata camp plans are read automatically: with `group` empty, the campers are those of the
-    Fata plan(s) for that night on the zone (skill, nights survived, vest, camp items, grave from
-    the plan), and the zone is the plan's: just call it with no arguments for "our camping
-    tonight". Do NOT ask the player for values the output says came from a plan.
+    Fata camp plans (the players' saved plans) are read automatically: with `campers` empty, the
+    campers and the zone are those of the Fata plan(s) for that night, so "our camping tonight"
+    needs no argument. Values the output says came from a plan are NOT asked. Without a plan, ASK
+    the player before calling what Fata cannot know (hero skill, camping nights survived, AP,
+    defensive items, camp items); the output states every assumption it made.
 
-    Rules the tool applies (state the result, not the rules): the crowd malus and the ruin's room
-    depend on how many are already hidden, so the ORDER matters (the tool says "any order" when
-    it does not); improve campsite = +5% for 1 AP and install a defensive item = +9% for 1 AP and
-    the item (consumed), both only while the zone's camp bonus is below 50%, shared by every
-    camper; a grave costs 1 AP and helps only its digger (+8%); a Groundsheet or Festering Flesh
-    carried in the rucksack gives +5% each, is not consumed and can be handed to whoever needs it;
-    a Tamer's dog digs the Tamer's grave for free, and fed a Tasty-looking Steak also improves
-    the camp +5%. AP are one pool for the whole group. Odds freeze when each camper hides:
-    upgrade first, hide in the given order after 19:00.
+    SEVERAL NIGHTS: day = the first night, until_day = the last (at most 6 nights), in ONE call:
+    each night starts from the previous night's plan (-15% overnight) and uses up the items.
+    Tomorrow = day + 1 (the day number is in any town tool's header); a future night is a
+    projection from today's data.
 
-    SEVERAL NIGHTS ("plan D28 to D31", "camp until day 31"): ONE call with day = the first night
-    and until_day = the last (at most 6 nights). Do NOT call once per night: a call alone does not
-    know the upgrades planned for the nights before. The chain starts each night from the
-    previous night's plan (-15% overnight), counts the Fata plans' upgrades, uses up the finite
-    defensive items and steaks night by night, and warns when a night needs more AP than the
-    group's 6 each. It plans each night greedily (cheapest plan for that night), not jointly.
-    A Fata plan's upgrades (level before -> after) count as part of the plan: "check in game
-    whether they are done" is what the output says tonight; do not re-plan them.
-
-    Defensive items lying on the camp zone itself are added to the pool. A "Defensive items near
-    the camp" block (3 zones at most) points at items worth fetching and the nights with AP to
-    spare; it is a signal only (not counted in the pool). For an exact route to them use
-    find_expedition_path / plan_expedition_supplies with start = the camp (x, y), round trip.
-
-    Output: the night, the zone, the plan (upgrades, graves, AP), the hiding order with each
-    camper's odds and what they do or carry, expected survivors, an optional "for later nights
-    only" line (an investment, not needed for these odds), the assumptions. Report them as given.
+    Output: the night, the zone, the plan (upgrades first), then the odds (one camper: odds now
+    and after the plan, the term breakdown, the zombie margin at the cap; a group: the hiding
+    order with each camper's odds, expected survivors), the Fata plan's own odds (a "MISMATCH"
+    line = our formula and Fata's differ: say so), an optional "for later nights only" line
+    (an investment, not needed for these odds), the assumptions. Report them as given, upgrades
+    before the hiding, hiding after 19:00. "no upgrade needed" = do not recommend upgrades.
+    "Hero skill" is the Reclusive / Pro camper skill, not the job.
 
     Args:
-        x: Zone X relative to town. Omit to use the zone of the group's Fata plan.
+        x: Zone X relative to town. Omit to use the Fata plan's zone, or the camper's position.
         y: Zone Y relative to town.
-        group: Empty = the campers of the Fata plan(s) for that night on the zone. Else a comma
-               list of citizen names, each with optional overrides after colons, e.g.
-               "Korra:R2:n2, Ammonia:R4:n2:tomb:items=1, Bob:tamer:vest". Overrides: R1-R4 /
-               pro / none (hero skill), nN (camping nights survived), tomb (grave already dug; notomb
-               cancels one taken from a plan),
-               items=K (camp items carried), vest (Scout vest worn), tamer, surv (Survivalist,
-               cap 100%). Defaults come from the Fata plan, then the camping log, then the
-               citizen's job. At most 6 campers.
-        day: Night to plan: 0 = tonight; a day number = the night of that day (tomorrow = current
-             day + 1): a projection from today's data (the output says so). A past day is an error.
-        ap: AP the whole group can spend on upgrades and graves. -1 = unlimited: the plan says
-            how many it needs. Extra AP appear as an optional line for later nights.
-        defense_items: Defensive items available (Old Door, Sheet Metal, Trestle, Mattress, Solid
-                       Wooden Board, Sheet of Plywood, Järpen Table); each install uses one.
-        camp_items: Extra Groundsheets / Festering Flesh available beyond what the campers carry
-                    (those on the zone's floor, if Fata's items are from today, are counted).
-        steaks: Tasty-looking Steaks for the Tamer's dog. -1 = those on the zone's floor (today's
-                Fata items), else 0.
-        slots: Rucksack slots a camper may fill with camp items (default 5).
-        camp_level: The zone's camp bonus in % now. -1 = from the Fata plan / Fata estimate /
-                    assumed (the output says which). A value given here wins.
-        hidden_before: Citizens outside the group already hidden on the zone.
-        objective: "expected" (default) = most expected survivors; "weakest" = raise the
-                   lowest camper's odds first.
+        campers: Empty = the campers of the Fata plan(s) for that night. Else a comma list of
+                 citizen names, each with optional overrides after colons, e.g. "Anna" or
+                 "Anna:R2:n2, Bob:R4:n2:tomb:items=1, Carl:tamer:vest". Overrides: R1-R4 /
+                 pro / none (hero skill), nN (camping nights survived), tomb (grave already dug;
+                 notomb cancels one from a plan), items=K (camp items carried), vest (Scout vest
+                 worn), tamer, surv (Survivalist, cap 100%). Defaults: the Fata plan, then the
+                 camping log, then the job. At most 6 campers. ":R4:n1" (no name) = a what-if
+                 camper who is not a citizen, alone and for one night only.
+        day: Night to plan: 0 = tonight; a day number = the night of that day. A past day is an error.
         until_day: Last night of a multi-night plan (day number). 0 = only the night `day`.
-                   `ap` is then the budget of EACH night.
+        ap: AP the campers can spend on upgrades and graves, all together, each night. -1 = as
+            many as needed (the plan says how many); 0 = no upgrade.
+        defense_items: Defensive items available to install (Old Door, Sheet Metal, Trestle,
+                       Mattress, Solid Wooden Board, Sheet of Plywood, Järpen Table); each install
+                       uses one. Those on the zone's floor are added.
+        camp_items: Groundsheets / Festering Flesh available beyond what the campers carry.
+        camp_level: The zone's camp bonus in % now (0-60). -1 = from the Fata plan / Fata's
+                    estimate / the last one recorded, else assumed 0 (the output says which).
+        hidden_before: Citizens outside the campers already hidden on the zone.
+        steaks: Tasty-looking Steaks for a Tamer's dog. -1 = those on the zone's floor.
+        slots: Rucksack slots a camper may fill with camp items (default 5).
+        objective: "expected" (default, most expected survivors) or "weakest" (best lowest odds).
+        nearby: True lists the defensive items on nearby zones and the nights with AP to fetch
+                them. Only when the player asks where to find more items.
+        record: True stores the camp bonus given and the planned one for the zone (one camper,
+                tonight), so later questions start from it. False for a what-if.
         town_id: Fata Morgana town ID. Omit for the player's default town.
     """
     got = await _town(town_id)
     if isinstance(got, str):
         return got
     tid, data = got
-    return fata.format_group_camping(
-        data, x=x, y=y, group=group, day_arg=day, ap=ap, defense_items=defense_items,
-        camp_items=camp_items, steaks=steaks, slots=slots, camp_level=camp_level,
-        hidden_before=hidden_before, objective=objective, until_day=until_day, town_id=tid,
+    return fata.format_plan_camping(
+        data, x=x, y=y, campers=campers, day_arg=day, until_day=until_day, ap=ap,
+        defense_items=defense_items, camp_items=camp_items, steaks=steaks, slots=slots,
+        camp_level=camp_level, hidden_before=hidden_before, objective=objective, record=record,
+        nearby=nearby, town_id=tid,
     )
 
 
