@@ -184,8 +184,8 @@ directly: it plans the same safest route as `find_expedition_path` plus the supp
 (`find_expedition_path` alone is for a bare route or the risk on the way). Citizens already
 outside asking how to get back: read their status in `get_town_overview` first (Trapped,
 terrorised), then the route. When the
-player has Second Wind (they say so, or the bot memory holds their level), pass
-`second_wind=<Enduring level 1-4>`: it is the day's one heroic action, shared with Heroic
+player has Second Wind, i.e. an Enduring level (they say so, or the bot memory holds
+"Enduring level N"), pass `second_wind=<Enduring level 1-4>`: it is the day's one heroic action, shared with Heroic
 Return. Items to bring back (blueprint, defensive objects) go in `waypoints` **and**
 `pickups` — without `pickups` the plan does not check the rucksack; with it, it checks
 `slots` (default 5, or what the player says) and heavy items.
