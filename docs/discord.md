@@ -39,7 +39,7 @@ The bot answers everybody in its channels, at two levels (`[public]` in
 
 | | trusted (`allow_users`) | public (everybody else) |
 | --- | --- | --- |
-| model | `sonnet` | `claude-haiku-5-5` (full id: the CLI alias `haiku` is Haiku 4.5) |
+| model | `sonnet` | `claude-sonnet-5-5` since 2026-11-21 (was `claude-haiku-5-5`; use full ids: the CLI alias `haiku` is Haiku 4.5) |
 | turns per person per hour | 60 | 10 (`[public] max_turns_per_user_per_hour`) |
 | writes | town logs (`inspect-town`, `close-day`) via `Write(./towns/**)` | none: `Write`/`Edit` stay denied; only the bot tools |
 | DMs | yes | yes, found by the gateway when they write (see below) |
@@ -48,8 +48,10 @@ A turn runs at the **lowest tier among its authors**: one public person in a thr
 makes that turn public (same session, resumed with the public model and tools), so a
 public person cannot have a trusted thread write files for them. Both tiers share the
 system prompt; `prompts/discord.md` "Other players" forbids verdicts on real players
-(traitor, thief, lazy), measured necessary on Haiku. Why Haiku, with the numbers: the
-2026-11-10 benchmark (`../claude-ollama-protocol/experiments/hordes-advisor/RESULTS.md`).
+(traitor, thief, lazy), measured necessary on Haiku. The public tier ran Haiku from 2026-11-10 (benchmark:
+`../claude-ollama-protocol/experiments/hordes-advisor/RESULTS.md`) and moved to Sonnet on
+2026-11-21: low use (14 turns in 3 days) and more hard fails on Haiku in the bot eval
+(`docs/bot-eval-plan.md` 6.5-6.6).
 
 ## Configure the listener
 

@@ -152,10 +152,11 @@ max_turns_per_user_per_hour = 10
 
 # A whole [claude] table, nothing inherited. Refused at start: unsafe_allow,
 # first_turn_files, and Write/Edit/Bash/NotebookEdit in allowed_tools. cwd must be the
-# same as [claude]'s. Use the full model id: the CLI alias "haiku" is Haiku 4.5.
+# same as [claude]'s. Use the full model id: the CLI alias "haiku" is Haiku 4.5
+# (the public tier ran claude-haiku-5-5 until 2026-11-21, see docs/discord.md).
 [public.claude]
 cwd = "."
-model = "claude-haiku-5-5"
+model = "claude-sonnet-5-5"
 append_system_prompt_files = ["persona.md", "prompts/game-primer.md", "prompts/discord.md", "prompts/discord-feedback.md"]
 mcp_config = ["discord-listener.mcp.json"]
 allowed_tools = [
