@@ -61,9 +61,8 @@ def format_plan_camping(data: dict, *, x: int | None, y: int | None, campers: st
                  camp_items=camp_items, steaks=steaks, slots=slots, camp_level=camp_level,
                  hidden_before=hidden_before, objective=objective, until_day=until_day, town_id=town_id,
                  nearby=nearby)
-    if any(not ov["name"] for ov in ovs) and (len(ovs) > 1 or not one_night):
-        return ("Error: a camper without a name (':R4:n1') works only alone and for one night: "
-                "give the citizens' names.")
+    if any(not ov["name"] for ov in ovs) and len(ovs) > 1:
+        return "Error: a camper without a name (':R4:n1') works only alone: give the citizens' names."
     single = None
     if one_night and len(ovs) == 1 and set(ovs[0]) <= _SINGLE_KEYS and ovs[0].get("tomb", True):
         single = ovs[0]
@@ -73,6 +72,8 @@ def format_plan_camping(data: dict, *, x: int | None, y: int | None, campers: st
         if cell is not None and len(names) <= 1:
             x, y = cell
             single = {"name": names[0] if names else ""}   # the plan's only camper, or anyone
+    elif not ovs and x is not None and y is not None and not _plan_campers(data, (x, y), night)[1]:
+        group["group"] = ":"   # several nights, nobody planned there: one camper, "anyone"
     if single is None:
         return format_group_camping(data, **group)
     return format_camping_odds(

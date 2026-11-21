@@ -360,6 +360,8 @@ def parse_group(text: str) -> list[dict] | str:
         ov = {"name": name}
         for t in rest:
             tl = t.lower()
+            if not tl:
+                continue
             if tl in _SKILL_TOKENS:
                 ov["skill"] = _SKILL_TOKENS[tl]
             elif tl.startswith("n") and tl[1:].isdigit():
@@ -622,6 +624,10 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
         return f"Error: {len(overrides)} campers: the planner handles at most {MAX_CAMPERS}. Split the group."
     cits = []
     for ov in overrides:
+        if not ov["name"] and len(overrides) == 1:   # a what-if camper who is not a citizen
+            cits.append({"id": None, "name": "anyone", "job": "unknown", "inside_town": True})
+            assumed.append("no citizen given: job unknown, cap 90% (100% for a Survivalist)")
+            continue
         cit = _find_citizen(data, ov["name"])
         if cit is None:
             names = [c["name"] for c in data.get("citizens", [])]

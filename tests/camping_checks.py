@@ -769,6 +769,10 @@ assert "Hiding order" in format_plan_camping(res, x=7, y=13, campers="Ann:tamer"
 assert "Nights 26-27, Ann at" in format_plan_camping(res, x=7, y=13, campers="Ann", until_day=27, town_id=None)
 assert "Hiding order" in format_plan_camping(res, x=7, y=13, town_id=None)   # the 4-camper plan
 assert format_plan_camping(res, x=7, y=13, campers=":R4, Ann", town_id=None).startswith("Error: a camper without a name")
+# several nights, nobody planned on the zone, no campers: one "anyone" camper, no error
+o = format_plan_camping(res, x=9, y=13, until_day=28, camp_level=0, town_id=None)
+assert "Nights 26-28, anyone at [9|13]" in o and "no citizen given: job unknown" in o, o
+assert "Nights 26-27, anyone at" in format_plan_camping(res, x=9, y=13, campers=":R4:n1", until_day=27, town_id=None)
 assert format_plan_camping(res, x=7, y=13, campers="Ann:ninja", town_id=None).startswith("Error: cannot read 'ninja' after Ann")
 # a count from an earlier day: one zombie note over several nights, not the same text twice
 RAW4 = copy.deepcopy(RAW)

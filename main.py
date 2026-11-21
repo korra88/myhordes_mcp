@@ -831,7 +831,9 @@ async def plan_camping(
     here?", "what are my odds?", "how many upgrades?", "who hides first?", "who digs a grave?",
     "plan our camping until day 31". ONE call answers the whole question: never call it once per
     camper or once per night, and never estimate odds, orders or upgrades yourself (it applies
-    the game's exact formula and searches every order and assignment).
+    the game's exact formula and searches every order and assignment). Put everything in that
+    first call: the campers' names (from the message or the player's memory) and, for a stay of
+    several nights, until_day; do not call it for tonight first and again for the stay.
 
     Fata camp plans (the players' saved plans) are read automatically: with `campers` empty, the
     campers and the zone are those of the Fata plan(s) for that night, so "our camping tonight"
@@ -862,7 +864,7 @@ async def plan_camping(
                  notomb cancels one from a plan), items=K (camp items carried), vest (Scout vest
                  worn), tamer, surv (Survivalist, cap 100%). Defaults: the Fata plan, then the
                  camping log, then the job. At most 6 campers. ":R4:n1" (no name) = a what-if
-                 camper who is not a citizen, alone and for one night only.
+                 camper who is not a citizen, alone.
         day: Night to plan: 0 = tonight; a day number = the night of that day. A past day is an error.
         until_day: Last night of a multi-night plan (day number). 0 = only the night `day`.
         ap: AP the campers can spend on upgrades and graves, all together, each night. -1 = as
