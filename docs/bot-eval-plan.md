@@ -1,6 +1,6 @@
 # Bot evaluation suite — plan
 
-Status (2026-11-21): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 done 2026-11-21 (8 extended scenarios, `bot-eval-compare`, first A/B deployed, see 6.6). Written so that
+Status (2026-11-21): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 done 2026-11-21 (8 extended scenarios, `bot-eval-compare`, first A/B deployed, see 6.6; cheap batch deployed, see 6.7). Written so that
 an agent with no prior context can implement it phase by phase (section 8).
 
 **Changes since the plan was written (2026-11-14), read first.** The server now has **28**
@@ -870,6 +870,36 @@ Deployed with it (2026-11-21): the public tier runs Sonnet 5.5 too (Pi toml
 Cost of the A/B, both days, summed from the 21 `ab-*` run files: $25.10 CLI-reported =
 bot runs $10.12 + opus judge $14.97 (Haiku's CLI cost is not trusted, `prices.json` missing).
 The judge costs more than the bot: on cheap targeted reruns, judge only the scenarios compared.
+
+### 6.7 Cheap batch: G5, G6, G7, G10, G14 (2026-11-21)
+
+Branch `ab-cheap-batch`, commit `4d4ce44`, merged to main and deployed 2026-11-21:
+
+- **G10** `prompts/discord.md` "Which town": name the town and the day at the start of every
+  answer built on town data; when the reader names another day, say which day the answer is
+  for and offer the other reading.
+- **G14** primer blueprint bullet: ruin blueprints listed under "Do not read" by
+  `get_blueprint_order` are not read (reading them wastes them).
+- **G5/G6/G7** stale docstrings: `get_citizen_cp` (Thirsty only cancels a skill's +1),
+  `get_defense_status` (Fata only), `get_attack_forecast` (no defense here; compare with
+  `get_defense_status`).
+- `get_zone_details(item=…)` also matches the item tags (`defense`, `defense part`, `heavy`;
+  `defence`/`defensive` aliases). Goldens 227.
+
+Sonnet only, 3 repeats on the targets (A = main at `79e66f1`, runs `ab-A-c` / `ab-C`):
+
+| Scenario | A score | C score | A HF | C HF |
+|---|---|---|---|---|
+| A1 | 0.37 | 0.93 | 0/3 | 0/3 |
+| B2 | 0.90 | 0.90 | 0/3 | 0/3 |
+
+`bot-eval-compare` on the targets: ACCEPT. Answers now open "**Tortuous valleys, day 16**".
+
+Core once (`ab-C-core` vs `ab-B3-core`): hard fails 3/18 → 3/18, mean score 0.70 → 0.74.
+C4 cleared; K2 new = the known invented per-zone counts ("[-5|9], [-5|8] and [-4|9] have 10
+each", no exact count in any tool output): target of the K2 tool-side fix, not caused by C.
+
+Cost: bot $2.35 + opus judge $2.05 = $4.41 (3 run files).
 
 ## 7. Gaps found while preparing this (not fixed; candidates)
 
