@@ -1,6 +1,6 @@
 # Bot evaluation suite — plan
 
-Status (2026-11-21): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 done 2026-11-21 (8 extended scenarios, `bot-eval-compare`, first A/B deployed, see 6.6; cheap batch deployed, see 6.7). Written so that
+Status (2026-11-21): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 done 2026-11-21 (8 extended scenarios, `bot-eval-compare`, first A/B deployed, see 6.6; cheap batch deployed, see 6.7; one camping tool deployed, see 6.8). Written so that
 an agent with no prior context can implement it phase by phase (section 8).
 
 **Changes since the plan was written (2026-11-14), read first.** The server now has **28**
@@ -899,6 +899,48 @@ C4 cleared; K2 new = the known invented per-zone counts ("[-5|9], [-5|8] and [-4
 each", no exact count in any tool output): target of the K2 tool-side fix, not caused by C.
 
 Cost: bot $2.35 + opus judge $2.05 = $4.41 (3 run files).
+
+### 6.8 One camping tool: `plan_camping` (2026-11-21)
+
+`get_camping_odds` and `plan_group_camping` become one tool, `plan_camping` (C1 called both: a
+D11 hard fail by itself, 3/3 on main in 6.6). `fata/campplan.py` picks the engine: one camper
+and one night (or a Fata plan with at most one camper, or no plan and no campers) →
+`camping.py` (breakdown, cap margin, Fata plan block with MISMATCH, `record`); a group, several
+nights (`until_day`), a Tamer / Survivalist / `notomb` override → `groupcamp.py`. Arguments:
+`campers` = the old `group` syntax (`Name:R2:n3:items=1`; `:R4:n1` = a nameless what-if camper),
+`ap` -1 = as many as needed (warning past 6 AP). Nearby defensive items: one line, the list with
+`nearby=True`. Fixed on the way: the stale zombie note repeated per night, "no upgrade possible
+(below 50%)" printed at a low bonus when no upgrade raises the odds. The grader maps the retired
+tools' calls to `plan_camping` (`grade.RETIRED_TOOLS`), so old runs grade under the new
+scenarios (C1, C3, C4, R1, R2 updated; C4 gained `D11:camping_one_call_until_day`).
+
+Branch `ab-camping-unify`, Sonnet, 3 repeats, A = main `c5a85b8` (run `ab-A-d`):
+
+| Step | Commit | C1 HF / score | C3 HF / score | C4 HF / score |
+|---|---|---|---|---|
+| A (main) | `c5a85b8` | 1/3 · 0.50 | 0/3 · 0.98 | 2/3 · 0.33 |
+| D: one tool | `83ee94a` | 2/3 · 0.15 | 0/3 · 0.98 | 0/3 · 1.00 |
+| D2: whole stay in the first call | `a8d83bc` | 2/3 · 0.19 | 0/3 · 0.98 | 0/3 · 1.00 |
+| D3: odds of surviving every night | `d542d8b` | 1/3 · 0.34 | 0/3 · 1.00 | — |
+| D4: the trip is a separate part | `e4575cd` | 0/3 · 0.69 | 0/3 · 0.98 | 2/3 · 0.33 |
+
+- D: C1 made 3 calls on one zone (tonight without a name → several nights without a name =
+  error "give the campers" → again with the name). D2: several nights with no campers and no
+  plan = one "anyone" camper, no error; docstring: names and `until_day` in the first call.
+- D2: C1 invented "73% over three nights" (0.9³). D3: the multi-night output prints each
+  camper's product of the nightly odds ("Surviving all 3 nights …").
+- D3: C1 skipped `plan_expedition_supplies` ("ONE call answers the whole question" read as the
+  whole message). D4: "the whole camping part"; the trip to the camp = `plan_expedition_supplies`
+  (docstring + primer). D4: C1 calls overview → `plan_camping` once → supplies, 3/3.
+- C4 (hiding order before "check the Fata plan's upgrades in game") fails on main too: pooled
+  branch D/D2/D4 2/9 vs A 2/3. Compare verdict on D4: REJECT by rule 2 on C4 alone; merged on
+  the maintainer's call, C4 fixed tool-side next (6.9).
+
+Core once (`ab-C-core` regraded under the new scenarios = `ab-C-core-rg`, vs `ab-D-core`):
+ACCEPT, hard fails 3/18 → 2/18 (K2 cleared, noise), mean score 0.74 → 0.80, no regression.
+
+Cost: bot $4.83 + opus judge $4.57 = $9.40 (6 run files: ab-D, ab-D-core, ab-A-d, ab-D2..D4).
+Deploy: Pi toml `allowed_tools` in both tiers, the two old names → `mcp__myhordes__plan_camping`.
 
 ## 7. Gaps found while preparing this (not fixed; candidates)
 
