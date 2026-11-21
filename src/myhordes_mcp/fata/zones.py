@@ -5,6 +5,7 @@ from ..utils.clock import data_updated
 from .bank import summary_lines
 from .game import DANGER_LEVELS, WIND_DISTANCE, WIND_NOT_DEPLETED, wind_refill_chance, zone_is_today
 from .geo import fmt_xy, km, moves, xy
+from .kills import zoo_clusters
 from .risk import (
     _item_tags,
     _staleness_tag,
@@ -85,6 +86,34 @@ def camping_line(z: dict | None) -> str | None:
     return f"Camping: ruin bonus {_signed(boost)}, {room}"
 
 
+TOP_COUNTS = 10
+
+
+def _densest_lines(data: dict, today_count: list[dict], older_count: list[dict], day) -> list[str]:
+    """'Where the zombies are': the likely zoo (kills.zoo_clusters) and the highest exact counts
+    with their day. Answers asked "which zones have the most" were read off the coordinate-ordered
+    lists and got the numbers wrong (bot-eval K2, docs/bot-eval-plan.md 6.10)."""
+    lines = []
+    zoo = next((c for c in zoo_clusters(data) if c["zoo"]), None)
+    if zoo:
+        z, (x0, x1, y0, y1) = zoo["zombies"], zoo["bbox"]
+        flags = [f for f in ("touches the map edge" if zoo["edge"] else "",
+                             f"{plural(len(zoo['unseen']), 'never-visited zone')} inside/next to it"
+                             if zoo["unseen"] else "") if f]
+        lines.append(f"  Likely zoo: {plural(len(zoo['zones']), 'zone')} with zombies next to each other, "
+                     f"~{round(z['avg'])} zombies ({round(z['min'])}-{round(z['max'])} estimated), x {x0}..{x1}, "
+                     f"y {y0}..{y1}" + (f", {', '.join(flags)}" if flags else "")
+                     + ". Its sides and a kill route: plan_kill_route with zoo=True.")
+    counts = [(z["zombies"], 1, z) for z in today_count] + [(z["zombies"], 0, z) for z in older_count]
+    counts.sort(key=lambda t: (-t[0], -t[1], t[2]["coords"]))
+    if counts:
+        top = counts[:TOP_COUNTS]
+        lines.append("  Highest exact counts (zombies, day of the count): " + ", ".join(
+            f"{z['coords']} {n} ({'today' if today else 'd' + str(z.get('updated_day'))})" for n, today, z in top)
+            + ". Quote these numbers: a zone not listed here has a lower count, or only a danger level (no number).")
+    return (["### Where the zombies are"] + lines + [""]) if lines else []
+
+
 def format_scout(data: dict) -> str:
     """Zombie picture of the map: today's readings first, then older counts by day.
 
@@ -128,6 +157,7 @@ def format_scout(data: dict) -> str:
     respawn = respawn_check(data)
     if respawn:
         lines += respawn + [""]
+    lines += _densest_lines(data, today_count, older_count, current_day)
 
     if today_danger or today_count:
         lines.append("### Zombies seen today")
@@ -136,7 +166,8 @@ def format_scout(data: dict) -> str:
             if zs:
                 lines.append(f"  ~{DANGER_LEVELS[level]}: " + ", ".join(z["coords"] for z in zs))
         if today_count:
-            lines.append("  counted: " + ", ".join(f"{z['coords']} {z['zombies']}" for z in today_count))
+            lines.append("  counted (most first): " + ", ".join(
+                f"{z['coords']} {z['zombies']}" for z in sorted(today_count, key=lambda z: -z["zombies"])))
         lines.append("")
     if older_count:
         n = sum(z["zombies"] for z in older_count)

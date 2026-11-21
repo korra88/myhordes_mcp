@@ -386,9 +386,12 @@ async def get_scout_map(
     Use this when the user asks about zombie positions, safe scavenging routes,
     or where the horde is concentrated.
     On the current day it also checks tonight's global respawn threshold
-    (25 × the new day zombies on the whole map) against what Fata counts —
-    use it for zombie-zoo questions; Fata never sees the whole map, and the
-    output says what is not counted.
+    (25 × the new day zombies on the whole map) against what Fata counts;
+    Fata never sees the whole map, and the output says what is not counted.
+    "Where the zombies are" gives the likely zoo (its extent and zombies) and the
+    highest exact counts with their day: quote a zone's number only from that
+    line or the counted lists, never from the danger lists (no number there).
+    For the zoo's sides and a kill route use plan_kill_route with zoo=True.
 
     Args:
         day: Specific day number to inspect. Use 0 or omit for the current day.
