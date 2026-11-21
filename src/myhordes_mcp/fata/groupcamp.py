@@ -881,9 +881,9 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
                  if plan_up else f"Camp bonus now +{camp_level}%")
         lines.append(f"Zone {where}{slots_txt}, {km_} km. {bonus}. "
                      f"{plural(np_.zombies, 'zombie')}" + (" (today)" if not future else "") + ".")
-        if plan_up:
-            lines.append(plan_upgrade_text(plan_up, future) + ".")
         if sol is None:
+            if plan_up:
+                lines.append(plan_upgrade_text(plan_up, future) + ".")
             lines.append("No feasible plan: the AP given do not allow the zone level or the graves needed.")
             return "\n".join(lines + near_lines)
         plan, gtxt = _plan_pieces(sol)
@@ -897,15 +897,23 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
         elif plan_up:
             ap_txt += f" (+{np_.plan_ap} AP if the Fata plan's upgrades are not done yet)"
         allcap = all(o >= c.cap for o, c in zip(sol.odds, np_.campers))
-        lines.append("")
-        lines.append(f"Plan: {plan}; {gtxt}; {lvl}; {ap_txt}."
-                     + (" Everyone at their cap." if allcap else " Not everyone can reach the cap with these resources."))
+        # Numbered steps: everything that changes the odds comes before the hiding (they freeze
+        # when each camper hides); answers that led with the hiding order were the C4 failure.
+        todo = []
+        if plan_up:
+            todo.append(plan_upgrade_text(plan_up, future) + ".")
+        todo.append(f"Upgrades: {plan}; {gtxt}; {lvl}; {ap_txt}.")
         steps = _camp_item_steps(np_.campers, sol, camp_items, floor_items)
         if steps:
-            lines.append(steps)
+            todo.append(steps.replace("Before hiding, camp items:", "Camp items:", 1))
         matters = n > 1 and order_matters(np_.campers, sol, np_.pos, sol.level)
-        lines.append("Hiding order (after the upgrades, after 19:00):" if matters else
-                     "Hiding order: any order (nobody's odds change), after the upgrades and after 19:00:")
+        lines.append("")
+        lines.append("Steps, in this order (the odds freeze when each camper hides, so steps "
+                     f"1-{len(todo)} come first):")
+        lines += [f"{i}. {t}" for i, t in enumerate(todo, 1)]
+        lines.append(f"{len(todo) + 1}. Hiding order, after 19:00" + (":" if matters else
+                     ": any order (nobody's odds change):")
+                     + (" everyone at their cap." if allcap else " not everyone can reach the cap with these resources."))
         for p, k in enumerate(sol.order):
             c, inf = np_.campers[k], np_.infos[k]
             desc = [inf["shown_job"]]

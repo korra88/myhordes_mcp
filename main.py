@@ -848,11 +848,11 @@ async def plan_camping(
     projection from today's data.
 
     Output: the night, the zone, the plan (upgrades first), then the odds (one camper: odds now
-    and after the plan, the term breakdown, the zombie margin at the cap; a group: the hiding
-    order with each camper's odds, expected survivors), the Fata plan's own odds (a "MISMATCH"
+    and after the plan, the term breakdown, the zombie margin at the cap; a group: numbered steps,
+    the hiding order last with each camper's odds, expected survivors), the Fata plan's own odds (a "MISMATCH"
     line = our formula and Fata's differ: say so), an optional "for later nights only" line
-    (an investment, not needed for these odds), the assumptions. Report them as given, upgrades
-    before the hiding, hiding after 19:00. "no upgrade needed" = do not recommend upgrades.
+    (an investment, not needed for these odds), the assumptions. Report them as given and in the
+    same order: the steps before the hiding order, hiding after 19:00. "no upgrade needed" = do not recommend upgrades.
     "Hero skill" is the Reclusive / Pro camper skill, not the job.
 
     Args:

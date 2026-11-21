@@ -782,3 +782,8 @@ st4 = format_plan_camping(build_result(1, RAW4), x=9, y=13, campers="Eve:n0", un
 zl = [l for l in st4.splitlines() if l.startswith("- Zombies:")]
 assert len(zl) == 1 and "the same count is used for later nights" in zl[0] and zl[0].count("probably higher") == 1, zl
 print("plan_camping checks: ok")
+# one night, a group: numbered steps, the Fata plan's upgrades first, the hiding order last (C4)
+o = format_plan_camping(res2, x=9, y=13, town_id=None)
+assert o.index("Steps, in this order") < o.index("1. Fata plan (Eve)") < o.index("2. Upgrades:") < o.index(
+    ". Hiding order, after 19:00"), o
+print("step order checks: ok")
