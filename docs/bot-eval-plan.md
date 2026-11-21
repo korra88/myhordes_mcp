@@ -1,6 +1,6 @@
 # Bot evaluation suite — plan
 
-Status (2026-11-21): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 done 2026-11-21 (8 extended scenarios, `bot-eval-compare`, first A/B deployed, see 6.6; cheap batch deployed, see 6.7; one camping tool deployed, see 6.8). Written so that
+Status (2026-11-21): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 done 2026-11-21 (8 extended scenarios, `bot-eval-compare`, first A/B deployed, see 6.6; cheap batch deployed, see 6.7; one camping tool deployed, see 6.8; C4 steps, see 6.9). Written so that
 an agent with no prior context can implement it phase by phase (section 8).
 
 **Changes since the plan was written (2026-11-14), read first.** The server now has **28**
@@ -941,6 +941,19 @@ ACCEPT, hard fails 3/18 → 2/18 (K2 cleared, noise), mean score 0.74 → 0.80, 
 
 Cost: bot $4.83 + opus judge $4.57 = $9.40 (6 run files: ab-D, ab-D-core, ab-A-d, ab-D2..D4).
 Deploy: Pi toml `allowed_tools` in both tiers, the two old names → `mcp__myhordes__plan_camping`.
+
+### 6.9 Group camping as numbered steps: C4 (2026-11-21)
+
+C4 ("How do we camp tonight at [10|-8]? Who hides first?") failed 2/3 on main and on D4: answers
+led with the hiding order and put "check the Fata plan's upgrades in game" after it. Branch
+`ab-c4-steps`, commit `dd24c27`, merged and deployed 2026-11-21: one night for a group prints
+"Steps, in this order (the odds freeze when each camper hides, so steps 1-N come first)": the
+Fata plan's upgrades, the upgrades / graves / AP, the camp items, then the hiding order after
+19:00; the `plan_camping` docstring asks for the answer in the same order.
+
+Sonnet, 3 repeats, A = `ab-D4` (same code as main `d5ece90`), B = `ab-E`: C4 hard fails 2/3 → 0/3,
+score 0.33 → 1.00; C3 0/3 → 0/3, 0.98 → 1.00. `bot-eval-compare`: ACCEPT. Cost: bot $0.35 + opus
+judge $0.38 = $0.73.
 
 ## 7. Gaps found while preparing this (not fixed; candidates)
 
