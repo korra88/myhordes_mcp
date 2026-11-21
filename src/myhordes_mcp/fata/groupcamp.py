@@ -1011,6 +1011,11 @@ def format_group_camping(data: dict, *, x: int | None, y: int | None, group: str
                 break
             aps.append(f"{np_.ap_total}" + (f" (+{np_.plan_ap} if not done)" if np_.plan_ap and not np_.future else ""))
         lines.append(f"AP per night: {' / '.join(aps)}; the group has {BASE_AP * n} a day ({BASE_AP} each).")
+        solved = [np_ for np_ in nights if np_.sol is not None]
+        if len(solved) > 1:   # each night's odds multiplied: the number players ask for ("all 3 nights?")
+            every = [math.prod(np_.sol.odds[k] / 100 for np_ in solved) for k in range(n)]
+            lines.append(f"Surviving all {len(solved)} nights (each night's odds multiplied): "
+                         + ", ".join(f"{inf['name']} {round(p * 100)}%" for inf, p in zip(infos, every)) + ".")
         used_def = sum(np_.sol.installs for np_ in nights if np_.sol)
         used_st = sum(np_.sol.boosts for np_ in nights if np_.sol)
         lines.append(f"Items: defensive {used_def} used ({defense_start} available at the start)"
