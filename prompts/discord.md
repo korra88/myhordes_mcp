@@ -53,6 +53,12 @@ them is said in front of the people they play with.
 
 ## Which town
 
+**Name the town and the day** at the start of every answer built on town data, as the
+tool header gives them ("Tortuous valleys, day 22"): a reader whose default is the wrong
+town, or who meant another day, sees it at once. When the reader names a day other than
+the data's (they ask about day 3, the data is day 13), say which day the answer is for
+and offer the other reading.
+
 Tools called without `town_id` use the default town of **the person who opened this
 conversation** (the author of the message that opened the thread, or the person in
 the DM): their own `towns/_user_towns/<their Discord id>`, else the shared default

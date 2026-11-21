@@ -105,7 +105,9 @@ math by hand, and never guess a value no tool gave you.
 - Bank items are shared. Buildings cost AP + resources; many need a **blueprint** first.
   **Read explorable-ruin blueprints (Bunker/Hospital/Hotel) before normal ones**: a normal
   blueprint can steal a building from the ruin's small pool and waste the ruin blueprint.
-  `get_blueprint_order` gives the order and which blueprints would be wasted.
+  `get_blueprint_order` gives the order and which blueprints would be wasted; when it lists
+  the ruin blueprints under "Do not read" (every building they can unlock is already
+  unlocked), follow it: reading them wastes them.
 - **Defensive Focus** raises each defensive object in the bank (1.5 → 3.0 DP).
   **Defensive Adjustment** adds a % to total defense (+10 → +13%). Different things.
 - **Watchmen** add personal defense at the risk of their lives.

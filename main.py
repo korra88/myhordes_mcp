@@ -130,8 +130,8 @@ async def get_citizen_cp(town_id: int = 0) -> str:
 
     CP comes from the zone CP Fata reports (game data, items and status
     included), read when a citizen stood alone on a zone. CP drops with status
-    (drugs -1 permanent; drunk -1, thirsty -1, guardian without shield -2
-    temporary), so last < max means a malus. Citizens never seen alone on a
+    (drugs -1 permanent; drunk -1, guardian without shield -2 temporary; Thirsty
+    only cancels a skill's +1), so last < max means a malus. Citizens never seen alone on a
     zone show '?': count them as 2 CP. Readings accumulate only when tools
     fetch the town, so the log fills up as the town is checked.
 
@@ -154,8 +154,8 @@ async def get_citizen_cp(town_id: int = 0) -> str:
 @mcp.tool()
 async def get_defense_status(day: int = 0, town_id: int = 0) -> str:
     """
-    Fetches the town defense breakdown and attack estimations from Fata Morgana,
-    enriched with Gest'Hordes per-source detail for the current day.
+    Fetches the town defense breakdown and attack estimations from Fata Morgana
+    (Fata only: Gest'Hordes is not used for defense).
     Includes: total defense, per-source breakdown (wall, buildings, items, guardians,
     homes, watchmen, temporary bonuses, dead-citizen bonus), item multiplier,
     tonight's and tomorrow's zombie estimates, and a survival assessment.
@@ -792,7 +792,8 @@ async def get_zone_details(
         y2: Y coordinate of the second corner. Required if x1/y1 are set.
         max_ap: Optional AP budget for the box (e.g. 8). Cells beyond this cost
                 are shown separately. Typical range: 4–15.
-        item: Part of an item name to locate on the map (case-insensitive).
+        item: Part of an item name to locate on the map (case-insensitive), or a tag:
+              "defense" (defensive objects), "defense part", "heavy".
     """
     got = await _town(town_id, day)
     if isinstance(got, str):
@@ -1033,12 +1034,13 @@ async def get_attack_distribution(town_id: int = 0) -> str:
 @mcp.tool()
 async def get_attack_forecast(town_id: int = 0) -> str:
     """
-    Fetches the theoretical attack curve and defence history from Gest'Hordes.
+    Fetches the theoretical attack curve and the attack history from Gest'Hordes.
     Shows the theoretical min/max zombie attack range for each day of the game,
-    actual attack counts from previous nights, Gest'Hordes community estimates,
-    and defence totals with per-source breakdown (buildings, items, homes, guardians).
+    actual attack counts from previous nights and Gest'Hordes community estimates.
+    No defense here: for defense use get_defense_status (Fata).
     Use this when the user asks about tonight's expected attack, how the attack
-    scales over the game, or wants to compare defence vs. projected zombie counts.
+    scales over the game, or wants projected zombie counts (to compare with the
+    defense from get_defense_status).
 
     Args:
         town_id: Gest'Hordes map ID. Omit for the player's default town.

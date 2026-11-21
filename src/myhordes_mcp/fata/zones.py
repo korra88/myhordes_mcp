@@ -6,6 +6,7 @@ from .bank import summary_lines
 from .game import DANGER_LEVELS, WIND_DISTANCE, WIND_NOT_DEPLETED, wind_refill_chance, zone_is_today
 from .geo import fmt_xy, km, moves, xy
 from .risk import (
+    _item_tags,
     _staleness_tag,
     _zone_freshness,
     _zone_status,
@@ -252,13 +253,25 @@ def format_zones(data: dict, item: str = "") -> str:
 ITEM_ZONES_SHOWN = 25
 
 
+TAG_ALIASES = {"defence": "defense", "defensive": "defense", "defense parts": "defense part"}
+
+
+def item_matches(i: dict, q: str) -> bool:
+    """Part of the item's name, or one of its tags exactly (heavy, defense, defense part):
+    the tags the zone lines print, so a "defense" search finds Old Door and Sheet Metal."""
+    if q in i["name"].lower():
+        return True
+    tags = _item_tags(i).strip(" ()").split(", ")
+    return TAG_ALIASES.get(q, q) in tags
+
+
 def _format_item_search(data: dict, item: str) -> str:
     meta = data["meta"]
     q = item.strip().lower()
     current_day = meta.get("day")
     hits = []
     for z in data["zones"]:
-        found = [i for i in z.get("items", []) if q in i["name"].lower()]
+        found = [i for i in z.get("items", []) if item_matches(i, q)]
         if found:
             x, y = xy(z)
             hits.append((moves((x, y)), z, found))

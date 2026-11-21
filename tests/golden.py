@@ -188,6 +188,7 @@ CASES = [
     ("zone_reach_closed", "get_zone_details", {"town_id": OTHER, "day": 4, "x1": 1, "y1": 1, "x2": 1, "y2": 1}),
     ("zone_item_none", "get_zone_details", {"item": "unobtainium"}),
     ("zone_item_many", "get_zone_details", {"item": "log"}),
+    ("zone_item_tag_defense", "get_zone_details", {"item": "defense"}),  # G7: tags match too
     ("zone_empty_box", "get_zone_details", {"x1": 30, "y1": 30, "x2": 31, "y2": 31}),
     ("scout_map_other", "get_scout_map", {"town_id": OTHER}),
     ("overview_missing_day", "get_town_overview", {"day": 4}),
