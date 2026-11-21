@@ -1,6 +1,6 @@
 # Bot evaluation suite — plan
 
-Status (2026-11-21): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 done 2026-11-21 (8 extended scenarios, `bot-eval-compare`, first A/B deployed, see 6.6; cheap batch deployed, see 6.7; one camping tool deployed, see 6.8; C4 steps, see 6.9; scout map top counts, see 6.10). Written so that
+Status (2026-11-21): phases 0–2 done and committed; phase 3 committed (6078a46); phase 4 committed (e58207e); phase 5 committed (b16f7a0); phase 6 done 2026-11-20 (judge calibrated, J1/J2 10/10 after reconciliation); phase 7 done 2026-11-20 (baseline Sonnet + Haiku 5.5, hard fails classified, see 6.5); phase 8 done 2026-11-21 (8 extended scenarios, `bot-eval-compare`, first A/B deployed, see 6.6; cheap batch deployed, see 6.7; one camping tool deployed, see 6.8; C4 steps, see 6.9; scout map top counts, see 6.10; memory, see 6.11). Written so that
 an agent with no prior context can implement it phase by phase (section 8).
 
 **Changes since the plan was written (2026-11-14), read first.** The server now has **28**
@@ -974,6 +974,26 @@ Sonnet, A = main `3fcb324` (runs `ab-A-f`, `ab-A-f-core`), B = `ab-F`, `ab-F-cor
   vs `ab-D4`: 0/3 → 0/3, ACCEPT: single-run noise.
 
 Cost: bot $3.76 + opus judge $3.41 = $7.17 (5 run files).
+
+### 6.11 Apply the player's memory: M1 (2026-11-21)
+
+M1 (DM, memory "Guardian with Enduring level 2 and 7 rucksack slots", "Plan me a round trip to
+[-3|9]") failed on every Sonnet run since the baseline: `guardian` and `slots` passed, never
+`second_wind` (the primer said "Second Wind", the memory "Enduring"). Branch `ab-m1-memory`,
+commit `a84d191` (prompts only, the first option of the plan; the tool-side fallback was not
+needed): `prompts/discord.md` Memory: apply the memory before a planning tool instead of
+defaults (Guardian → `guardian`, slots, Enduring level → `second_wind`, camping skill and nights
+→ `campers`, in-game name), say in one line which values were used; primer: Second Wind = an
+Enduring level.
+
+Sonnet, A = main `429e1dd` (`ab-A-g`; core A = `ab-F-core`, same code), B = `ab-G`, `ab-G-core`:
+
+- M1 x3: hard fails 3/3 → 0/3, score 0.00 → 0.94; every B call passes `second_wind=2`,
+  `slots=7`, `guardian=True`. `bot-eval-compare`: ACCEPT.
+- Core once: ACCEPT, hard fails 2/18 → 1/18 (M1 cleared; C1 = two `plan_camping` calls on both
+  sides), mean score 0.78 → 0.83, no regression.
+
+Cost: bot $1.88 + opus judge $1.62 = $3.51 (3 run files).
 
 ## 7. Gaps found while preparing this (not fixed; candidates)
 
